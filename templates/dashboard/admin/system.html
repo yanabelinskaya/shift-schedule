@@ -1,0 +1,75 @@
+{% extends 'dashboard/admin.html' %}
+
+{% block content %}
+  <div class="card dashboard-hero fade-up">
+    <div class="hero-header">
+      <div>
+        <h1>Система</h1>
+        <p class="subtle">Логи изменений, email-настройки и бэкапы.</p>
+      </div>
+      <div class="hero-actions">
+        <button class="btn btn-primary btn-inline" type="button">Тест SMTP</button>
+        <button class="btn btn-ghost btn-inline" type="button">Создать бэкап</button>
+      </div>
+    </div>
+    <div class="hero-meta">
+      <div class="meta-chip">Последний бэкап: сегодня 09:30</div>
+      <div class="meta-chip">24 пользователя онлайн</div>
+      <div class="meta-chip">Ошибок за сутки: 0</div>
+    </div>
+  </div>
+
+  <div class="tab-bar">
+    <a class="tab-pill{% if active_tab == 'users' %} active{% endif %}" href="{% url 'admin-users' %}">Пользователи</a>
+    <a class="tab-pill{% if active_tab == 'departments' %} active{% endif %}" href="{% url 'admin-departments' %}">Отделы</a>
+    <a class="tab-pill{% if active_tab == 'settings' %} active{% endif %}" href="{% url 'admin-settings' %}">Глобальные настройки</a>
+    <a class="tab-pill{% if active_tab == 'reports' %} active{% endif %}" href="{% url 'admin-reports' %}">Отчеты компании</a>
+    <a class="tab-pill{% if active_tab == 'payroll' %} active{% endif %}" href="{% url 'admin-payroll' %}">Payroll</a>
+    <a class="tab-pill{% if active_tab == 'system' %} active{% endif %}" href="{% url 'admin-system' %}">Система</a>
+  </div>
+
+  <section class="card section-block">
+    <div class="section-header">
+      <div>
+        <h2>Системные журналы</h2>
+        <p class="subtle">История действий и текущее состояние сервиса.</p>
+      </div>
+      <div class="section-actions">
+        <button class="btn btn-primary btn-inline" type="button">Экспорт логов</button>
+        <button class="btn btn-ghost btn-inline" type="button">Мониторинг</button>
+      </div>
+    </div>
+    <div class="system-grid">
+      <div class="mini-card">
+        <div class="mini-title">Логи изменений</div>
+        <ul class="mini-list">
+          <li>12:24 · Иванов утвердил график отдела Саппорт</li>
+          <li>11:58 · Обновлены ставки на 5%</li>
+          <li>10:45 · Создан новый отдел "Data"</li>
+        </ul>
+      </div>
+      <div class="mini-card">
+        <div class="mini-title">Бэкапы</div>
+        <ul class="mini-list">
+          <li>Сегодня · backup_2026_05_14.zip</li>
+          <li>Вчера · backup_2026_05_13.zip</li>
+          <li>12 мая · backup_2026_05_12.zip</li>
+        </ul>
+      </div>
+      <div class="mini-card">
+        <div class="mini-title">Мониторинг</div>
+        <div class="monitor-grid">
+          <div>
+            <div class="stat-value">24</div>
+            <div class="stat-label">Онлайн</div>
+          </div>
+          <div>
+            <div class="stat-value">312</div>
+            <div class="stat-label">API запросов/мин</div>
+          </div>
+        </div>
+        <div class="mini-note">Последний логин: 2 мин назад</div>
+      </div>
+    </div>
+  </section>
+{% endblock %}

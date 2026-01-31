@@ -1,0 +1,202 @@
+{% extends 'dashboard/employee.html' %}
+
+{% block content %}
+  <div class="card dashboard-hero fade-up">
+    <div class="hero-header">
+      <div>
+        <h1>{{ page_title }}</h1>
+        <p class="subtle">{{ page_subtitle }}</p>
+      </div>
+      <div class="hero-actions period-bar">
+        <div class="period-switch">
+          <button class="btn btn-primary btn-inline btn-sm" type="button">Текущая неделя</button>
+          <button class="btn btn-ghost btn-inline btn-sm" type="button">Следующая неделя</button>
+        </div>
+        <div class="period-range">
+          <div class="period-dates">15-21 апреля</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section class="card section-block">
+    <div class="section-header">
+      <div>
+        <h2>Доступность по дням</h2>
+        <p class="subtle">Выберите, когда вы готовы работать и с каким приоритетом.</p>
+      </div>
+      <div class="section-actions">
+        <button class="btn btn-ghost btn-inline btn-sm" type="button">Шаблон 5/2</button>
+        <button class="btn btn-ghost btn-inline btn-sm" type="button">Сбросить</button>
+      </div>
+    </div>
+    <div class="availability-table">
+      <div class="availability-row availability-head">
+        <div>День</div>
+        <div>Работаю</div>
+        <div>Время</div>
+        <div>Приоритет</div>
+      </div>
+      <div class="availability-row">
+        <div class="availability-day">Понедельник, 15 апреля</div>
+        <label class="availability-check">
+          <input type="checkbox" checked />
+          Работаю
+        </label>
+        <div class="availability-time-range">
+          <label class="time-label">
+            От
+            <input class="time-input" type="time" value="09:00" />
+          </label>
+          <label class="time-label">
+            До
+            <input class="time-input" type="time" value="18:00" />
+          </label>
+        </div>
+        <div class="priority-group">
+          <button class="priority-pill is-high" type="button">Очень хочу</button>
+          <button class="priority-pill is-mid" type="button">Ок</button>
+          <button class="priority-pill is-low" type="button">Не хочу</button>
+        </div>
+      </div>
+      <div class="availability-row">
+        <div class="availability-day">Вторник, 16 апреля</div>
+        <label class="availability-check">
+          <input type="checkbox" checked />
+          Работаю
+        </label>
+        <div class="availability-time-range">
+          <label class="time-label">
+            От
+            <input class="time-input" type="time" value="10:00" />
+          </label>
+          <label class="time-label">
+            До
+            <input class="time-input" type="time" value="19:00" />
+          </label>
+        </div>
+        <div class="priority-group">
+          <button class="priority-pill is-mid" type="button">Очень хочу</button>
+          <button class="priority-pill is-high" type="button">Ок</button>
+          <button class="priority-pill is-low" type="button">Не хочу</button>
+        </div>
+      </div>
+      <div class="availability-row">
+        <div class="availability-day">Среда, 17 апреля</div>
+        <label class="availability-check">
+          <input type="checkbox" />
+          Работаю
+        </label>
+        <div class="availability-time-range">
+          <label class="time-label">
+            От
+            <input class="time-input" type="time" value="09:00" />
+          </label>
+          <label class="time-label">
+            До
+            <input class="time-input" type="time" value="17:00" />
+          </label>
+        </div>
+        <div class="priority-group">
+          <button class="priority-pill is-low" type="button">Очень хочу</button>
+          <button class="priority-pill is-mid" type="button">Ок</button>
+          <button class="priority-pill is-high" type="button">Не хочу</button>
+        </div>
+      </div>
+      <div class="availability-row">
+        <div class="availability-day">Четверг, 18 апреля</div>
+        <label class="availability-check">
+          <input type="checkbox" checked />
+          Работаю
+        </label>
+        <div class="availability-time-range">
+          <label class="time-label">
+            От
+            <input class="time-input" type="time" value="09:00" />
+          </label>
+          <label class="time-label">
+            До
+            <input class="time-input" type="time" value="18:00" />
+          </label>
+        </div>
+        <div class="priority-group">
+          <button class="priority-pill is-high" type="button">Очень хочу</button>
+          <button class="priority-pill is-mid" type="button">Ок</button>
+          <button class="priority-pill is-low" type="button">Не хочу</button>
+        </div>
+      </div>
+      <div class="availability-row">
+        <div class="availability-day">Пятница, 19 апреля</div>
+        <label class="availability-check">
+          <input type="checkbox" checked />
+          Работаю
+        </label>
+        <div class="availability-time-range">
+          <label class="time-label">
+            От
+            <input class="time-input" type="time" value="09:00" />
+          </label>
+          <label class="time-label">
+            До
+            <input class="time-input" type="time" value="18:00" />
+          </label>
+        </div>
+        <div class="priority-group">
+          <button class="priority-pill is-mid" type="button">Очень хочу</button>
+          <button class="priority-pill is-high" type="button">Ок</button>
+          <button class="priority-pill is-low" type="button">Не хочу</button>
+        </div>
+      </div>
+      <div class="availability-row">
+        <div class="availability-day">Суббота, 20 апреля</div>
+        <label class="availability-check">
+          <input type="checkbox" />
+          Работаю
+        </label>
+        <div class="availability-time-range">
+          <label class="time-label">
+            От
+            <input class="time-input" type="time" value="11:00" />
+          </label>
+          <label class="time-label">
+            До
+            <input class="time-input" type="time" value="16:00" />
+          </label>
+        </div>
+        <div class="priority-group">
+          <button class="priority-pill is-low" type="button">Очень хочу</button>
+          <button class="priority-pill is-mid" type="button">Ок</button>
+          <button class="priority-pill is-high" type="button">Не хочу</button>
+        </div>
+      </div>
+      <div class="availability-row">
+        <div class="availability-day">Воскресенье, 21 апреля</div>
+        <label class="availability-check">
+          <input type="checkbox" />
+          Работаю
+        </label>
+        <div class="availability-time-range">
+          <label class="time-label">
+            От
+            <input class="time-input" type="time" value="09:00" />
+          </label>
+          <label class="time-label">
+            До
+            <input class="time-input" type="time" value="15:00" />
+          </label>
+        </div>
+        <div class="priority-group">
+          <button class="priority-pill is-low" type="button">Очень хочу</button>
+          <button class="priority-pill is-mid" type="button">Ок</button>
+          <button class="priority-pill is-high" type="button">Не хочу</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="inline-panel availability-footer">
+    <button class="btn btn-primary btn-inline" type="button">Сохранить доступность</button>
+    <div class="mini-meta">Менеджер увидит обновления в понедельник</div>
+    <span class="status-pill success">Последнее сохранение: сегодня 18:20</span>
+  </div>
+{% endblock %}

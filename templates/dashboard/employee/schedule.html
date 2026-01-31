@@ -1,0 +1,293 @@
+{% extends 'dashboard/employee.html' %}
+
+{% block content %}
+  <div class="card dashboard-hero fade-up">
+    <div class="hero-header">
+      <div>
+        <h1>{{ page_title }}</h1>
+        <p class="subtle">{{ page_subtitle }}</p>
+      </div>
+      <div class="hero-actions period-bar">
+        <div class="period-switch">
+          <button class="btn btn-primary btn-inline btn-sm" type="button">Неделя</button>
+          <button class="btn btn-ghost btn-inline btn-sm" type="button">Месяц</button>
+        </div>
+        <div class="period-range">
+          <button class="btn btn-ghost btn-inline btn-sm" type="button">Назад</button>
+          <div class="period-dates">15-21 апреля 2024</div>
+          <button class="btn btn-ghost btn-inline btn-sm" type="button">Вперед</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section class="card section-block">
+    <div class="section-header">
+      <div>
+        <h2>Неделя</h2>
+        <p class="subtle">Смены, статусы и ответственные менеджеры.</p>
+      </div>
+      <div class="section-actions">
+        <button class="btn btn-ghost btn-inline btn-sm" type="button">Экспорт недели</button>
+        <button class="btn btn-ghost btn-inline btn-sm" type="button">Показать отдел</button>
+      </div>
+    </div>
+    <div class="data-table-wrap">
+      <table class="data-table schedule-table">
+        <thead>
+          <tr>
+            <th>День</th>
+            <th>Время</th>
+            <th>Статус</th>
+            <th>Задачи</th>
+            <th>Менеджер</th>
+            <th>Детали</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Понедельник, 15 апреля</td>
+            <td>09:00-18:00</td>
+            <td><span class="status-pill success">Подтверждена</span></td>
+            <td><span class="pill">2 задачи</span></td>
+            <td>А. Смирнов</td>
+            <td><button class="btn btn-ghost btn-inline btn-sm" type="button">Открыть</button></td>
+          </tr>
+          <tr>
+            <td>Вторник, 16 апреля</td>
+            <td>10:00-19:00</td>
+            <td><span class="status-pill warning">На согласовании</span></td>
+            <td><span class="pill">1 задача</span></td>
+            <td>А. Смирнов</td>
+            <td><button class="btn btn-ghost btn-inline btn-sm" type="button">Открыть</button></td>
+          </tr>
+          <tr>
+            <td>Среда, 17 апреля</td>
+            <td>Выходной</td>
+            <td><span class="status-pill">Нет смены</span></td>
+            <td><span class="pill">-</span></td>
+            <td>--</td>
+            <td><button class="btn btn-ghost btn-inline btn-sm" type="button">Открыть</button></td>
+          </tr>
+          <tr>
+            <td>Четверг, 18 апреля</td>
+            <td>09:00-18:00</td>
+            <td><span class="status-pill success">Подтверждена</span></td>
+            <td><span class="pill">3 задачи</span></td>
+            <td>М. Иванова</td>
+            <td><button class="btn btn-ghost btn-inline btn-sm" type="button">Открыть</button></td>
+          </tr>
+          <tr>
+            <td>Пятница, 19 апреля</td>
+            <td>09:00-18:00</td>
+            <td><span class="status-pill success">Подтверждена</span></td>
+            <td><span class="pill">0 задач</span></td>
+            <td>М. Иванова</td>
+            <td><button class="btn btn-ghost btn-inline btn-sm" type="button">Открыть</button></td>
+          </tr>
+          <tr>
+            <td>Суббота, 20 апреля</td>
+            <td>11:00-17:00</td>
+            <td><span class="status-pill warning">Запрошена</span></td>
+            <td><span class="pill">1 задача</span></td>
+            <td>А. Смирнов</td>
+            <td><button class="btn btn-ghost btn-inline btn-sm" type="button">Открыть</button></td>
+          </tr>
+          <tr>
+            <td>Воскресенье, 21 апреля</td>
+            <td>Выходной</td>
+            <td><span class="status-pill">Нет смены</span></td>
+            <td><span class="pill">-</span></td>
+            <td>--</td>
+            <td><button class="btn btn-ghost btn-inline btn-sm" type="button">Открыть</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card section-block">
+    <div class="section-header">
+      <div>
+        <h2>Месяц</h2>
+        <p class="subtle">Рабочие дни, переработки и больничные.</p>
+      </div>
+      <div class="section-actions">
+        <button class="btn btn-ghost btn-inline btn-sm" type="button">Фильтры</button>
+      </div>
+    </div>
+    <div class="calendar">
+      <div class="calendar-weekday">Пн</div>
+      <div class="calendar-weekday">Вт</div>
+      <div class="calendar-weekday">Ср</div>
+      <div class="calendar-weekday">Чт</div>
+      <div class="calendar-weekday">Пт</div>
+      <div class="calendar-weekday">Сб</div>
+      <div class="calendar-weekday">Вс</div>
+
+      <div class="calendar-day is-empty">
+        <div class="calendar-date">-</div>
+      </div>
+      <div class="calendar-day is-work">
+        <div class="calendar-date">1</div>
+        <div class="calendar-shift">09:00-18:00</div>
+      </div>
+      <div class="calendar-day is-work">
+        <div class="calendar-date">2</div>
+        <div class="calendar-shift">09:00-18:00</div>
+      </div>
+      <div class="calendar-day is-work">
+        <div class="calendar-date">3</div>
+        <div class="calendar-shift">10:00-19:00</div>
+      </div>
+      <div class="calendar-day is-off">
+        <div class="calendar-date">4</div>
+        <div class="calendar-shift">Выходной</div>
+      </div>
+      <div class="calendar-day is-work">
+        <div class="calendar-date">5</div>
+        <div class="calendar-shift">09:00-18:00</div>
+      </div>
+      <div class="calendar-day is-overtime">
+        <div class="calendar-date">6</div>
+        <div class="calendar-shift">09:00-21:00</div>
+      </div>
+
+      <div class="calendar-day is-work">
+        <div class="calendar-date">7</div>
+        <div class="calendar-shift">09:00-18:00</div>
+      </div>
+      <div class="calendar-day is-work">
+        <div class="calendar-date">8</div>
+        <div class="calendar-shift">09:00-18:00</div>
+      </div>
+      <div class="calendar-day is-off">
+        <div class="calendar-date">9</div>
+        <div class="calendar-shift">Выходной</div>
+      </div>
+      <div class="calendar-day is-work">
+        <div class="calendar-date">10</div>
+        <div class="calendar-shift">10:00-19:00</div>
+      </div>
+      <div class="calendar-day is-work">
+        <div class="calendar-date">11</div>
+        <div class="calendar-shift">09:00-18:00</div>
+      </div>
+      <div class="calendar-day is-sick">
+        <div class="calendar-date">12</div>
+        <div class="calendar-shift">Больничный</div>
+      </div>
+      <div class="calendar-day is-off">
+        <div class="calendar-date">13</div>
+        <div class="calendar-shift">Выходной</div>
+      </div>
+
+      <div class="calendar-day is-work">
+        <div class="calendar-date">14</div>
+        <div class="calendar-shift">09:00-18:00</div>
+      </div>
+      <div class="calendar-day is-work">
+        <div class="calendar-date">15</div>
+        <div class="calendar-shift">09:00-18:00</div>
+      </div>
+      <div class="calendar-day is-overtime">
+        <div class="calendar-date">16</div>
+        <div class="calendar-shift">09:00-20:00</div>
+      </div>
+      <div class="calendar-day is-work">
+        <div class="calendar-date">17</div>
+        <div class="calendar-shift">10:00-19:00</div>
+      </div>
+      <div class="calendar-day is-off">
+        <div class="calendar-date">18</div>
+        <div class="calendar-shift">Выходной</div>
+      </div>
+      <div class="calendar-day is-work">
+        <div class="calendar-date">19</div>
+        <div class="calendar-shift">09:00-18:00</div>
+      </div>
+      <div class="calendar-day is-off">
+        <div class="calendar-date">20</div>
+        <div class="calendar-shift">Выходной</div>
+      </div>
+
+      <div class="calendar-day is-work">
+        <div class="calendar-date">21</div>
+        <div class="calendar-shift">09:00-18:00</div>
+      </div>
+      <div class="calendar-day is-work">
+        <div class="calendar-date">22</div>
+        <div class="calendar-shift">09:00-18:00</div>
+      </div>
+      <div class="calendar-day is-work">
+        <div class="calendar-date">23</div>
+        <div class="calendar-shift">10:00-19:00</div>
+      </div>
+      <div class="calendar-day is-work">
+        <div class="calendar-date">24</div>
+        <div class="calendar-shift">09:00-18:00</div>
+      </div>
+      <div class="calendar-day is-overtime">
+        <div class="calendar-date">25</div>
+        <div class="calendar-shift">09:00-21:00</div>
+      </div>
+      <div class="calendar-day is-off">
+        <div class="calendar-date">26</div>
+        <div class="calendar-shift">Выходной</div>
+      </div>
+      <div class="calendar-day is-off">
+        <div class="calendar-date">27</div>
+        <div class="calendar-shift">Выходной</div>
+      </div>
+
+      <div class="calendar-day is-work">
+        <div class="calendar-date">28</div>
+        <div class="calendar-shift">09:00-18:00</div>
+      </div>
+      <div class="calendar-day is-work">
+        <div class="calendar-date">29</div>
+        <div class="calendar-shift">09:00-18:00</div>
+      </div>
+      <div class="calendar-day is-work">
+        <div class="calendar-date">30</div>
+        <div class="calendar-shift">10:00-19:00</div>
+      </div>
+      <div class="calendar-day is-empty">
+        <div class="calendar-date">-</div>
+      </div>
+      <div class="calendar-day is-empty">
+        <div class="calendar-date">-</div>
+      </div>
+      <div class="calendar-day is-empty">
+        <div class="calendar-date">-</div>
+      </div>
+      <div class="calendar-day is-empty">
+        <div class="calendar-date">-</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="stats-grid">
+    <div class="card stat-card">
+      <div class="stat-label">Всего часов</div>
+      <div class="stat-value">38</div>
+      <div class="stat-note">План недели</div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-label">Переработка</div>
+      <div class="stat-value">+4</div>
+      <div class="stat-note">Согласовано</div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-label">Сумма за неделю</div>
+      <div class="stat-value">22 400</div>
+      <div class="stat-note">До налога</div>
+    </div>
+  </div>
+
+  <div class="section-actions schedule-actions">
+    <button class="btn btn-primary btn-inline" type="button">Запросить доп. часы</button>
+    <button class="btn btn-ghost btn-inline" type="button">Запросить изменение смены</button>
+    <button class="btn btn-ghost btn-inline" type="button">Скачать график PDF</button>
+  </div>
+{% endblock %}

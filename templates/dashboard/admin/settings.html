@@ -1,0 +1,84 @@
+{% extends 'dashboard/admin.html' %}
+
+{% block content %}
+  <div class="card dashboard-hero fade-up">
+    <div class="hero-header">
+      <div>
+        <h1>Глобальные настройки</h1>
+        <p class="subtle">Рабочее время, типы смен и шаблоны уведомлений.</p>
+      </div>
+      <div class="hero-actions">
+        <button class="btn btn-primary btn-inline" type="button">Сохранить изменения</button>
+        <button class="btn btn-ghost btn-inline" type="button">История правок</button>
+      </div>
+    </div>
+    <div class="hero-meta">
+      <div class="meta-chip">Переработка: 160ч/мес</div>
+      <div class="meta-chip">Шаблоны уведомлений: 8</div>
+      <div class="meta-chip">Последний апдейт: 2 дня назад</div>
+    </div>
+  </div>
+
+  <div class="tab-bar">
+    <a class="tab-pill{% if active_tab == 'users' %} active{% endif %}" href="{% url 'admin-users' %}">Пользователи</a>
+    <a class="tab-pill{% if active_tab == 'departments' %} active{% endif %}" href="{% url 'admin-departments' %}">Отделы</a>
+    <a class="tab-pill{% if active_tab == 'settings' %} active{% endif %}" href="{% url 'admin-settings' %}">Глобальные настройки</a>
+    <a class="tab-pill{% if active_tab == 'reports' %} active{% endif %}" href="{% url 'admin-reports' %}">Отчеты компании</a>
+    <a class="tab-pill{% if active_tab == 'payroll' %} active{% endif %}" href="{% url 'admin-payroll' %}">Payroll</a>
+    <a class="tab-pill{% if active_tab == 'system' %} active{% endif %}" href="{% url 'admin-system' %}">Система</a>
+  </div>
+
+  <section class="card section-block">
+    <div class="section-header">
+      <div>
+        <h2>Конфигурация</h2>
+        <p class="subtle">Синхронизируйте правила работы и уведомления во всех отделах.</p>
+      </div>
+      <div class="section-actions">
+        <button class="btn btn-primary btn-inline" type="button">Обновить шаблоны</button>
+        <button class="btn btn-ghost btn-inline" type="button">Проверить настройки</button>
+      </div>
+    </div>
+    <div class="settings-grid">
+      <div class="mini-card">
+        <div class="mini-title">Рабочее время</div>
+        <div class="setting-row">
+          <span>Переработка</span>
+          <span class="pill">160ч/мес</span>
+        </div>
+        <div class="setting-row">
+          <span>Рабочие дни</span>
+          <span class="pill">Пн-Пт</span>
+        </div>
+        <div class="setting-row">
+          <span>Коэффициент OT</span>
+          <span class="pill">1.5x</span>
+        </div>
+      </div>
+      <div class="mini-card">
+        <div class="mini-title">Типы смен</div>
+        <div class="pill-set">
+          <span class="pill">День 09-18</span>
+          <span class="pill">Вечер 12-21</span>
+          <span class="pill">Дежурство 21-09</span>
+        </div>
+        <div class="mini-note">3 активных шаблона</div>
+      </div>
+      <div class="mini-card">
+        <div class="mini-title">Уведомления</div>
+        <div class="setting-row">
+          <span>График готов</span>
+          <span class="status-pill success">Включено</span>
+        </div>
+        <div class="setting-row">
+          <span>Зарплата посчитана</span>
+          <span class="status-pill success">Включено</span>
+        </div>
+        <div class="setting-row">
+          <span>Задачи</span>
+          <span class="status-pill warning">Только важные</span>
+        </div>
+      </div>
+    </div>
+  </section>
+{% endblock %}

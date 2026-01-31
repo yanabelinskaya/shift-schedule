@@ -1,0 +1,86 @@
+{% extends 'dashboard/admin.html' %}
+
+{% block content %}
+  <div class="card dashboard-hero fade-up">
+    <div class="hero-header">
+      <div>
+        <h1>Отчеты компании</h1>
+        <p class="subtle">Затраты, загрузка по отделам и аналитика отпусков.</p>
+      </div>
+      <div class="hero-actions">
+        <button class="btn btn-primary btn-inline" type="button">Экспорт Excel</button>
+        <button class="btn btn-ghost btn-inline" type="button">Скачать PDF</button>
+      </div>
+    </div>
+    <div class="hero-meta">
+      <div class="meta-chip">₽ 4.82 млн · затраты за месяц</div>
+      <div class="meta-chip">Средняя загрузка: 86%</div>
+      <div class="meta-chip">Отпусков в этом месяце: 12</div>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="card stat-card">
+      <div class="stat-label">Суммарные часы</div>
+      <div class="stat-value">18 420ч</div>
+      <div class="stat-note">+3% к прошлому месяцу</div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-label">Топ загруженных</div>
+      <div class="stat-value">6 сотрудников</div>
+      <div class="stat-note">выше 170ч/мес</div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-label">История повышений</div>
+      <div class="stat-value">14</div>
+      <div class="stat-note">за последние 90 дней</div>
+    </div>
+  </div>
+
+  <div class="tab-bar">
+    <a class="tab-pill{% if active_tab == 'users' %} active{% endif %}" href="{% url 'admin-users' %}">Пользователи</a>
+    <a class="tab-pill{% if active_tab == 'departments' %} active{% endif %}" href="{% url 'admin-departments' %}">Отделы</a>
+    <a class="tab-pill{% if active_tab == 'settings' %} active{% endif %}" href="{% url 'admin-settings' %}">Глобальные настройки</a>
+    <a class="tab-pill{% if active_tab == 'reports' %} active{% endif %}" href="{% url 'admin-reports' %}">Отчеты компании</a>
+    <a class="tab-pill{% if active_tab == 'payroll' %} active{% endif %}" href="{% url 'admin-payroll' %}">Payroll</a>
+    <a class="tab-pill{% if active_tab == 'system' %} active{% endif %}" href="{% url 'admin-system' %}">Система</a>
+  </div>
+
+  <section class="card section-block">
+    <div class="section-header">
+      <div>
+        <h2>Ключевая аналитика</h2>
+        <p class="subtle">Сводные показатели по отделам и загрузке.</p>
+      </div>
+      <div class="section-actions">
+        <button class="btn btn-primary btn-inline" type="button">Обновить отчеты</button>
+        <button class="btn btn-ghost btn-inline" type="button">Сравнить период</button>
+      </div>
+    </div>
+    <div class="reports-grid">
+      <div class="mini-card">
+        <div class="mini-title">Затраты на зарплату</div>
+        <div class="stat-value">₽ 4.82 млн</div>
+        <div class="mini-note">Пик расходов: 2 неделя месяца</div>
+      </div>
+      <div class="mini-card">
+        <div class="mini-title">Топ загруженных</div>
+        <ol class="mini-list">
+          <li>Екатерина Степанова — 186ч</li>
+          <li>Илья Назаров — 174ч</li>
+          <li>Ольга Петренко — 169ч</li>
+        </ol>
+      </div>
+      <div class="mini-card chart-placeholder">
+        <div class="mini-title">Загрузка по отделам</div>
+        <div class="chart-bars">
+          <span style="height: 68%"></span>
+          <span style="height: 54%"></span>
+          <span style="height: 82%"></span>
+          <span style="height: 46%"></span>
+        </div>
+        <div class="mini-note">Средняя: 86%</div>
+      </div>
+    </div>
+  </section>
+{% endblock %}

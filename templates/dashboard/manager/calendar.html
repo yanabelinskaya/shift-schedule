@@ -1,0 +1,229 @@
+{% extends 'dashboard/manager.html' %}
+
+{% block content %}
+  <div class="card dashboard-hero fade-up">
+    <div class="hero-header">
+      <div>
+        <h1>{{ page_title }}</h1>
+        <p class="subtle">{{ page_subtitle }}</p>
+      </div>
+      <div class="hero-actions">
+        <button class="btn btn-primary btn-inline" type="button">Сгенерировать неделю</button>
+        <button class="btn btn-ghost btn-inline" type="button">Утвердить график</button>
+      </div>
+    </div>
+    <div class="hero-meta">
+      <div class="meta-chip">Отдел: Поддержка</div>
+      <div class="meta-chip">Пожелания: 18</div>
+      <div class="meta-chip">Нагрузка: 92%</div>
+    </div>
+  </div>
+
+  <section class="card section-block">
+    <div class="section-header">
+      <div>
+        <h2>Параметры генерации</h2>
+        <p class="subtle">Ограничения по часам, выходные и лимиты переработки.</p>
+      </div>
+      <div class="section-actions">
+        <button class="btn btn-ghost btn-inline btn-sm" type="button">Сохранить шаблон</button>
+      </div>
+    </div>
+    <div class="manager-controls">
+      <div class="control-field">
+        <label for="dept">Отдел</label>
+        <select id="dept" class="availability-select">
+          <option selected>Поддержка</option>
+          <option>Склад</option>
+          <option>Логистика</option>
+        </select>
+      </div>
+      <div class="control-field">
+        <span>Период</span>
+        <div class="pill-set">
+          <button class="pill is-active" type="button">Неделя</button>
+          <button class="pill" type="button">Месяц</button>
+        </div>
+      </div>
+      <div class="control-field">
+        <label for="max-hours">Макс. часов на человека</label>
+        <input id="max-hours" class="control-input" type="text" value="40" />
+      </div>
+      <div class="control-field">
+        <label for="weekend">Выходные</label>
+        <div class="pill-set">
+          <button class="pill is-active" type="button">Сб</button>
+          <button class="pill is-active" type="button">Вс</button>
+          <button class="pill" type="button">Пт</button>
+        </div>
+      </div>
+      <div class="control-field">
+        <label for="overtime">Лимит переработки</label>
+        <input id="overtime" class="control-input" type="text" value="6 часов" />
+      </div>
+    </div>
+    <div class="inline-panel manager-actions">
+      <button class="btn btn-primary btn-inline btn-sm" type="button">Сгенерировать неделю</button>
+      <div class="pill-set">
+        <button class="pill is-active" type="button">Показать пожелания</button>
+        <button class="pill" type="button">Показать переработку</button>
+      </div>
+      <button class="btn btn-ghost btn-inline btn-sm" type="button">Добавить смену</button>
+    </div>
+  </section>
+
+  <section class="card section-block">
+    <div class="section-header">
+      <div>
+        <h2>Сетка смен</h2>
+        <p class="subtle">Перетаскивайте смены и фиксируйте слоты.</p>
+      </div>
+      <div class="section-actions">
+        <button class="btn btn-ghost btn-inline btn-sm" type="button">Экспорт Excel</button>
+      </div>
+    </div>
+    <div class="data-table-wrap manager-schedule">
+      <table class="data-table schedule-matrix">
+        <thead>
+          <tr>
+            <th>Сотрудник</th>
+            <th>Пн 15</th>
+            <th>Вт 16</th>
+            <th>Ср 17</th>
+            <th>Чт 18</th>
+            <th>Пт 19</th>
+            <th>Сб 20</th>
+            <th>Вс 21</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <div class="employee-cell">
+                <div class="employee-name">Елена Кузнецова</div>
+                <div class="employee-meta">38 ч / лимит 40</div>
+              </div>
+            </td>
+            <td>
+              <div class="shift-block">09:00-18:00</div>
+              <div class="desire-indicators">
+                <span class="desire-dot is-high"></span>
+                <span class="desire-dot is-mid"></span>
+              </div>
+            </td>
+            <td>
+              <div class="shift-block">10:00-19:00</div>
+              <div class="desire-indicators">
+                <span class="desire-dot is-high"></span>
+              </div>
+            </td>
+            <td>
+              <div class="slot-empty">Пусто</div>
+            </td>
+            <td>
+              <div class="shift-block is-locked">
+                09:00-18:00
+                <span class="shift-lock">LOCK</span>
+              </div>
+              <div class="desire-indicators">
+                <span class="desire-dot is-low"></span>
+              </div>
+            </td>
+            <td>
+              <div class="shift-block">09:00-18:00</div>
+              <div class="desire-indicators">
+                <span class="desire-dot is-high"></span>
+              </div>
+            </td>
+            <td>
+              <div class="slot-empty">Выходной</div>
+            </td>
+            <td>
+              <div class="slot-empty">Выходной</div>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <div class="employee-cell">
+                <div class="employee-name">Игорь Лебедев</div>
+                <div class="employee-meta">40 ч / лимит 40</div>
+              </div>
+            </td>
+            <td>
+              <div class="shift-block is-overtime">09:00-21:00</div>
+              <div class="desire-indicators">
+                <span class="desire-dot is-mid"></span>
+              </div>
+            </td>
+            <td>
+              <div class="shift-block">09:00-18:00</div>
+              <div class="desire-indicators">
+                <span class="desire-dot is-high"></span>
+              </div>
+            </td>
+            <td>
+              <div class="shift-block">09:00-18:00</div>
+              <div class="desire-indicators">
+                <span class="desire-dot is-high"></span>
+              </div>
+            </td>
+            <td>
+              <div class="shift-block">10:00-19:00</div>
+              <div class="desire-indicators">
+                <span class="desire-dot is-mid"></span>
+              </div>
+            </td>
+            <td>
+              <div class="slot-empty">Пусто</div>
+            </td>
+            <td>
+              <div class="slot-empty">Выходной</div>
+            </td>
+            <td>
+              <div class="slot-empty">Выходной</div>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <div class="employee-cell">
+                <div class="employee-name">Мария Соколова</div>
+                <div class="employee-meta">32 ч / лимит 36</div>
+              </div>
+            </td>
+            <td>
+              <div class="shift-block">12:00-20:00</div>
+              <div class="desire-indicators">
+                <span class="desire-dot is-high"></span>
+              </div>
+            </td>
+            <td>
+              <div class="slot-empty">Пусто</div>
+            </td>
+            <td>
+              <div class="shift-block">12:00-20:00</div>
+              <div class="desire-indicators">
+                <span class="desire-dot is-high"></span>
+                <span class="desire-dot is-mid"></span>
+              </div>
+            </td>
+            <td>
+              <div class="shift-block">12:00-20:00</div>
+              <div class="desire-indicators">
+                <span class="desire-dot is-low"></span>
+              </div>
+            </td>
+            <td>
+              <div class="slot-empty">Выходной</div>
+            </td>
+            <td>
+              <div class="slot-empty">Выходной</div>
+            </td>
+            <td>
+              <div class="slot-empty">Выходной</div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}

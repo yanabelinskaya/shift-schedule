@@ -1,0 +1,118 @@
+{% extends 'dashboard/employee.html' %}
+
+{% block content %}
+  <div class="card dashboard-hero fade-up">
+    <div class="hero-header">
+      <div>
+        <h1>{{ page_title }}</h1>
+        <p class="subtle">{{ page_subtitle }}</p>
+      </div>
+      <div class="hero-actions period-bar">
+        <div class="period-switch">
+          <button class="btn btn-primary btn-inline btn-sm" type="button">Текущий месяц</button>
+          <button class="btn btn-ghost btn-inline btn-sm" type="button">Прошлый месяц</button>
+          <button class="btn btn-ghost btn-inline btn-sm" type="button">Диапазон</button>
+        </div>
+        <div class="period-range">
+          <button class="btn btn-ghost btn-inline btn-sm" type="button">Скачать PDF</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="card stat-card">
+      <div class="stat-label">Отработано часов</div>
+      <div class="stat-value">168</div>
+      <div class="stat-note">План 160</div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-label">Переработка</div>
+      <div class="stat-value">+8</div>
+      <div class="stat-note">Согласовано</div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-label">К выплате</div>
+      <div class="stat-value">96 800</div>
+      <div class="stat-note">До налога</div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-label">Ставка в час</div>
+      <div class="stat-value">580</div>
+      <div class="stat-note">Дата повышения: 01.03</div>
+    </div>
+  </div>
+
+  <section class="card section-block">
+    <div class="section-header">
+      <div>
+        <h2>История ставок</h2>
+        <p class="subtle">Все изменения ставок за последние 12 месяцев.</p>
+      </div>
+      <div class="section-actions">
+        <button class="btn btn-ghost btn-inline btn-sm" type="button">Скачать PDF</button>
+      </div>
+    </div>
+    <div class="rate-history">
+      <div class="rate-item">
+        <div>01.03.2024</div>
+        <div>+40</div>
+        <div>Итог: 580 в час</div>
+      </div>
+      <div class="rate-item">
+        <div>01.11.2023</div>
+        <div>+30</div>
+        <div>Итог: 540 в час</div>
+      </div>
+      <div class="rate-item">
+        <div>01.06.2023</div>
+        <div>+20</div>
+        <div>Итог: 510 в час</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card section-block">
+    <div class="section-header">
+      <div>
+        <h2>Отчет прошлого месяца</h2>
+        <p class="subtle">Сравнение плановых и фактических часов.</p>
+      </div>
+      <div class="section-actions">
+        <button class="btn btn-ghost btn-inline btn-sm" type="button">Экспорт</button>
+      </div>
+    </div>
+    <div class="data-table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Показатель</th>
+            <th>Запланировано</th>
+            <th>Факт</th>
+            <th>Отклонение</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Часы</td>
+            <td>160</td>
+            <td>168</td>
+            <td>+8</td>
+          </tr>
+          <tr>
+            <td>Смены</td>
+            <td>20</td>
+            <td>21</td>
+            <td>+1</td>
+          </tr>
+          <tr>
+            <td>Переработка</td>
+            <td>0</td>
+            <td>8</td>
+            <td>+8</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}

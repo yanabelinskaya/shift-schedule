@@ -1,0 +1,135 @@
+{% extends 'dashboard/employee.html' %}
+
+{% block content %}
+  <div class="card dashboard-hero fade-up">
+    <div class="hero-header">
+      <div>
+        <h1>{{ page_title }}</h1>
+        <p class="subtle">{{ page_subtitle }}</p>
+      </div>
+      <div class="hero-actions">
+        <button class="btn btn-primary btn-inline btn-sm" type="button">Добавить отчет</button>
+        <button class="btn btn-ghost btn-inline btn-sm" type="button">История</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <div class="tab-bar">
+      <button class="tab-pill active" type="button">Сегодня</button>
+      <button class="tab-pill" type="button">Завтра</button>
+      <button class="tab-pill" type="button">Неделя</button>
+      <button class="tab-pill" type="button">Все</button>
+    </div>
+    <div class="pill-set">
+      <button class="pill is-active" type="button">В работе</button>
+      <button class="pill" type="button">Выполнено</button>
+    </div>
+  </div>
+
+  <div class="task-grid">
+    <article class="card task-card">
+      <div class="task-header">
+        <div>
+          <h3>Проверка оборудования на складе</h3>
+          <p class="subtle">Смена 09:00-18:00, 15 апреля</p>
+        </div>
+        <span class="status-pill warning">Высокий приоритет</span>
+      </div>
+      <div class="task-meta">
+        <div>Менеджер: А. Смирнов</div>
+        <div>Комментарий: проверить списком из регламента</div>
+        <div>Статус: в работе</div>
+      </div>
+      <div class="task-attachments">Вложения: 1 фото</div>
+      <div class="task-actions">
+        <button class="btn btn-primary btn-inline btn-sm" type="button">Отметить выполнено</button>
+        <button class="btn btn-ghost btn-inline btn-sm" type="button">Запросить уточнение</button>
+      </div>
+      <div class="task-form">
+        <label>
+          Комментарий к выполнению
+          <textarea rows="3" placeholder="Что было сделано"></textarea>
+        </label>
+        <label>
+          Фото результата
+          <input type="file" />
+        </label>
+      </div>
+    </article>
+
+    <article class="card task-card">
+      <div class="task-header">
+        <div>
+          <h3>Обновить витрину</h3>
+          <p class="subtle">Смена 10:00-19:00, 16 апреля</p>
+        </div>
+        <span class="status-pill success">Средний приоритет</span>
+      </div>
+      <div class="task-meta">
+        <div>Менеджер: М. Иванова</div>
+        <div>Комментарий: установить новые ценники</div>
+        <div>Статус: в работе</div>
+      </div>
+      <div class="task-attachments">Вложения: нет</div>
+      <div class="task-actions">
+        <button class="btn btn-primary btn-inline btn-sm" type="button">Отметить выполнено</button>
+        <button class="btn btn-ghost btn-inline btn-sm" type="button">Добавить комментарий</button>
+      </div>
+      <div class="task-form">
+        <label>
+          Комментарий к выполнению
+          <textarea rows="3" placeholder="Что было сделано"></textarea>
+        </label>
+        <label>
+          Фото результата
+          <input type="file" />
+        </label>
+      </div>
+    </article>
+  </div>
+
+  <section class="card section-block">
+    <div class="section-header">
+      <div>
+        <h2>История за месяц</h2>
+        <p class="subtle">Последние выполненные задачи и время закрытия.</p>
+      </div>
+      <div class="section-actions">
+        <button class="btn btn-ghost btn-inline btn-sm" type="button">Экспорт</button>
+      </div>
+    </div>
+    <div class="data-table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Задача</th>
+            <th>Смена</th>
+            <th>Выполнено</th>
+            <th>Комментарий</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Контроль поставки</td>
+            <td>12 апреля, 09:00-18:00</td>
+            <td>12 апреля, 17:40</td>
+            <td>Подтверждено менеджером</td>
+          </tr>
+          <tr>
+            <td>Инвентаризация секции B</td>
+            <td>9 апреля, 10:00-19:00</td>
+            <td>9 апреля, 18:55</td>
+            <td>Фото отчета загружено</td>
+          </tr>
+          <tr>
+            <td>Подготовка склада</td>
+            <td>6 апреля, 09:00-18:00</td>
+            <td>6 апреля, 16:20</td>
+            <td>Комментарий сохранен</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}

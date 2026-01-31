@@ -1,0 +1,64 @@
+{% extends 'dashboard/employee.html' %}
+
+{% block content %}
+  <div class="card dashboard-hero fade-up">
+    <div class="hero-header">
+      <div>
+        <h1>{{ page_title }}</h1>
+        <p class="subtle">{{ page_subtitle }}</p>
+      </div>
+      <div class="hero-actions">
+        <button class="btn btn-primary btn-inline btn-sm" type="button">Отметить прочитанным</button>
+        <button class="btn btn-ghost btn-inline btn-sm" type="button">Настроить</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <div class="tab-bar">
+      <button class="tab-pill active" type="button">Все</button>
+      <button class="tab-pill" type="button">Важные</button>
+      <button class="tab-pill" type="button">Задачи</button>
+      <button class="tab-pill" type="button">Зарплата</button>
+    </div>
+    <div class="pill-set">
+      <button class="pill is-active" type="button">Непрочитанные</button>
+      <button class="pill" type="button">Все</button>
+    </div>
+  </div>
+
+  <div class="notification-list">
+    <div class="card notification-item">
+      <div class="notification-meta">
+        <div class="notification-time">Сегодня, 09:20</div>
+        <div class="notification-title">График на неделю готов</div>
+        <div class="subtle">Проверьте смены и подтвердите доступность.</div>
+      </div>
+      <span class="status-pill success">График</span>
+    </div>
+    <div class="card notification-item">
+      <div class="notification-meta">
+        <div class="notification-time">Вчера, 18:40</div>
+        <div class="notification-title">Запрос на изменение смены одобрен</div>
+        <div class="subtle">Смена 16 апреля обновлена на 10:00-19:00.</div>
+      </div>
+      <span class="status-pill">Запрос</span>
+    </div>
+    <div class="card notification-item">
+      <div class="notification-meta">
+        <div class="notification-time">Вчера, 12:10</div>
+        <div class="notification-title">Новая задача на смену</div>
+        <div class="subtle">Добавлена задача: проверить витрину.</div>
+      </div>
+      <span class="status-pill warning">Задачи</span>
+    </div>
+    <div class="card notification-item">
+      <div class="notification-meta">
+        <div class="notification-time">12 апреля, 16:15</div>
+        <div class="notification-title">Зарплата за март рассчитана</div>
+        <div class="subtle">Сумма доступна в разделе "Зарплата".</div>
+      </div>
+      <span class="status-pill success">Зарплата</span>
+    </div>
+  </div>
+{% endblock %}
