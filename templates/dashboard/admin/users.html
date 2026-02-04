@@ -124,6 +124,11 @@
             <div class="custom-select-menu" data-select-menu></div>
           </div>
         </div>
+        <div class="tab-bar" data-employee-status>
+          <button class="tab-pill active" type="button" data-status="all">Все</button>
+          <button class="tab-pill" type="button" data-status="active">Активные</button>
+          <button class="tab-pill" type="button" data-status="inactive">Деактивированные</button>
+        </div>
       </div>
       <div class="table-meta">
         <span data-bulk-hint>Выберите сотрудников для массовых действий.</span>
@@ -366,7 +371,6 @@
         Вы уверены, что хотите деактивировать выбранных сотрудников? Они потеряют доступ к сайту.
       </div>
       <div class="modal-actions">
-        <button class="btn btn-ghost" type="button" data-action="close-modal">Отмена</button>
         <button class="btn btn-danger" type="button" data-bulk-confirm>Деактивировать</button>
       </div>
     </div>
@@ -390,7 +394,6 @@
         Вы уверены, что хотите активировать выбранных сотрудников? Доступ к сайту будет восстановлен.
       </div>
       <div class="modal-actions">
-        <button class="btn btn-ghost" type="button" data-action="close-modal">Отмена</button>
         <button class="btn btn-primary" type="button" data-bulk-activate-confirm>Активировать</button>
       </div>
     </div>

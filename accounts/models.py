@@ -1,6 +1,19 @@
+from datetime import time
+from decimal import Decimal
+
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+
+
+def _default_shift_templates():
+    return [
+        "07:00-15:00",
+        "15:00-23:00",
+        "10:00-18:00",
+        "08:00-16:00",
+        "12:00-20:00",
+    ]
 
 
 class UserRole(models.TextChoices):
@@ -105,3 +118,122 @@ class PasswordResetRequest(models.Model):
 
     def __str__(self):
         return f'Reset request for {self.email} ({self.status})'
+
+
+class GlobalSettings(models.Model):
+    WORK_DAYS_CHOICES = [
+        ("daily", "Ежедневно"),
+        ("weekdays", "Пн–Пт"),
+        ("week6", "Пн–Сб"),
+    ]
+
+    work_start = models.TimeField(default=time(7, 0))
+    work_end = models.TimeField(default=time(23, 0))
+    work_days = models.CharField(max_length=20, choices=WORK_DAYS_CHOICES, default="daily")
+    ot_threshold = models.PositiveIntegerField(default=12)
+    ot_coeff = models.DecimalField(max_digits=4, decimal_places=2, default=Decimal("1.5"))
+    shift_templates = models.JSONField(default=_default_shift_templates, blank=True)
+    allow_custom_shifts = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_global_settings",
+    )
+
+    def __str__(self):
+        return "Global settings"
+
+
+class GlobalSettingsChange(models.Model):
+    admin = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="settings_changes",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    summary = models.CharField(max_length=255)
+    details = models.TextField(blank=True)
+    changes = models.JSONField(default=list, blank=True)
+    payload = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.admin} settings change"
+
+
+class SystemLogEntry(models.Model):
+    LEVEL_CHOICES = [
+        ("info", "Инфо"),
+        ("warning", "Предупреждение"),
+        ("error", "Ошибка"),
+    ]
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="system_log_entries",
+    )
+    action = models.CharField(max_length=255)
+    path = models.CharField(max_length=255, blank=True)
+    method = models.CharField(max_length=10, blank=True)
+    status_code = models.PositiveSmallIntegerField(null=True, blank=True)
+    level = models.CharField(max_length=10, choices=LEVEL_CHOICES, default="info")
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=255, blank=True)
+    duration_ms = models.PositiveIntegerField(null=True, blank=True)
+    meta = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.created_at:%Y-%m-%d %H:%M} {self.action}"
+
+
+class SystemBackup(models.Model):
+    STATUS_CHOICES = [
+        ("ready", "Готов"),
+        ("failed", "Ошибка"),
+        ("restored", "Восстановлен"),
+    ]
+    SOURCE_CHOICES = [
+        ("manual", "Вручную"),
+        ("auto", "Авто"),
+    ]
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_backups",
+    )
+    file_name = models.CharField(max_length=255)
+    file_path = models.CharField(max_length=512)
+    file_size = models.PositiveBigIntegerField(default=0)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="ready")
+    source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default="manual")
+    restored_at = models.DateTimeField(null=True, blank=True)
+    restored_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="restored_backups",
+    )
+    notes = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.file_name

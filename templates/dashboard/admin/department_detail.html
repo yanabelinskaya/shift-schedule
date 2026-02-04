@@ -5,6 +5,7 @@
     class="profile-hero card fade-up"
     data-department-detail
     data-department-id="{{ department.id }}"
+    data-department-archived="{{ department.is_archived|yesno:'true,false' }}"
     data-department-update-url="{% url 'api-department-detail' department.id %}"
     data-employee-update-base="{% url 'api-employee-detail' 0 %}"
     data-employee-detail-base="{% url 'admin-user-detail' 0 %}"
@@ -50,6 +51,9 @@
           <button class="btn btn-ghost btn-inline btn-sm" type="button" data-dept-info-cancel hidden>Отмена</button>
         </div>
       </div>
+      {% if department.is_archived %}
+        <div class="form-message is-warning">Архивный отдел. Редактирование параметров отключено.</div>
+      {% endif %}
       <div class="form-message" data-section-message hidden></div>
       <div class="info-list">
         <div class="info-row" data-field-row>
@@ -138,6 +142,9 @@
           <button class="btn btn-primary btn-inline btn-sm" type="button" data-dept-edit-done hidden>Готово</button>
         </div>
       </div>
+      {% if department.is_archived %}
+        <div class="form-message is-warning">Архивный отдел. Добавление и перевод сотрудников недоступны.</div>
+      {% endif %}
       <div class="form-message" data-section-message hidden></div>
       <div class="department-employee-add" data-employee-add hidden>
         <form class="form" data-employee-add-form novalidate>

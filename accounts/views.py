@@ -16,6 +16,7 @@ from rest_framework.response import Response
 from django.utils.decorators import method_decorator
 from django.db.models import Count
 from django.utils import timezone
+from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
 
 from .models import Department, DepartmentPosition, EmployeeProfile, PasswordResetRequest
@@ -359,6 +360,11 @@ class DepartmentDetailView(generics.GenericAPIView):
 
     def patch(self, request, department_id):
         department = get_object_or_404(Department, id=department_id)
+        if department.is_archived:
+            return Response(
+                {'detail': 'Архивный отдел нельзя редактировать.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         serializer = self.get_serializer(
             data=request.data,
             context={'department': department},
@@ -374,7 +380,7 @@ class DepartmentDetailView(generics.GenericAPIView):
         if 'manager_id' in data:
             manager_id = data.get('manager_id')
             manager = (
-                get_user_model().objects.filter(id=manager_id, role='manager').first()
+                get_user_model().objects.filter(id=manager_id, role='manager', is_active=True).first()
                 if manager_id
                 else None
             )
@@ -499,6 +505,8 @@ class EmployeeDetailView(generics.GenericAPIView):
             user_fields.append('is_active')
         if user_fields:
             user.save(update_fields=user_fields)
+            if is_admin and user.role == 'manager' and 'is_active' in data and not user.is_active:
+                Department.objects.filter(manager=user).update(manager=None)
 
         profile_fields = []
 
@@ -691,8 +699,45 @@ class EmployeeDeactivateView(generics.GenericAPIView):
         User = get_user_model()
         users = User.objects.filter(id__in=ids).exclude(role='admin')
         updated_ids = list(users.values_list('id', flat=True))
+        managers = users.filter(role='manager')
+        manager_departments = []
+        if managers.exists():
+            departments = (
+                Department.objects.filter(manager__in=managers)
+                .select_related('manager')
+                .order_by('name')
+            )
+            manager_map = {}
+            for department in departments:
+                manager = department.manager
+                if not manager:
+                    continue
+                entry = manager_map.setdefault(
+                    manager.id,
+                    {
+                        'manager_id': manager.id,
+                        'manager_name': manager.get_full_name() or manager.username,
+                        'departments': [],
+                    },
+                )
+                entry['departments'].append(
+                    {
+                        'id': department.id,
+                        'name': department.name,
+                        'is_archived': department.is_archived,
+                        'detail_url': reverse('admin-department-detail', args=[department.id]),
+                    }
+                )
+            manager_departments = list(manager_map.values())
+            Department.objects.filter(manager__in=managers).update(manager=None)
         users.update(is_active=False)
-        return Response({'updated_ids': updated_ids}, status=status.HTTP_200_OK)
+        return Response(
+            {
+                'updated_ids': updated_ids,
+                'manager_departments': manager_departments,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class EmployeeActivateView(generics.GenericAPIView):

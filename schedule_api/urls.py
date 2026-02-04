@@ -17,13 +17,16 @@ Including another URLconf
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
+from django.templatetags.static import static as static_url
 from django.urls import include, path
+from django.views.generic.base import RedirectView
 from accounts.web_views import login_view
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 urlpatterns = [
     path('', login_view, name='login'),
     path('login/', login_view, name='login-alt'),
+    path('favicon.ico', RedirectView.as_view(url=static_url('favicon.ico'), permanent=True), name='favicon'),
     path('', include('accounts.web_urls')),
     path('api/', include('accounts.api_urls')),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

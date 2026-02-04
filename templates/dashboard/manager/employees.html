@@ -1,87 +1,160 @@
 {% extends 'dashboard/manager.html' %}
 
 {% block content %}
-  <div class="card dashboard-hero fade-up">
+  <div class="card dashboard-hero fade-up" data-manager-employees>
     <div class="hero-header">
       <div>
         <h1>{{ page_title }}</h1>
         <p class="subtle">{{ page_subtitle }}</p>
       </div>
-      <div class="hero-actions">
-        <button class="btn btn-primary btn-inline" type="button">Добавить сотрудника</button>
-        <button class="btn btn-ghost btn-inline" type="button">Импорт Excel</button>
-      </div>
+    </div>
+    <div class="hero-meta">
+      <div class="meta-chip">Отдел: {{ department_name }}</div>
+      <div class="meta-chip">Сотрудников: {{ stats.total }}</div>
+      <div class="meta-chip">Активные: {{ stats.active }}</div>
+      <div class="meta-chip">Неактивные: {{ stats.inactive }}</div>
     </div>
   </div>
 
-  <div class="employees-layout">
-    <section class="card section-block">
-      <div class="section-header">
-        <div>
-          <h2>Сотрудники отдела</h2>
-          <p class="subtle">Статусы и лимиты по часам.</p>
-        </div>
-        <div class="section-actions">
-          <button class="btn btn-ghost btn-inline btn-sm" type="button">Фильтры</button>
+  <section class="card section-block manager-employees" data-employee-section>
+    <div class="section-header">
+      <div>
+        <h2>Сотрудники отдела</h2>
+        <p class="subtle">Фильтры, контакты и быстрые отметки отпусков/больничных.</p>
+      </div>
+    </div>
+
+    <div class="table-toolbar employee-toolbar">
+      <div class="table-filters">
+        <label class="search-field">
+          <input type="search" name="employee_search" placeholder="Поиск по ФИО, телефону или email" data-employee-search />
+        </label>
+        <div class="filter-group">
+          <div class="custom-select" data-custom-select>
+            <select class="filter-select" name="position" data-employee-position-filter>
+              <option value="">Все должности</option>
+              {% for position in positions %}
+                <option value="{{ position|lower }}">{{ position }}</option>
+              {% endfor %}
+            </select>
+            <button class="custom-select-trigger" type="button" data-select-trigger>
+              <span data-select-label>Все должности</span>
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M5 7l5 6 5-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+            <div class="custom-select-menu" data-select-menu></div>
+          </div>
+          <div class="custom-select" data-custom-select>
+            <select class="filter-select" name="status" data-employee-status-filter>
+              <option value="">Все статусы</option>
+              <option value="active">Активные</option>
+              <option value="vacation">В отпуске</option>
+              <option value="sick">Больничный</option>
+              <option value="inactive">Неактивные</option>
+            </select>
+            <button class="custom-select-trigger" type="button" data-select-trigger>
+              <span data-select-label>Все статусы</span>
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M5 7l5 6 5-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+            <div class="custom-select-menu" data-select-menu></div>
+          </div>
         </div>
       </div>
-      <div class="data-table-wrap">
+      <div class="table-meta">
+        <span class="subtle" data-employee-count>Показано: {{ stats.total }} из {{ stats.total }}</span>
+      </div>
+    </div>
+
+    <div class="employees-layout manager-employees-layout">
+      <div class="data-table-wrap data-table-scroll" data-employee-table>
         <table class="data-table">
           <thead>
             <tr>
               <th>ФИО</th>
-              <th>Роль</th>
+              <th>Должность</th>
+              <th>Телефон</th>
+              <th>Email</th>
               <th>Ставка</th>
-              <th>Лимит часов</th>
+              <th>Лимит</th>
               <th>Статус</th>
+              <th>Действия</th>
             </tr>
           </thead>
-          <tbody>
-            <tr>
-              <td>Елена Кузнецова</td>
-              <td>Сотрудник</td>
-              <td>580/ч</td>
-              <td>40</td>
-              <td><span class="status-pill success">Активен</span></td>
-            </tr>
-            <tr>
-              <td>Игорь Лебедев</td>
-              <td>Старший смены</td>
-              <td>620/ч</td>
-              <td>40</td>
-              <td><span class="status-pill">Активен</span></td>
-            </tr>
-            <tr>
-              <td>Мария Соколова</td>
-              <td>Сотрудник</td>
-              <td>560/ч</td>
-              <td>36</td>
-              <td><span class="status-pill warning">В отпуске</span></td>
+          <tbody data-employee-rows>
+            {% if employees %}
+              {% for employee in employees %}
+                <tr
+                  data-employee-row
+                  data-employee-id="{{ employee.id }}"
+                  data-name="{{ employee.full_name|default:''|lower }}"
+                  data-position="{{ employee.position|default:''|lower }}"
+                  data-status="{{ employee.status_code }}"
+                  data-phone="{{ employee.phone|default:''|lower }}"
+                  data-email="{{ employee.email|default:''|lower }}"
+                  data-rate="{{ employee.rate_display }}"
+                  data-limit="{{ employee.weekly_limit }}"
+                >
+                  <td>{{ employee.full_name }}</td>
+                  <td>{{ employee.position }}</td>
+                  <td>{{ employee.phone }}</td>
+                  <td>{{ employee.email }}</td>
+                  <td>{{ employee.rate_display }}</td>
+                  <td>{{ employee.weekly_limit }} ч</td>
+                  <td>
+                    <span class="status-pill {{ employee.status_class }}" data-status-pill>{{ employee.status_label }}</span>
+                  </td>
+                  <td>
+                    <button class="btn btn-ghost btn-inline btn-sm" type="button" data-action="select-employee">Открыть</button>
+                  </td>
+                </tr>
+              {% endfor %}
+            {% endif %}
+            <tr data-empty-row{% if employees %} hidden{% endif %}>
+              <td colspan="8">Сотрудники не найдены.</td>
             </tr>
           </tbody>
         </table>
       </div>
-    </section>
 
-    <aside class="card employee-detail">
-      <h2>Карточка сотрудника</h2>
-      <p class="subtle">Настройки ставки и лимитов.</p>
-      <div class="detail-field">
-        <label for="rate">Текущая ставка</label>
-        <input id="rate" class="control-input" type="text" value="580/ч" />
-      </div>
-      <div class="detail-field">
-        <label for="limit">Лимит часов в неделю</label>
-        <input id="limit" class="control-input" type="text" value="40" />
-      </div>
-      <div class="detail-field">
-        <label for="note">Комментарий по дисциплине</label>
-        <textarea id="note" rows="4" placeholder="Короткий комментарий"></textarea>
-      </div>
-      <div class="detail-actions">
-        <button class="btn btn-primary btn-inline" type="button">Изменить ставку</button>
-        <button class="btn btn-ghost btn-inline" type="button">Сохранить</button>
-      </div>
-    </aside>
-  </div>
+      <aside class="card employee-detail manager-employee-detail" data-employee-detail>
+        <h2>Карточка сотрудника</h2>
+        <p class="subtle">Ставка отображается для справки. Менеджер отмечает отпуск или больничный.</p>
+        <div class="employee-detail-list">
+          <div>
+            <div class="employee-meta-label">ФИО</div>
+            <div class="employee-detail-value" data-detail-name>—</div>
+          </div>
+          <div>
+            <div class="employee-meta-label">Должность</div>
+            <div class="employee-detail-value" data-detail-position>—</div>
+          </div>
+          <div>
+            <div class="employee-meta-label">Контакты</div>
+            <div class="employee-detail-value" data-detail-contacts>—</div>
+          </div>
+          <div>
+            <div class="employee-meta-label">Ставка</div>
+            <div class="employee-detail-value" data-detail-rate>—</div>
+          </div>
+          <div>
+            <div class="employee-meta-label">Лимит часов</div>
+            <div class="employee-detail-value" data-detail-limit>—</div>
+          </div>
+          <div>
+            <div class="employee-meta-label">Статус</div>
+            <div class="employee-detail-value" data-detail-status>—</div>
+          </div>
+        </div>
+        <div class="detail-actions">
+          <button class="btn btn-primary btn-inline" type="button" data-detail-action="vacation">Отметить отпуск</button>
+          <button class="btn btn-ghost btn-inline" type="button" data-detail-action="sick">Больничный</button>
+          <button class="btn btn-ghost btn-inline" type="button" data-detail-action="active">Вернуть в работу</button>
+        </div>
+        <div class="form-message" data-detail-message hidden></div>
+      </aside>
+    </div>
+  </section>
 {% endblock %}

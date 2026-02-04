@@ -128,14 +128,18 @@ class DepartmentCreateSerializer(serializers.Serializer):
     def validate_manager_id(self, value):
         if value in (None, "", 0):
             return None
-        if not User.objects.filter(id=value, role='manager').exists():
-            raise serializers.ValidationError("Менеджер не найден.")
+        if not User.objects.filter(id=value, role='manager', is_active=True).exists():
+            raise serializers.ValidationError("Менеджер не найден или деактивирован.")
         return value
 
     def create(self, validated_data):
         positions = validated_data.pop('positions', [])
         manager_id = validated_data.pop('manager_id', None)
-        manager = User.objects.filter(id=manager_id, role='manager').first() if manager_id else None
+        manager = (
+            User.objects.filter(id=manager_id, role='manager', is_active=True).first()
+            if manager_id
+            else None
+        )
         department = Department.objects.create(manager=manager, **validated_data)
         if positions:
             DepartmentPosition.objects.bulk_create(
@@ -179,8 +183,8 @@ class DepartmentUpdateSerializer(serializers.Serializer):
     def validate_manager_id(self, value):
         if value in (None, "", 0):
             return None
-        if not User.objects.filter(id=value, role='manager').exists():
-            raise serializers.ValidationError("Менеджер не найден.")
+        if not User.objects.filter(id=value, role='manager', is_active=True).exists():
+            raise serializers.ValidationError("Менеджер не найден или деактивирован.")
         return value
 
 

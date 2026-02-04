@@ -407,6 +407,8 @@
     const roleFilter = document.querySelector("[data-filter-role]");
     const departmentFilter = document.querySelector("[data-filter-department]");
     const searchInput = document.querySelector("[data-filter-search]");
+    const statusToggle = document.querySelector("[data-employee-status]");
+    const statusButtons = statusToggle ? Array.from(statusToggle.querySelectorAll("[data-status]")) : [];
     const pagination = document.querySelector("[data-pagination]");
     const paginationPages = pagination ? pagination.querySelector("[data-pagination-pages]") : null;
     const paginationPrev = pagination ? pagination.querySelector("[data-pagination-prev]") : null;
@@ -435,30 +437,42 @@
         return;
       }
       message.textContent = text || "";
-      message.classList.remove("is-error", "is-success");
+      message.classList.remove("is-error", "is-success", "is-warning");
       if (!text) {
         message.hidden = true;
         return;
       }
       message.hidden = false;
-      if (type) {
-        message.classList.add(type === "error" ? "is-error" : "is-success");
+      if (type === "error") {
+        message.classList.add("is-error");
+      } else if (type === "warning") {
+        message.classList.add("is-warning");
+      } else if (type) {
+        message.classList.add("is-success");
       }
     };
 
-    const showGlobalMessage = (text, type) => {
+    const showGlobalMessage = (text, type, options = {}) => {
       if (!globalMessage) {
         return;
       }
-      globalMessage.textContent = text || "";
-      globalMessage.classList.remove("is-error", "is-success");
+      if (options.allowHtml) {
+        globalMessage.innerHTML = text || "";
+      } else {
+        globalMessage.textContent = text || "";
+      }
+      globalMessage.classList.remove("is-error", "is-success", "is-warning");
       if (!text) {
         globalMessage.hidden = true;
         return;
       }
       globalMessage.hidden = false;
-      if (type) {
-        globalMessage.classList.add(type === "error" ? "is-error" : "is-success");
+      if (type === "error") {
+        globalMessage.classList.add("is-error");
+      } else if (type === "warning") {
+        globalMessage.classList.add("is-warning");
+      } else if (type) {
+        globalMessage.classList.add("is-success");
       }
     };
 
@@ -567,6 +581,14 @@
         .toLowerCase()
         .replace(/\s+/g, " ")
         .trim();
+
+    const escapeHtml = (value) =>
+      String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#39;");
 
     const buildDetailUrl = (id) => {
       if (!detailBaseUrl) {
@@ -737,7 +759,38 @@
             }
           });
           updateSelectAllState();
-          showGlobalMessage("Сотрудники деактивированы. Они потеряли доступ к сайту.", "success");
+          const managerDepartments = Array.isArray(data.manager_departments)
+            ? data.manager_departments
+            : [];
+          if (managerDepartments.length) {
+            const lines = managerDepartments
+              .map((item) => {
+                const managerName = escapeHtml(item.manager_name || "Менеджер");
+                const departments = Array.isArray(item.departments) ? item.departments : [];
+                const departmentLinks = departments
+                  .map((department) => {
+                    const name = escapeHtml(department.name || "Отдел");
+                    const href = department.detail_url ? escapeHtml(department.detail_url) : "";
+                    return href ? `<a href="${href}">${name}</a>` : name;
+                  })
+                  .filter(Boolean);
+                const departmentsLabel = departmentLinks.length
+                  ? departmentLinks.join(", ")
+                  : "отделы не указаны";
+                return `<strong>${managerName}:</strong> ${departmentsLabel}`;
+              })
+              .join("<br>");
+            const warningText = [
+              "Сотрудники деактивированы. Они потеряли доступ к сайту.",
+              "",
+              "Менеджер снят с отделов. Назначьте нового или оставьте отдел без менеджера.",
+              "",
+              lines,
+            ].join("<br>");
+            showGlobalMessage(warningText, "warning", { allowHtml: true });
+          } else {
+            showGlobalMessage("Сотрудники деактивированы. Они потеряли доступ к сайту.", "success");
+          }
           autoHideGlobalMessage();
           closeModal(bulkModal);
         } catch (error) {
@@ -952,6 +1005,8 @@
       }
     };
 
+    let currentStatusFilter = "all";
+
     const applyFiltersAndPagination = () => {
       if (!tableBody) {
         return;
@@ -965,7 +1020,12 @@
         const matchesDepartment = !departmentValue || row.dataset.department === departmentValue;
         const matchesSearch =
           !searchValue || normalizeText(row.dataset.name || row.textContent).includes(searchValue);
-        return matchesRole && matchesDepartment && matchesSearch;
+        const isActive = row.dataset.active === "true";
+        const matchesStatus =
+          currentStatusFilter === "all" ||
+          (currentStatusFilter === "active" && isActive) ||
+          (currentStatusFilter === "inactive" && !isActive);
+        return matchesRole && matchesDepartment && matchesSearch && matchesStatus;
       });
 
       const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
@@ -983,6 +1043,14 @@
 
       if (emptyRow) {
         emptyRow.hidden = filteredRows.length > 0;
+        const hasFilters =
+          !!roleValue || !!departmentValue || !!searchValue || currentStatusFilter !== "all";
+        const emptyCell = emptyRow.querySelector("td");
+        if (emptyCell) {
+          emptyCell.textContent = hasFilters
+            ? "Такие пользователи не найдены."
+            : "Сотрудники не найдены.";
+        }
       }
 
       renderPagination(totalPages);
@@ -1004,6 +1072,26 @@
       });
     }
 
+    if (statusButtons.length) {
+      const activeButton = statusButtons.find((button) => button.classList.contains("active"));
+      if (activeButton && activeButton.dataset.status) {
+        currentStatusFilter = activeButton.dataset.status;
+      }
+      statusButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          const nextStatus = button.dataset.status;
+          if (!nextStatus || nextStatus === currentStatusFilter) {
+            return;
+          }
+          currentStatusFilter = nextStatus;
+          statusButtons.forEach((item) => item.classList.remove("active"));
+          button.classList.add("active");
+          currentPage = 1;
+          applyFiltersAndPagination();
+        });
+      });
+    }
+
     if (paginationPrev) {
       paginationPrev.addEventListener("click", () => {
         currentPage = Math.max(1, currentPage - 1);
@@ -1022,8 +1110,6 @@
     const departmentPositions = departmentPositionsEl
       ? JSON.parse(departmentPositionsEl.textContent)
       : {};
-
-    const employeeRole = detailRoot.dataset.employeeRole || "";
 
     const updatePositionOptions = () => {
       if (!departmentSelect || !positionSelect) {
@@ -1440,9 +1526,21 @@
     const openAddDepartmentButton = document.querySelector("[data-action='open-add-department']");
     const archiveButton = document.querySelector("[data-action='toggle-department-archive']");
     const cardGrid = document.querySelector("[data-department-cards]");
+    const departmentSearch = document.querySelector("[data-department-search]");
+    const viewToggle = document.querySelector("[data-department-view]");
+    const viewButtons = viewToggle ? Array.from(viewToggle.querySelectorAll("[data-view]")) : [];
+    const emptyState = document.querySelector("[data-department-empty]");
+    const countLabel = document.querySelector("[data-department-count]");
+    const pagination = document.querySelector("[data-department-pagination]");
+    const paginationPages = pagination ? pagination.querySelector("[data-department-pagination-pages]") : null;
+    const paginationPrev = pagination ? pagination.querySelector("[data-department-pagination-prev]") : null;
+    const paginationNext = pagination ? pagination.querySelector("[data-department-pagination-next]") : null;
     const departmentsDataEl = document.getElementById("departments-data");
     let departmentsData = [];
     let selectedDepartmentId = null;
+    let currentDepartmentView = "active";
+    let currentPage = 1;
+    const pageSize = 9;
 
     if (departmentsDataEl) {
       try {
@@ -1457,14 +1555,18 @@
         return;
       }
       message.textContent = text || "";
-      message.classList.remove("is-error", "is-success");
+      message.classList.remove("is-error", "is-success", "is-warning");
       if (!text) {
         message.hidden = true;
         return;
       }
       message.hidden = false;
-      if (type) {
-        message.classList.add(type === "error" ? "is-error" : "is-success");
+      if (type === "error") {
+        message.classList.add("is-error");
+      } else if (type === "warning") {
+        message.classList.add("is-warning");
+      } else if (type) {
+        message.classList.add("is-success");
       }
     };
 
@@ -1473,14 +1575,18 @@
         return;
       }
       globalMessage.textContent = text || "";
-      globalMessage.classList.remove("is-error", "is-success");
+      globalMessage.classList.remove("is-error", "is-success", "is-warning");
       if (!text) {
         globalMessage.hidden = true;
         return;
       }
       globalMessage.hidden = false;
-      if (type) {
-        globalMessage.classList.add(type === "error" ? "is-error" : "is-success");
+      if (type === "error") {
+        globalMessage.classList.add("is-error");
+      } else if (type === "warning") {
+        globalMessage.classList.add("is-warning");
+      } else if (type) {
+        globalMessage.classList.add("is-success");
       }
     };
 
@@ -1533,6 +1639,188 @@
       archiveButton.disabled = false;
       archiveButton.textContent = department.is_archived ? "Разархивировать" : "Архивировать";
     };
+
+    const normalizeText = (value) =>
+      String(value || "")
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim();
+
+    const getCards = () =>
+      cardGrid ? Array.from(cardGrid.querySelectorAll("[data-department-card]")) : [];
+
+    const getDepartmentRecord = (card) => {
+      const id = card?.dataset?.departmentId;
+      if (!id) {
+        return null;
+      }
+      return departmentsData.find((item) => String(item.id) === String(id)) || null;
+    };
+
+    const isCardArchived = (card) => {
+      if (!card) {
+        return false;
+      }
+      const flag = card.dataset?.departmentArchived;
+      if (typeof flag === "string") {
+        return flag === "true";
+      }
+      if (card.classList.contains("is-archived")) {
+        return true;
+      }
+      const record = getDepartmentRecord(card);
+      return record ? !!record.is_archived : false;
+    };
+
+    const matchesView = (card) => {
+      const archived = isCardArchived(card);
+      return currentDepartmentView === "archived" ? archived : !archived;
+    };
+
+    const matchesSearch = (card, searchValue) => {
+      if (!searchValue) {
+        return true;
+      }
+      const name =
+        card?.dataset?.departmentName ||
+        card?.querySelector(".mini-title")?.textContent ||
+        card?.textContent ||
+        "";
+      return normalizeText(name).includes(searchValue);
+    };
+
+    const updateCountLabel = (visibleCount, totalCount) => {
+      if (!countLabel) {
+        return;
+      }
+      if (!totalCount) {
+        countLabel.textContent = "Показано: 0";
+        return;
+      }
+      countLabel.textContent = `Показано: ${visibleCount} из ${totalCount}`;
+    };
+
+    const renderPagination = (totalPages) => {
+      if (!pagination || !paginationPages) {
+        return;
+      }
+      paginationPages.innerHTML = "";
+      pagination.hidden = totalPages <= 1;
+      for (let i = 1; i <= totalPages; i += 1) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "pagination-page";
+        button.textContent = String(i);
+        if (i === currentPage) {
+          button.classList.add("is-active");
+        }
+        button.addEventListener("click", () => {
+          currentPage = i;
+          applyFiltersAndPagination();
+        });
+        paginationPages.append(button);
+      }
+      if (paginationPrev) {
+        paginationPrev.disabled = currentPage <= 1;
+      }
+      if (paginationNext) {
+        paginationNext.disabled = currentPage >= totalPages;
+      }
+    };
+
+    const applyFiltersAndPagination = () => {
+      const cards = getCards();
+      if (!cards.length) {
+        if (emptyState) {
+          emptyState.hidden = false;
+        }
+        if (pagination) {
+          pagination.hidden = true;
+        }
+        updateArchiveButton();
+        updateCountLabel(0, 0);
+        return;
+      }
+      const searchValue = normalizeText(departmentSearch ? departmentSearch.value : "");
+      const cardsForView = cards.filter((card) => matchesView(card));
+      const filteredCards = cardsForView.filter((card) => matchesSearch(card, searchValue));
+      const totalPages = Math.max(1, Math.ceil(filteredCards.length / pageSize));
+      currentPage = Math.min(currentPage, totalPages);
+      const startIndex = (currentPage - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+
+      cards.forEach((card) => {
+        card.hidden = true;
+        card.style.display = "none";
+      });
+
+      filteredCards.forEach((card, index) => {
+        const shouldHide = index < startIndex || index >= endIndex;
+        card.hidden = shouldHide;
+        card.style.display = shouldHide ? "none" : "";
+      });
+
+      if (emptyState) {
+        emptyState.hidden = filteredCards.length > 0;
+      }
+
+      renderPagination(totalPages);
+      updateCountLabel(filteredCards.length, cardsForView.length);
+
+      if (selectedDepartmentId) {
+        const selectedCard = cardGrid
+          ? cardGrid.querySelector(`[data-department-id='${selectedDepartmentId}']`)
+          : null;
+        if (!selectedCard || selectedCard.hidden) {
+          if (selectedCard) {
+            selectedCard.classList.remove("is-selected");
+          }
+          selectedDepartmentId = null;
+        }
+      }
+      updateArchiveButton();
+    };
+
+    if (viewButtons.length) {
+      const activeButton = viewButtons.find((button) => button.classList.contains("active"));
+      if (activeButton && activeButton.dataset.view) {
+        currentDepartmentView = activeButton.dataset.view;
+      }
+      viewButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          const nextView = button.dataset.view;
+          if (!nextView || nextView === currentDepartmentView) {
+            return;
+          }
+          currentDepartmentView = nextView;
+          currentPage = 1;
+          viewButtons.forEach((item) => item.classList.remove("active"));
+          button.classList.add("active");
+          applyFiltersAndPagination();
+        });
+      });
+    }
+
+    if (departmentSearch) {
+      departmentSearch.addEventListener("input", () => {
+        currentPage = 1;
+        applyFiltersAndPagination();
+      });
+    }
+
+    if (paginationPrev) {
+      paginationPrev.addEventListener("click", () => {
+        currentPage = Math.max(1, currentPage - 1);
+        applyFiltersAndPagination();
+      });
+    }
+
+    if (paginationNext) {
+      paginationNext.addEventListener("click", () => {
+        currentPage += 1;
+        applyFiltersAndPagination();
+      });
+    }
 
     if (openAddDepartmentButton && addDepartmentModal) {
       openAddDepartmentButton.addEventListener("click", () => openModal(addDepartmentModal));
@@ -1603,8 +1891,9 @@
             : null;
           if (card) {
             card.classList.toggle("is-archived", !!department.is_archived);
+            card.dataset.departmentArchived = department.is_archived ? "true" : "false";
           }
-          updateArchiveButton();
+          applyFiltersAndPagination();
           showGlobalMessage(
             department.is_archived ? "Отдел архивирован." : "Отдел разархивирован.",
             "success",
@@ -1707,6 +1996,8 @@
         }
       });
     }
+
+    applyFiltersAndPagination();
   }
 
   const loginPage = document.querySelector("[data-login-page]");
@@ -2868,6 +3159,889 @@
   };
 
   initEmployeeDetail();
+  const initAdminSettings = () => {
+    const root = document.querySelector("[data-admin-settings]");
+    if (!root) {
+      return;
+    }
+
+    const updateUrl = root.dataset.settingsUpdateUrl || "";
+    const historyUrl = root.dataset.settingsHistoryUrl || "";
+    const editButton = root.querySelector("[data-settings-edit]");
+    const cancelButton = root.querySelector("[data-settings-cancel]");
+    const messageEl = root.querySelector("[data-settings-message]");
+    const inputs = Array.from(root.querySelectorAll("[data-settings-input]"));
+    const tagWrappers = Array.from(root.querySelectorAll("[data-settings-tags]"));
+    const summaryHours = root.querySelector("[data-summary-hours]");
+    const summaryOt = root.querySelector("[data-summary-ot]");
+    const summaryShifts = root.querySelector("[data-summary-shifts]");
+    const summaryUpdate = root.querySelector("[data-summary-update]");
+    const timeCalendar = root.querySelector("[data-time-calendar]");
+
+    const historyButton = root.querySelector("[data-settings-history]");
+    const historyList = root.querySelector("[data-history-list]");
+    const historyEmpty = root.querySelector("[data-history-empty]");
+    const historyMessage = root.querySelector("[data-history-message]");
+
+    const showMessage = (element, text, type) => {
+      if (!element) {
+        return;
+      }
+      element.textContent = text || "";
+      element.classList.remove("is-error", "is-success");
+      if (!text) {
+        element.hidden = true;
+        return;
+      }
+      element.hidden = false;
+      if (type) {
+        element.classList.add(type === "error" ? "is-error" : "is-success");
+      }
+    };
+
+    const formatCoeff = (value) => String(value || "").replace(".", ",");
+
+    const parseHour = (value) => {
+      if (!value) {
+        return 0;
+      }
+      const [hours] = String(value).split(":");
+      const parsed = Number(hours);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    };
+
+    const renderTimeCalendar = () => {
+      if (!timeCalendar) {
+        return;
+      }
+      const startInput = root.querySelector("[name='work_start']");
+      const endInput = root.querySelector("[name='work_end']");
+      const startValue = startInput ? startInput.value : "07:00";
+      const endValue = endInput ? endInput.value : "23:00";
+      const startHour = parseHour(startValue);
+      const endHour = parseHour(endValue);
+
+      timeCalendar.innerHTML = "";
+
+      const label = document.createElement("div");
+      label.className = "time-calendar-label";
+      label.textContent = `Рабочие часы: ${startValue}–${endValue}`;
+
+      const grid = document.createElement("div");
+      grid.className = "time-calendar-grid";
+
+      for (let hour = 0; hour < 24; hour += 1) {
+        const cell = document.createElement("div");
+        cell.className = "time-slot";
+        cell.textContent = `${String(hour).padStart(2, "0")}:00`;
+        const isActive =
+          startHour <= endHour
+            ? hour >= startHour && hour < endHour
+            : hour >= startHour || hour < endHour;
+        if (isActive) {
+          cell.classList.add("is-active");
+        }
+        grid.append(cell);
+      }
+
+      timeCalendar.append(label, grid);
+    };
+
+    const formatShiftValue = (value) => {
+      const raw = String(value || "").trim();
+      if (!raw) {
+        return "";
+      }
+      const normalized = raw.replace(/[–—]/g, "-");
+      let parts = normalized.split("-");
+      if (parts.length !== 2) {
+        parts = normalized.split(/\s+/);
+      }
+      if (parts.length !== 2) {
+        return "";
+      }
+      const parsePart = (part) => {
+        const cleaned = String(part || "").trim();
+        if (!cleaned) {
+          return null;
+        }
+        const colonMatch = cleaned.match(/^(\d{1,2})(?::(\d{1,2}))?$/);
+        if (colonMatch) {
+          const hours = Number(colonMatch[1]);
+          const minutes = colonMatch[2] ? Number(colonMatch[2]) : 0;
+          if (hours > 23 || minutes > 59) {
+            return null;
+          }
+          return { hours, minutes };
+        }
+        const digits = cleaned.replace(/\D/g, "");
+        if (!digits) {
+          return null;
+        }
+        let hours = 0;
+        let minutes = 0;
+        if (digits.length <= 2) {
+          hours = Number(digits);
+          minutes = 0;
+        } else if (digits.length === 3) {
+          hours = Number(digits.slice(0, 1));
+          minutes = Number(digits.slice(1));
+        } else if (digits.length === 4) {
+          hours = Number(digits.slice(0, 2));
+          minutes = Number(digits.slice(2));
+        } else {
+          return null;
+        }
+        if (hours > 23 || minutes > 59) {
+          return null;
+        }
+        return { hours, minutes };
+      };
+      const start = parsePart(parts[0]);
+      const end = parsePart(parts[1]);
+      if (!start || !end) {
+        return "";
+      }
+      const pad = (num) => String(num).padStart(2, "0");
+      return `${pad(start.hours)}:${pad(start.minutes)}-${pad(end.hours)}:${pad(end.minutes)}`;
+    };
+
+    const setTagInputState = (wrapper, isEditing) => {
+      if (!wrapper) {
+        return;
+      }
+      wrapper.classList.toggle("is-disabled", !isEditing);
+      const input = wrapper.querySelector("[data-tag-field]");
+      const addButton = wrapper.querySelector("[data-tag-add]");
+      if (input) {
+        input.disabled = !isEditing;
+      }
+      if (addButton) {
+        addButton.disabled = !isEditing;
+      }
+      wrapper.querySelectorAll(".tag-remove").forEach((button) => {
+        button.disabled = !isEditing;
+      });
+    };
+
+    const getShiftCount = () => {
+      const wrapper = tagWrappers[0];
+      if (!wrapper) {
+        return 0;
+      }
+      return wrapper.querySelectorAll("[data-tag-value]").length;
+    };
+
+    const initShiftValidation = () => {
+      const wrapper = tagWrappers[0];
+      if (!wrapper) {
+        return;
+      }
+      const input = wrapper.querySelector("[data-tag-field]");
+      const addButton = wrapper.querySelector("[data-tag-add]");
+      if (!input) {
+        return;
+      }
+
+      const applyFormat = (event) => {
+        if (input.disabled) {
+          return;
+        }
+        const formatted = formatShiftValue(input.value);
+        if (!formatted && String(input.value || "").trim()) {
+          showMessage(messageEl, "Введите смену в формате 07:00-15:00.", "error");
+          if (event) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+          return;
+        }
+        if (formatted) {
+          input.value = formatted;
+          showMessage(messageEl, "", null);
+        }
+      };
+
+      if (addButton) {
+        addButton.addEventListener("click", applyFormat, true);
+      }
+      input.addEventListener(
+        "keydown",
+        (event) => {
+          if (event.key === "Enter") {
+            applyFormat(event);
+          }
+        },
+        true,
+      );
+      input.addEventListener("blur", () => {
+        applyFormat();
+      });
+    };
+
+    const updateSummaries = (options = {}) => {
+      const startInput = root.querySelector("[name='work_start']");
+      const endInput = root.querySelector("[name='work_end']");
+      const workDays = root.querySelector("[name='work_days']");
+      const otThreshold = root.querySelector("[name='ot_threshold']");
+      const otCoeff = root.querySelector("[name='ot_coeff']");
+      const updatedAt = options.updatedAt;
+
+      if (summaryHours && startInput && endInput) {
+        const label =
+          workDays && workDays.selectedOptions && workDays.selectedOptions.length
+            ? workDays.selectedOptions[0].textContent
+            : "Ежедневно";
+        summaryHours.textContent = `Режим: ${label} · ${startInput.value}–${endInput.value}`;
+      }
+      if (summaryOt && otThreshold && otCoeff) {
+        summaryOt.textContent = `Переработка: >${otThreshold.value} ч/день · ${formatCoeff(
+          otCoeff.value,
+        )}x`;
+      }
+      if (summaryShifts) {
+        summaryShifts.textContent = `Типы смен: ${getShiftCount()}`;
+      }
+      if (summaryUpdate && updatedAt) {
+        const parsed = new Date(updatedAt);
+        if (!Number.isNaN(parsed.getTime())) {
+          const formatter = new Intl.DateTimeFormat("ru-RU", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          });
+          summaryUpdate.textContent = `Последний апдейт: ${formatter.format(parsed)}`;
+        }
+      }
+    };
+
+    const captureState = () => ({
+      inputs: inputs.map((input) => ({
+        input,
+        value: input.type === "checkbox" ? input.checked : input.value,
+      })),
+      tags: tagWrappers.map((wrapper) => {
+        const list = wrapper.querySelector("[data-tag-list]");
+        const storage = wrapper.querySelector("[data-tag-storage]");
+        return {
+          wrapper,
+          listHtml: list ? list.innerHTML : "",
+          storageValue: storage ? storage.value : "",
+        };
+      }),
+    });
+
+    const restoreState = (state) => {
+      if (!state) {
+        return;
+      }
+      state.inputs.forEach((entry) => {
+        if (!entry.input) {
+          return;
+        }
+        if (entry.input.type === "checkbox") {
+          entry.input.checked = Boolean(entry.value);
+        } else {
+          entry.input.value = entry.value;
+        }
+        if (entry.input.tagName === "SELECT") {
+          refreshCustomSelect(entry.input.closest("[data-custom-select]"));
+        }
+      });
+      state.tags.forEach((entry) => {
+        if (!entry.wrapper) {
+          return;
+        }
+        const list = entry.wrapper.querySelector("[data-tag-list]");
+        const storage = entry.wrapper.querySelector("[data-tag-storage]");
+        if (list) {
+          list.innerHTML = entry.listHtml;
+        }
+        if (storage) {
+          storage.value = entry.storageValue;
+        }
+      });
+      renderTimeCalendar();
+    };
+
+    let isEditing = false;
+    let originalState = captureState();
+    let historyLoaded = false;
+
+    const setEditingState = (nextState) => {
+      isEditing = nextState;
+      if (editButton) {
+        editButton.textContent = isEditing ? "Сохранить изменения" : "Обновить шаблоны";
+      }
+      if (cancelButton) {
+        cancelButton.hidden = !isEditing;
+      }
+      inputs.forEach((input) => {
+        input.disabled = !isEditing;
+        if (input.tagName === "SELECT") {
+          refreshCustomSelect(input.closest("[data-custom-select]"));
+        }
+      });
+      tagWrappers.forEach((wrapper) => setTagInputState(wrapper, isEditing));
+    };
+
+    const getTagsPayload = () => {
+      const wrapper = tagWrappers[0];
+      if (!wrapper) {
+        return [];
+      }
+      const storage = wrapper.querySelector("[data-tag-storage]");
+      if (!storage) {
+        return [];
+      }
+      try {
+        const parsed = JSON.parse(storage.value || "[]");
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (error) {
+        return [];
+      }
+    };
+
+    const buildPayload = () => {
+      const getInput = (name) => root.querySelector(`[name='${name}']`);
+      const startInput = getInput("work_start");
+      const endInput = getInput("work_end");
+      const workDays = getInput("work_days");
+      const otThreshold = getInput("ot_threshold");
+      const otCoeff = getInput("ot_coeff");
+      const allowCustom = getInput("allow_custom_shifts");
+
+      return {
+        work_start: startInput ? startInput.value : "07:00",
+        work_end: endInput ? endInput.value : "23:00",
+        work_days: workDays ? workDays.value : "daily",
+        ot_threshold: otThreshold ? Number(otThreshold.value) : 12,
+        ot_coeff: otCoeff ? otCoeff.value : "1.5",
+        shift_templates: getTagsPayload(),
+        allow_custom_shifts: allowCustom ? allowCustom.checked : true,
+      };
+    };
+
+    const saveSettings = async () => {
+      if (!updateUrl) {
+        showMessage(messageEl, "URL сохранения настроек не задан.", "error");
+        return;
+      }
+      if (editButton) {
+        editButton.disabled = true;
+      }
+      showMessage(messageEl, "Сохраняем изменения...", "success");
+      try {
+        const response = await fetch(updateUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCookie("csrftoken"),
+          },
+          credentials: "same-origin",
+          body: JSON.stringify(buildPayload()),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          showMessage(messageEl, data.detail || "Не удалось сохранить настройки.", "error");
+          return;
+        }
+        setEditingState(false);
+        originalState = captureState();
+        updateSummaries({ updatedAt: data.updated_at });
+        renderTimeCalendar();
+        historyLoaded = false;
+        showMessage(messageEl, "Настройки сохранены и применены.", "success");
+      } catch (error) {
+        showMessage(messageEl, "Ошибка сети. Попробуйте позже.", "error");
+      } finally {
+        if (editButton) {
+          editButton.disabled = false;
+        }
+      }
+    };
+
+    if (editButton) {
+      editButton.addEventListener("click", () => {
+        if (!isEditing) {
+          originalState = captureState();
+          setEditingState(true);
+          showMessage(messageEl, "Режим редактирования включен. Обновите параметры и нажмите сохранить.", "success");
+          return;
+        }
+        saveSettings();
+      });
+    }
+
+    if (cancelButton) {
+      cancelButton.addEventListener("click", () => {
+        restoreState(originalState);
+        setEditingState(false);
+        updateSummaries();
+        showMessage(messageEl, "Изменения отменены.", "error");
+      });
+    }
+
+    inputs.forEach((input) => {
+      input.addEventListener("change", () => {
+        updateSummaries();
+        renderTimeCalendar();
+      });
+    });
+
+    tagWrappers.forEach((wrapper) => {
+      const list = wrapper.querySelector("[data-tag-list]");
+      if (!list || !window.MutationObserver) {
+        return;
+      }
+      const observer = new MutationObserver(() => {
+        updateSummaries();
+      });
+      observer.observe(list, { childList: true });
+    });
+
+    const formatHistoryDate = (value) => {
+      if (!value) {
+        return "";
+      }
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) {
+        return value;
+      }
+      const formatter = new Intl.DateTimeFormat("ru-RU", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      return formatter.format(parsed);
+    };
+
+    const renderHistory = (items) => {
+      if (!historyList || !historyEmpty) {
+        return;
+      }
+      historyList.innerHTML = "";
+      if (!items.length) {
+        historyEmpty.textContent = "История пока пуста.";
+        historyEmpty.hidden = false;
+        historyList.hidden = true;
+        return;
+      }
+      items.forEach((item) => {
+        const card = document.createElement("div");
+        card.className = "settings-history-item";
+
+        const title = document.createElement("div");
+        title.className = "settings-history-title";
+        title.textContent = item.title || "Изменение настроек";
+
+        const meta = document.createElement("div");
+        meta.className = "settings-history-meta";
+        if (item.date) {
+          const date = document.createElement("span");
+          date.textContent = formatHistoryDate(item.date);
+          meta.append(date);
+        }
+        if (item.author) {
+          const author = document.createElement("span");
+          author.textContent = item.author;
+          meta.append(author);
+        }
+
+        const details = document.createElement("div");
+        details.textContent = item.details || "";
+
+        card.append(title, meta, details);
+
+        if (Array.isArray(item.changes) && item.changes.length) {
+          const changes = document.createElement("div");
+          changes.className = "settings-history-changes";
+          item.changes.forEach((change) => {
+            const pill = document.createElement("span");
+            pill.className = "pill";
+            pill.textContent = change;
+            changes.append(pill);
+          });
+          card.append(changes);
+        }
+
+        historyList.append(card);
+      });
+      historyEmpty.hidden = true;
+      historyList.hidden = false;
+    };
+
+    const loadHistory = async () => {
+      if (!historyUrl) {
+        showMessage(historyMessage, "URL истории не задан.", "error");
+        return;
+      }
+      showMessage(historyMessage, "Загружаем историю...", "success");
+      try {
+        const response = await fetch(historyUrl, { credentials: "same-origin" });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          showMessage(historyMessage, data.detail || "Не удалось загрузить историю.", "error");
+          return;
+        }
+        renderHistory(data.history || []);
+        historyLoaded = true;
+        showMessage(historyMessage, "История загружена.", "success");
+      } catch (error) {
+        showMessage(historyMessage, "Ошибка сети. Попробуйте позже.", "error");
+      }
+    };
+
+    if (historyButton) {
+      historyButton.addEventListener("click", () => {
+        if (historyLoaded) {
+          historyList?.scrollIntoView({ behavior: "smooth", block: "start" });
+          return;
+        }
+        loadHistory();
+      });
+    }
+
+    setEditingState(false);
+    updateSummaries();
+    renderTimeCalendar();
+    initShiftValidation();
+  };
+
+  const initAdminSystem = () => {
+    const systemRoot = document.querySelector("[data-admin-system]");
+    const bodyCreateUrl = document.body.dataset.backupCreateUrl || "";
+    const createButtons = Array.from(document.querySelectorAll("[data-action='create-backup']"));
+    const createUrl = (systemRoot && systemRoot.dataset.backupCreateUrl) || bodyCreateUrl || "";
+    const monitoringUrl = systemRoot ? systemRoot.dataset.monitoringUrl || "" : "";
+    const messageEl = systemRoot ? systemRoot.querySelector("[data-system-message]") : null;
+    const globalMessageEl = document.querySelector("[data-global-system-message]");
+    const monitoringButtons = document.querySelectorAll("[data-action='refresh-monitoring']");
+    const backupTableBody = document.querySelector("[data-backup-rows]");
+    const backupEmptyRow = backupTableBody ? backupTableBody.querySelector("[data-empty-row]") : null;
+    const lastBackupEl = systemRoot ? systemRoot.querySelector("[data-last-backup]") : null;
+    const errorsEls = document.querySelectorAll("[data-errors-24h]");
+    const onlineEl = document.querySelector("[data-online-users]");
+    const rpmEl = document.querySelector("[data-requests-per-minute]");
+    const lastLoginEl = document.querySelector("[data-last-login]");
+    const lastLoginUserEl = document.querySelector("[data-last-login-user]");
+    const updatedEl = document.querySelector("[data-monitoring-updated]");
+    const restoreModal = document.querySelector("[data-modal='restore-backup']");
+    const restoreNameEl = restoreModal ? restoreModal.querySelector("[data-restore-name]") : null;
+    const restoreConfirmButton = restoreModal
+      ? restoreModal.querySelector("[data-action='confirm-restore']")
+      : null;
+    let pendingRestoreUrl = "";
+    let pendingRestoreRow = null;
+
+    const showMessage = (text, type, options = {}) => {
+      const targetEl = messageEl || globalMessageEl;
+      if (!targetEl) {
+        if (text && !options.silent) {
+          window.alert(text);
+        }
+        return;
+      }
+      if (targetEl.dataset.timeoutId) {
+        window.clearTimeout(Number(targetEl.dataset.timeoutId));
+      }
+      targetEl.textContent = text || "";
+      targetEl.classList.remove("is-error", "is-success");
+      if (!text) {
+        targetEl.hidden = true;
+        return;
+      }
+      targetEl.hidden = false;
+      if (type) {
+        targetEl.classList.add(type === "error" ? "is-error" : "is-success");
+      }
+      const timeoutId = window.setTimeout(() => {
+        targetEl.hidden = true;
+        targetEl.textContent = "";
+        targetEl.classList.remove("is-error", "is-success");
+      }, 6000);
+      targetEl.dataset.timeoutId = String(timeoutId);
+    };
+
+    const setLoading = (button, isLoading) => {
+      if (!button) {
+        return;
+      }
+      button.disabled = isLoading;
+      button.classList.toggle("is-loading", isLoading);
+    };
+
+    const setLoadingForButtons = (buttons, isLoading) => {
+      buttons.forEach((button) => {
+        setLoading(button, isLoading);
+      });
+    };
+
+    const formatDateTime = (value) => {
+      if (!value) {
+        return "Нет данных";
+      }
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) {
+        return value;
+      }
+      return new Intl.DateTimeFormat("ru-RU", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(parsed);
+    };
+
+    const formatTime = (value) => {
+      if (!value) {
+        return "—";
+      }
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) {
+        return value;
+      }
+      return new Intl.DateTimeFormat("ru-RU", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      }).format(parsed);
+    };
+
+    const renderBackupRow = (backup) => {
+      const row = document.createElement("tr");
+      row.dataset.backupId = String(backup.id || "");
+
+      const nameCell = document.createElement("td");
+      nameCell.textContent = backup.file_name || "backup";
+
+      const createdCell = document.createElement("td");
+      createdCell.textContent = formatDateTime(backup.created_at);
+
+      const sizeCell = document.createElement("td");
+      sizeCell.textContent = backup.size_display || "";
+
+      const sourceCell = document.createElement("td");
+      sourceCell.textContent = backup.source_label || "";
+
+      const statusCell = document.createElement("td");
+      const statusPill = document.createElement("span");
+      const statusClass = backup.status === "failed" ? "warning" : "success";
+      statusPill.className = `status-pill ${statusClass}`;
+      statusPill.textContent = backup.status_label || "";
+      statusCell.append(statusPill);
+
+      const actionsCell = document.createElement("td");
+      const actions = document.createElement("div");
+      actions.className = "table-actions";
+
+      if (backup.download_url) {
+        const downloadLink = document.createElement("a");
+        downloadLink.className = "icon-action";
+        downloadLink.href = backup.download_url;
+        downloadLink.setAttribute("aria-label", "Скачать бэкап");
+        downloadLink.innerHTML = `
+          <svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">
+            <path d=\"M12 3v10\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" />
+            <path d=\"M8 9l4 4 4-4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" />
+            <path d=\"M4 17h16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" />
+          </svg>
+        `;
+        actions.append(downloadLink);
+      }
+
+      if (backup.restore_url) {
+        const restoreButton = document.createElement("button");
+        restoreButton.type = "button";
+        restoreButton.className = "icon-action";
+        restoreButton.dataset.action = "restore-backup";
+        restoreButton.dataset.restoreUrl = backup.restore_url;
+        restoreButton.setAttribute("aria-label", "Восстановить бэкап");
+        restoreButton.innerHTML = `
+          <svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">
+            <path d=\"M4 11a8 8 0 0 1 13.5-5.7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" />
+            <path d=\"M18 3v5h-5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" />
+            <path d=\"M20 13a8 8 0 0 1-13.5 5.7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" />
+          </svg>
+        `;
+        actions.append(restoreButton);
+      }
+
+      actionsCell.append(actions);
+      row.append(nameCell, createdCell, sizeCell, sourceCell, statusCell, actionsCell);
+      return row;
+    };
+
+    const handleCreateBackup = async () => {
+      if (!createUrl) {
+        showMessage("URL создания бэкапа не задан.", "error");
+        return;
+      }
+      showMessage("Создаем бэкап...", "success", { silent: true });
+      setLoadingForButtons(createButtons, true);
+      try {
+        const response = await fetch(createUrl, {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": getCookie("csrftoken"),
+          },
+          credentials: "same-origin",
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          showMessage(data.detail || "Не удалось создать бэкап.", "error");
+          return;
+        }
+        if (data.backup && backupTableBody) {
+          const newRow = renderBackupRow(data.backup);
+          if (backupEmptyRow) {
+            backupEmptyRow.hidden = true;
+          }
+          backupTableBody.prepend(newRow);
+          if (lastBackupEl) {
+            lastBackupEl.textContent = formatDateTime(data.backup.created_at);
+          }
+        }
+        showMessage("Бэкап создан.", "success");
+      } catch (error) {
+        showMessage("Ошибка сети. Попробуйте позже.", "error");
+      } finally {
+        setLoadingForButtons(createButtons, false);
+      }
+    };
+
+    const handleRestore = async (restoreUrl, row) => {
+      if (!restoreUrl) {
+        showMessage("URL восстановления не задан.", "error");
+        return;
+      }
+      showMessage("Запускаем восстановление...", "success");
+      try {
+        const response = await fetch(restoreUrl, {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": getCookie("csrftoken"),
+          },
+          credentials: "same-origin",
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          showMessage(data.detail || "Не удалось восстановить бэкап.", "error");
+          return;
+        }
+        if (data.backup && row) {
+          const statusPill = row.querySelector(".status-pill");
+          if (statusPill) {
+            statusPill.textContent = data.backup.status_label || "Восстановлен";
+            const statusClass = data.backup.status === "failed" ? "warning" : "success";
+            statusPill.className = `status-pill ${statusClass}`;
+          }
+        }
+        showMessage("Бэкап восстановлен.", "success");
+      } catch (error) {
+        showMessage("Ошибка сети. Попробуйте позже.", "error");
+      }
+    };
+
+    const refreshMonitoring = async () => {
+      if (!monitoringUrl) {
+        showMessage("URL мониторинга не задан.", "error");
+        return;
+      }
+      try {
+        const response = await fetch(monitoringUrl, { credentials: "same-origin" });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          showMessage(data.detail || "Не удалось обновить мониторинг.", "error");
+          return;
+        }
+        if (onlineEl) {
+          onlineEl.textContent = data.online_users ?? 0;
+        }
+        if (rpmEl) {
+          rpmEl.textContent = data.requests_per_minute ?? 0;
+        }
+        if (errorsEls.length) {
+          errorsEls.forEach((el) => {
+            el.textContent = data.errors_24h ?? 0;
+          });
+        }
+        if (lastLoginEl) {
+          lastLoginEl.textContent = data.last_login ? formatDateTime(data.last_login) : "Нет данных";
+        }
+        if (lastLoginUserEl) {
+          lastLoginUserEl.textContent = data.last_login_user || "";
+        }
+        if (updatedEl) {
+          updatedEl.textContent = data.updated_at ? formatTime(data.updated_at) : formatTime(new Date());
+        }
+        if (data.last_backup && lastBackupEl) {
+          lastBackupEl.textContent = formatDateTime(data.last_backup.created_at);
+        }
+        showMessage("Мониторинг обновлен.", "success");
+      } catch (error) {
+        showMessage("Ошибка сети. Попробуйте позже.", "error");
+      }
+    };
+
+    if (createButtons.length) {
+      createButtons.forEach((button) => {
+        button.addEventListener("click", handleCreateBackup);
+      });
+    }
+
+    if (monitoringButtons.length) {
+      monitoringButtons.forEach((button) => {
+        button.addEventListener("click", refreshMonitoring);
+      });
+    }
+
+    if (backupTableBody) {
+      backupTableBody.addEventListener("click", (event) => {
+        const restoreButton = event.target.closest("[data-action='restore-backup']");
+        if (!restoreButton) {
+          return;
+        }
+        const restoreUrl = restoreButton.dataset.restoreUrl || "";
+        pendingRestoreUrl = restoreUrl;
+        pendingRestoreRow = restoreButton.closest("tr");
+        if (restoreNameEl && pendingRestoreRow) {
+          restoreNameEl.textContent = pendingRestoreRow.querySelector("td")?.textContent || "";
+        }
+        if (restoreModal) {
+          openModal(restoreModal);
+        } else {
+          const confirmed = window.confirm("Восстановить бэкап? Текущие данные будут перезаписаны.");
+          if (confirmed) {
+            handleRestore(pendingRestoreUrl, pendingRestoreRow);
+          }
+        }
+      });
+    }
+
+    if (restoreConfirmButton) {
+      restoreConfirmButton.addEventListener("click", async () => {
+        if (!pendingRestoreUrl) {
+          showMessage("URL восстановления не задан.", "error");
+          return;
+        }
+        setLoading(restoreConfirmButton, true);
+        await handleRestore(pendingRestoreUrl, pendingRestoreRow);
+        setLoading(restoreConfirmButton, false);
+        if (restoreModal) {
+          closeModal(restoreModal);
+        }
+        pendingRestoreUrl = "";
+        pendingRestoreRow = null;
+      });
+    }
+  };
+
+  initAdminSettings();
+  initAdminSystem();
   const initDepartmentDetail = () => {
     const detailRoot = document.querySelector("[data-department-detail]");
     if (!detailRoot) {
@@ -2876,6 +4050,7 @@
 
     const detailScope = detailRoot.closest(".content") || document;
     const departmentId = detailRoot.dataset.departmentId || "";
+    const isArchived = detailRoot.dataset.departmentArchived === "true";
     const employeeUpdateBase = detailRoot.dataset.employeeUpdateBase || "";
     const employeeDetailBase = detailRoot.dataset.employeeDetailBase || "";
     const departmentUpdateUrl = detailRoot.dataset.departmentUpdateUrl || "";
@@ -2986,18 +4161,19 @@
     };
 
     const setEditingState = (isEditing) => {
-      section.classList.toggle("is-editing", isEditing);
-      addBlock.hidden = !isEditing;
-      toggleButton.hidden = isEditing;
-      doneButton.hidden = !isEditing;
+      const canEdit = !isArchived;
+      section.classList.toggle("is-editing", isEditing && canEdit);
+      addBlock.hidden = !isEditing || !canEdit;
+      toggleButton.hidden = !canEdit || isEditing;
+      doneButton.hidden = !canEdit || !isEditing;
       addForm.querySelectorAll("input, select, button").forEach((input) => {
-        input.disabled = !isEditing;
+        input.disabled = !isEditing || !canEdit;
       });
-      if (isEditing && employeeSelect) {
+      if (isEditing && canEdit && employeeSelect) {
         const hasOptions = employeeSelect.options.length > 1;
         employeeSelect.disabled = !hasOptions;
       }
-      if (isEditing) {
+      if (isEditing && canEdit) {
         const submitButton = addForm.querySelector("button[type='submit']");
         if (submitButton && employeeSelect && employeeSelect.disabled) {
           submitButton.disabled = true;
@@ -3203,6 +4379,27 @@
         return;
       }
 
+      if (isArchived) {
+        editButton.disabled = true;
+        editButton.hidden = true;
+        saveButton.hidden = true;
+        cancelButton.hidden = true;
+        [nameInput, managerSelect, tagField, tagAdd].forEach((input) => {
+          if (input) {
+            input.disabled = true;
+          }
+        });
+        if (tagList) {
+          tagList.querySelectorAll(".tag-remove").forEach((button) => {
+            button.disabled = true;
+          });
+        }
+        if (managerSelect) {
+          refreshCustomSelect(managerSelect.closest("[data-custom-select]"));
+        }
+        return;
+      }
+
       const showInfoMessage = (text, type) => {
         if (!messageEl) {
           return;
@@ -3376,162 +4573,62 @@
       setEditingState(false);
     };
 
-    toggleButton.addEventListener("click", () => {
-      showMessage("", null);
-      setEditingState(true);
-    });
-
-    doneButton.addEventListener("click", () => {
-      showMessage("", null);
-      setEditingState(false);
-    });
-
-    addForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      showMessage("", null);
-      if (!departmentId) {
-        showMessage("ID отдела не найден.", "error");
-        return;
-      }
-      const employeeId = employeeSelect ? employeeSelect.value : "";
-      if (!employeeId) {
-        showMessage("Выберите сотрудника.", "error");
-        return;
-      }
-      const positionValue = positionInput ? positionInput.value.trim() : "";
-      if (positionInput && !positionInput.disabled && !positionValue) {
-        showMessage("Укажите должность.", "error");
-        return;
-      }
-      const rateValue = rateInput ? rateInput.value.trim() : "";
-      const rateError = validateRate(rateValue);
-      if (rateError) {
-        showMessage(rateError, "error");
-        return;
-      }
-
-      const updateUrl = buildEmployeeUpdateUrl(employeeId);
-      if (!updateUrl) {
-        showMessage("URL обновления сотрудника не задан.", "error");
-        return;
-      }
-
-      const payload = {
-        department_id: Number(departmentId),
-      };
-      if (positionValue) {
-        payload.position = positionValue;
-      }
-      if (rateValue) {
-        payload.hourly_rate = Number(rateValue.replace(",", "."));
-      }
-
-      const submitButton = addForm.querySelector("button[type='submit']");
-      if (submitButton) {
-        submitButton.disabled = true;
-      }
-      try {
-        const response = await fetch(updateUrl, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": getCookie("csrftoken"),
-          },
-          credentials: "same-origin",
-          body: JSON.stringify(payload),
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          showMessage(data.detail || "Не удалось добавить сотрудника.", "error");
-          return;
-        }
-
-        if (listBody) {
-          const row = renderEmployeeRow(data);
-          listBody.append(row);
-        }
-        const currentEmptyRow = getEmptyRow();
-        if (currentEmptyRow) {
-          currentEmptyRow.remove();
-        }
-        updateEmployeeCount(1);
-        if (employeeSelect) {
-          const option = employeeSelect.querySelector(`option[value='${employeeId}']`);
-          if (option) {
-            option.remove();
-          }
-          employeeSelect.value = "";
-          const hasOptions = employeeSelect.options.length > 1;
-          employeeSelect.disabled = !hasOptions;
-          refreshCustomSelect(employeeSelect.closest("[data-custom-select]"));
-          if (!hasOptions && submitButton) {
-            submitButton.disabled = true;
-          }
-        }
-        if (positionInput) {
-          positionInput.value = "";
-          if (positionInput.tagName === "SELECT") {
-            refreshCustomSelect(positionInput.closest("[data-custom-select]"));
-          }
-        }
-        if (rateInput) {
-          rateInput.value = "";
-        }
-        showMessage("Сотрудник добавлен в отдел.", "success");
-      } catch (error) {
-        showMessage("Ошибка сети. Попробуйте позже.", "error");
-      } finally {
-        if (submitButton) {
-          submitButton.disabled = false;
-        }
-      }
-    });
-
-    if (listBody) {
-      listBody.addEventListener("click", (event) => {
-        const transferButton = event.target.closest("[data-employee-transfer]");
-        if (!transferButton) {
-          return;
-        }
-        if (!section.classList.contains("is-editing")) {
-          return;
-        }
-        if (transferDepartmentSelect && transferDepartmentSelect.disabled) {
-          showMessage("Нет доступных отделов для перевода.", "error");
-          return;
-        }
-        const row = transferButton.closest("tr");
-        if (!row) {
-          return;
-        }
-        openTransferModal(row);
+    if (isArchived) {
+      toggleButton.disabled = true;
+      toggleButton.hidden = true;
+      doneButton.hidden = true;
+    } else {
+      toggleButton.addEventListener("click", () => {
+        showMessage("", null);
+        setEditingState(true);
       });
-    }
 
-    if (transferForm) {
-      transferForm.addEventListener("submit", async (event) => {
+      doneButton.addEventListener("click", () => {
+        showMessage("", null);
+        setEditingState(false);
+      });
+
+      addForm.addEventListener("submit", async (event) => {
         event.preventDefault();
-        showTransferMessage("", null);
-        if (!transferTarget || !transferTarget.id) {
-          showTransferMessage("Сотрудник не выбран.", "error");
+        showMessage("", null);
+        if (!departmentId) {
+          showMessage("ID отдела не найден.", "error");
           return;
         }
-        const departmentValue = transferDepartmentSelect ? transferDepartmentSelect.value : "";
-        if (!departmentValue) {
-          showTransferMessage("Выберите отдел.", "error");
+        const employeeId = employeeSelect ? employeeSelect.value : "";
+        if (!employeeId) {
+          showMessage("Выберите сотрудника.", "error");
           return;
         }
-        const reasonValue = transferReasonInput ? transferReasonInput.value.trim() : "";
-        if (!reasonValue) {
-          showTransferMessage("Укажите причину перевода.", "error");
+        const positionValue = positionInput ? positionInput.value.trim() : "";
+        if (positionInput && !positionInput.disabled && !positionValue) {
+          showMessage("Укажите должность.", "error");
           return;
         }
-        const updateUrl = buildEmployeeUpdateUrl(transferTarget.id);
+        const rateValue = rateInput ? rateInput.value.trim() : "";
+        const rateError = validateRate(rateValue);
+        if (rateError) {
+          showMessage(rateError, "error");
+          return;
+        }
+
+        const updateUrl = buildEmployeeUpdateUrl(employeeId);
         if (!updateUrl) {
-          showTransferMessage("URL обновления сотрудника не задан.", "error");
+          showMessage("URL обновления сотрудника не задан.", "error");
           return;
         }
-        const submitButton = transferForm.querySelector("button[type='submit']");
+
+        const payload = {
+          department_id: Number(departmentId),
+        };
+        if (positionValue) {
+          payload.position = positionValue;
+        }
+        if (rateValue) {
+          payload.hourly_rate = Number(rateValue.replace(",", "."));
+        }
+
+        const submitButton = addForm.querySelector("button[type='submit']");
         if (submitButton) {
           submitButton.disabled = true;
         }
@@ -3543,39 +4640,145 @@
               "X-CSRFToken": getCookie("csrftoken"),
             },
             credentials: "same-origin",
-            body: JSON.stringify({
-              department_id: Number(departmentValue),
-              department_change_reason: reasonValue,
-            }),
+            body: JSON.stringify(payload),
           });
           const data = await response.json().catch(() => ({}));
           if (!response.ok) {
-            showTransferMessage(data.detail || "Не удалось перевести сотрудника.", "error");
+            showMessage(data.detail || "Не удалось добавить сотрудника.", "error");
             return;
           }
-          if (transferTarget.row) {
-            transferTarget.row.remove();
+
+          if (listBody) {
+            const row = renderEmployeeRow(data);
+            listBody.append(row);
           }
-          updateEmployeeCount(-1);
-          if (listBody && !listBody.querySelector("tr:not([data-empty-row])")) {
-            ensureEmptyRow();
+          const currentEmptyRow = getEmptyRow();
+          if (currentEmptyRow) {
+            currentEmptyRow.remove();
           }
-          addEmployeeOption({
-            id: transferTarget.id,
-            full_name: transferTarget.name,
-            email: transferTarget.email,
-          });
-          transferTarget = null;
-          showMessage("Сотрудник переведен в другой отдел.", "success");
-          closeModal(transferModal);
+          updateEmployeeCount(1);
+          if (employeeSelect) {
+            const option = employeeSelect.querySelector(`option[value='${employeeId}']`);
+            if (option) {
+              option.remove();
+            }
+            employeeSelect.value = "";
+            const hasOptions = employeeSelect.options.length > 1;
+            employeeSelect.disabled = !hasOptions;
+            refreshCustomSelect(employeeSelect.closest("[data-custom-select]"));
+            if (!hasOptions && submitButton) {
+              submitButton.disabled = true;
+            }
+          }
+          if (positionInput) {
+            positionInput.value = "";
+            if (positionInput.tagName === "SELECT") {
+              refreshCustomSelect(positionInput.closest("[data-custom-select]"));
+            }
+          }
+          if (rateInput) {
+            rateInput.value = "";
+          }
+          showMessage("Сотрудник добавлен в отдел.", "success");
         } catch (error) {
-          showTransferMessage("Ошибка сети. Попробуйте позже.", "error");
+          showMessage("Ошибка сети. Попробуйте позже.", "error");
         } finally {
           if (submitButton) {
             submitButton.disabled = false;
           }
         }
       });
+
+      if (listBody) {
+        listBody.addEventListener("click", (event) => {
+          const transferButton = event.target.closest("[data-employee-transfer]");
+          if (!transferButton) {
+            return;
+          }
+          if (!section.classList.contains("is-editing")) {
+            return;
+          }
+          if (transferDepartmentSelect && transferDepartmentSelect.disabled) {
+            showMessage("Нет доступных отделов для перевода.", "error");
+            return;
+          }
+          const row = transferButton.closest("tr");
+          if (!row) {
+            return;
+          }
+          openTransferModal(row);
+        });
+      }
+
+      if (transferForm) {
+        transferForm.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          showTransferMessage("", null);
+          if (!transferTarget || !transferTarget.id) {
+            showTransferMessage("Сотрудник не выбран.", "error");
+            return;
+          }
+          const departmentValue = transferDepartmentSelect ? transferDepartmentSelect.value : "";
+          if (!departmentValue) {
+            showTransferMessage("Выберите отдел.", "error");
+            return;
+          }
+          const reasonValue = transferReasonInput ? transferReasonInput.value.trim() : "";
+          if (!reasonValue) {
+            showTransferMessage("Укажите причину перевода.", "error");
+            return;
+          }
+          const updateUrl = buildEmployeeUpdateUrl(transferTarget.id);
+          if (!updateUrl) {
+            showTransferMessage("URL обновления сотрудника не задан.", "error");
+            return;
+          }
+          const submitButton = transferForm.querySelector("button[type='submit']");
+          if (submitButton) {
+            submitButton.disabled = true;
+          }
+          try {
+            const response = await fetch(updateUrl, {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": getCookie("csrftoken"),
+              },
+              credentials: "same-origin",
+              body: JSON.stringify({
+                department_id: Number(departmentValue),
+                department_change_reason: reasonValue,
+              }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              showTransferMessage(data.detail || "Не удалось перевести сотрудника.", "error");
+              return;
+            }
+            if (transferTarget.row) {
+              transferTarget.row.remove();
+            }
+            updateEmployeeCount(-1);
+            if (listBody && !listBody.querySelector("tr:not([data-empty-row])")) {
+              ensureEmptyRow();
+            }
+            addEmployeeOption({
+              id: transferTarget.id,
+              full_name: transferTarget.name,
+              email: transferTarget.email,
+            });
+            transferTarget = null;
+            showMessage("Сотрудник переведен в другой отдел.", "success");
+            closeModal(transferModal);
+          } catch (error) {
+            showTransferMessage("Ошибка сети. Попробуйте позже.", "error");
+          } finally {
+            if (submitButton) {
+              submitButton.disabled = false;
+            }
+          }
+        });
+      }
     }
 
     setEditingState(false);

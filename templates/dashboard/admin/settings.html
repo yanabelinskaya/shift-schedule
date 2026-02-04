@@ -1,84 +1,222 @@
 {% extends 'dashboard/admin.html' %}
 
 {% block content %}
-  <div class="card dashboard-hero fade-up">
-    <div class="hero-header">
-      <div>
-        <h1>Глобальные настройки</h1>
-        <p class="subtle">Рабочее время, типы смен и шаблоны уведомлений.</p>
+  <div
+    class="settings-page"
+    data-admin-settings
+    data-settings-update-url="{% url 'admin-settings-update' %}"
+    data-settings-history-url="{% url 'admin-settings-history' %}"
+  >
+    <div class="card dashboard-hero fade-up">
+      <div class="hero-header">
+        <div>
+          <h1>Глобальные настройки</h1>
+          <p class="subtle">Рабочее время, правила переработки и типы смен для всех отделов.</p>
+        </div>
       </div>
-      <div class="hero-actions">
-        <button class="btn btn-primary btn-inline" type="button">Сохранить изменения</button>
-        <button class="btn btn-ghost btn-inline" type="button">История правок</button>
+      <div class="hero-meta">
+        <div class="meta-chip" data-summary-hours>
+          Режим: {{ settings_data.work_days_label }} · {{ settings_data.work_start }}–{{ settings_data.work_end }}
+        </div>
+        <div class="meta-chip" data-summary-ot>
+          Переработка: &gt;{{ settings_data.ot_threshold }} ч/день · {{ settings_data.ot_coeff_display }}x
+        </div>
+        <div class="meta-chip" data-summary-shifts>
+          Типы смен: {{ settings_data.shift_templates|length }}
+        </div>
+        <div class="meta-chip" data-summary-update>
+          Последний апдейт: {{ settings_data.updated_at|date:"d.m.Y" }}
+        </div>
       </div>
     </div>
-    <div class="hero-meta">
-      <div class="meta-chip">Переработка: 160ч/мес</div>
-      <div class="meta-chip">Шаблоны уведомлений: 8</div>
-      <div class="meta-chip">Последний апдейт: 2 дня назад</div>
-    </div>
-  </div>
 
-  <div class="tab-bar">
-    <a class="tab-pill{% if active_tab == 'users' %} active{% endif %}" href="{% url 'admin-users' %}">Пользователи</a>
-    <a class="tab-pill{% if active_tab == 'departments' %} active{% endif %}" href="{% url 'admin-departments' %}">Отделы</a>
-    <a class="tab-pill{% if active_tab == 'settings' %} active{% endif %}" href="{% url 'admin-settings' %}">Глобальные настройки</a>
-    <a class="tab-pill{% if active_tab == 'reports' %} active{% endif %}" href="{% url 'admin-reports' %}">Отчеты компании</a>
-    <a class="tab-pill{% if active_tab == 'payroll' %} active{% endif %}" href="{% url 'admin-payroll' %}">Payroll</a>
-    <a class="tab-pill{% if active_tab == 'system' %} active{% endif %}" href="{% url 'admin-system' %}">Система</a>
-  </div>
+    <section class="card section-block" data-settings-config>
+      <div class="section-header">
+        <div>
+          <h2>Конфигурация</h2>
+          <p class="subtle">Единые правила работы и расписания для всех отделов.</p>
+        </div>
+        <div class="section-actions">
+          <button class="btn btn-primary btn-inline" type="button" data-settings-edit>Обновить шаблоны</button>
+          <button class="btn btn-ghost btn-inline" type="button" data-settings-cancel hidden>Отменить</button>
+        </div>
+      </div>
+      <div class="form-message" data-settings-message hidden></div>
+      <div class="settings-layout">
+        <div class="settings-panel">
+          <div class="settings-panel-header">
+            <h3>График работы</h3>
+            <p class="subtle">Работаем ежедневно с 07:00 до 23:00.</p>
+          </div>
+          <div class="form">
+            <label>
+              Начало дня
+              <div class="custom-select" data-custom-select>
+                <select name="work_start" data-settings-input disabled>
+                  {% for option in time_options %}
+                    <option value="{{ option }}" {% if option == settings_data.work_start %}selected{% endif %}>
+                      {{ option }}
+                    </option>
+                  {% endfor %}
+                </select>
+                <button class="custom-select-trigger" type="button" data-select-trigger>
+                  <span data-select-label>{{ settings_data.work_start }}</span>
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="M5 7l5 6 5-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </button>
+                <div class="custom-select-menu" data-select-menu>
+                  <div class="custom-select-search">
+                    <input type="search" placeholder="Найти время" data-select-search />
+                  </div>
+                  <div class="custom-select-options" data-select-options></div>
+                </div>
+              </div>
+            </label>
+            <label>
+              Конец дня
+              <div class="custom-select" data-custom-select>
+                <select name="work_end" data-settings-input disabled>
+                  {% for option in time_options %}
+                    <option value="{{ option }}" {% if option == settings_data.work_end %}selected{% endif %}>
+                      {{ option }}
+                    </option>
+                  {% endfor %}
+                </select>
+                <button class="custom-select-trigger" type="button" data-select-trigger>
+                  <span data-select-label>{{ settings_data.work_end }}</span>
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="M5 7l5 6 5-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </button>
+                <div class="custom-select-menu" data-select-menu>
+                  <div class="custom-select-search">
+                    <input type="search" placeholder="Найти время" data-select-search />
+                  </div>
+                  <div class="custom-select-options" data-select-options></div>
+                </div>
+              </div>
+            </label>
+            <label>
+              Рабочие дни
+              <div class="custom-select" data-custom-select>
+                <select name="work_days" data-settings-input disabled>
+                  {% for value, label in work_days_options %}
+                    <option value="{{ value }}" {% if value == settings_data.work_days %}selected{% endif %}>
+                      {{ label }}
+                    </option>
+                  {% endfor %}
+                </select>
+                <button class="custom-select-trigger" type="button" data-select-trigger>
+                  <span data-select-label>{{ settings_data.work_days_label }}</span>
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="M5 7l5 6 5-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </button>
+                <div class="custom-select-menu" data-select-menu>
+                  <div class="custom-select-search">
+                    <input type="search" placeholder="Найти режим" data-select-search />
+                  </div>
+                  <div class="custom-select-options" data-select-options></div>
+                </div>
+              </div>
+            </label>
+          </div>
+        </div>
 
-  <section class="card section-block">
-    <div class="section-header">
-      <div>
-        <h2>Конфигурация</h2>
-        <p class="subtle">Синхронизируйте правила работы и уведомления во всех отделах.</p>
+        <div class="settings-panel">
+          <div class="settings-panel-header">
+            <h3>Переработка</h3>
+            <p class="subtle">Переработка считается при смене более 12 часов.</p>
+          </div>
+          <div class="form">
+            <label>
+              Порог переработки, часов в день
+              <input
+                type="number"
+                name="ot_threshold"
+                value="{{ settings_data.ot_threshold }}"
+                min="1"
+                step="1"
+                data-settings-input
+                disabled
+              />
+            </label>
+            <label>
+              Коэффициент переработки
+              <input
+                type="number"
+                name="ot_coeff"
+                value="{{ settings_data.ot_coeff }}"
+                min="1"
+                step="0.1"
+                data-settings-input
+                disabled
+              />
+            </label>
+            <div class="settings-note">Каждый час после 12 часов оплачивается с коэффициентом 1,5.</div>
+          </div>
+        </div>
+
+        <div class="settings-panel">
+          <div class="settings-panel-header">
+            <h3>Типы смен</h3>
+            <p class="subtle">Шаблоны смен + возможность добавлять собственные.</p>
+          </div>
+          <div class="tag-input settings-tag-input" data-tag-input data-settings-tags>
+            <div class="tag-list" data-tag-list>
+              {% for shift in settings_data.shift_templates %}
+                <span class="tag" data-tag-value="{{ shift }}">
+                  <span class="tag-label">{{ shift }}</span>
+                  <button class="tag-remove" type="button" aria-label="Удалить" disabled>×</button>
+                </span>
+              {% endfor %}
+            </div>
+            <div class="tag-input-row">
+              <input type="text" placeholder="Новая смена, например 09:00-17:00" data-tag-field disabled />
+              <button class="btn btn-ghost btn-inline btn-sm" type="button" data-tag-add disabled>Добавить</button>
+            </div>
+            <input
+              type="hidden"
+              name="shift_templates"
+              data-tag-storage
+              value='{{ shift_templates_json|escapejs }}'
+            />
+          </div>
+          <label class="settings-checkbox">
+            <span class="checkbox">
+              <input
+                type="checkbox"
+                name="allow_custom_shifts"
+                {% if settings_data.allow_custom_shifts %}checked{% endif %}
+                data-settings-input
+                disabled
+              />
+              <span class="checkbox-mark"></span>
+            </span>
+            Разрешить сотрудникам задавать собственные смены
+          </label>
+        </div>
       </div>
-      <div class="section-actions">
-        <button class="btn btn-primary btn-inline" type="button">Обновить шаблоны</button>
-        <button class="btn btn-ghost btn-inline" type="button">Проверить настройки</button>
-      </div>
-    </div>
-    <div class="settings-grid">
-      <div class="mini-card">
-        <div class="mini-title">Рабочее время</div>
-        <div class="setting-row">
-          <span>Переработка</span>
-          <span class="pill">160ч/мес</span>
+    </section>
+
+    <section class="card section-block" data-settings-history>
+      <div class="section-header">
+        <div>
+          <h2>История правок</h2>
+          <p class="subtle">Здесь отображаются изменения, которые делал текущий администратор.</p>
         </div>
-        <div class="setting-row">
-          <span>Рабочие дни</span>
-          <span class="pill">Пн-Пт</span>
-        </div>
-        <div class="setting-row">
-          <span>Коэффициент OT</span>
-          <span class="pill">1.5x</span>
+        <div class="section-actions">
+          <button class="btn btn-ghost btn-inline" type="button" data-settings-history>История правок</button>
         </div>
       </div>
-      <div class="mini-card">
-        <div class="mini-title">Типы смен</div>
-        <div class="pill-set">
-          <span class="pill">День 09-18</span>
-          <span class="pill">Вечер 12-21</span>
-          <span class="pill">Дежурство 21-09</span>
+      <div class="form-message" data-history-message hidden></div>
+      <div class="settings-history">
+        <div class="reset-empty subtle" data-history-empty>
+          Нажмите «История правок», чтобы загрузить журнал изменений.
         </div>
-        <div class="mini-note">3 активных шаблона</div>
+        <div class="settings-history-list" data-history-list hidden></div>
       </div>
-      <div class="mini-card">
-        <div class="mini-title">Уведомления</div>
-        <div class="setting-row">
-          <span>График готов</span>
-          <span class="status-pill success">Включено</span>
-        </div>
-        <div class="setting-row">
-          <span>Зарплата посчитана</span>
-          <span class="status-pill success">Включено</span>
-        </div>
-        <div class="setting-row">
-          <span>Задачи</span>
-          <span class="status-pill warning">Только важные</span>
-        </div>
-      </div>
-    </div>
-  </section>
+    </section>
+  </div>
 {% endblock %}
