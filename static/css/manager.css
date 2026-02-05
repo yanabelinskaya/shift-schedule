@@ -1,0 +1,307 @@
+.manager-employees {
+  display: grid;
+  gap: 20px;
+}
+
+.employee-toolbar {
+  gap: 16px;
+}
+
+.employee-toolbar .search-field {
+  min-width: 220px;
+  flex: 1 1 260px;
+}
+
+.employee-toolbar .filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.employee-toolbar .filter-reset {
+  align-self: center;
+}
+
+.employee-meta-label {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.employee-detail-list {
+  display: grid;
+  gap: 10px;
+}
+
+.employee-detail-value {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--ink);
+  margin-top: 2px;
+}
+
+.modal-card-lg {
+  max-width: 820px;
+  width: min(92vw, 820px);
+}
+
+.manager-employee-page {
+  display: grid;
+  gap: 16px;
+}
+
+.manager-employee-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.manager-employee-card {
+  display: grid;
+  gap: 16px;
+}
+
+.detail-line {
+  display: block;
+}
+
+.absence-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.employee-absence-block {
+  display: grid;
+  gap: 10px;
+}
+
+.employee-absence-list {
+  display: grid;
+  gap: 8px;
+}
+
+.absence-item {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-2);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.absence-item-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.absence-item-meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.absence-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.absence-meta-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  display: grid;
+  gap: 6px;
+}
+
+.absence-calendar {
+  display: grid;
+  gap: 12px;
+}
+
+.absence-calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: nowrap;
+      margin: 10px 0;
+}
+
+.absence-calendar-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.absence-calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.absence-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.absence-day {
+  min-height: 64px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  padding: 8px;
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.absence-day:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(15, 24, 35, 0.08);
+}
+
+.absence-day.is-empty {
+  background: transparent;
+  border: 1px dashed var(--line);
+  color: var(--muted);
+  cursor: default;
+  box-shadow: none;
+  transform: none;
+}
+
+.absence-day.is-today {
+  border-color: rgba(42, 122, 110, 0.55);
+}
+
+.absence-day.is-selected {
+  background: rgba(42, 122, 110, 0.18);
+  border-color: rgba(42, 122, 110, 0.35);
+}
+
+.absence-day.is-range {
+  background: rgba(42, 122, 110, 0.1);
+}
+
+.absence-day.is-vacation {
+  background: rgba(224, 134, 74, 0.18);
+  border-color: rgba(224, 134, 74, 0.35);
+}
+
+.absence-day.is-sick {
+  background: rgba(42, 79, 125, 0.18);
+  border-color: rgba(42, 79, 125, 0.35);
+}
+
+.absence-day.is-blocked {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+  box-shadow: none;
+}
+
+.absence-day-number {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.absence-day-label {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+[data-theme="dark"] .absence-day-number {
+  color: #ffffff;
+}
+
+[data-theme="dark"] .absence-day {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="dark"] .absence-day.is-selected {
+  background: rgba(75, 193, 172, 0.38);
+  border-color: rgba(75, 193, 172, 0.65);
+}
+
+[data-theme="dark"] .absence-day.is-range {
+  background: rgba(75, 193, 172, 0.22);
+  border-color: rgba(75, 193, 172, 0.4);
+}
+
+[data-theme="dark"] .absence-day.is-vacation {
+  background: rgba(240, 160, 102, 0.3);
+  border-color: rgba(240, 160, 102, 0.55);
+}
+
+[data-theme="dark"] .absence-day.is-sick {
+  background: rgba(125, 168, 232, 0.3);
+  border-color: rgba(125, 168, 232, 0.55);
+}
+
+.absence-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--line);
+  display: inline-block;
+}
+
+.legend-dot.is-selected {
+  background: var(--accent);
+}
+
+.legend-dot.is-vacation {
+  background: var(--accent-2);
+}
+
+.legend-dot.is-sick {
+  background: rgba(42, 79, 125, 1);
+}
+
+.status-pill.muted {
+  background: rgba(108, 117, 125, 0.14);
+  color: rgba(108, 117, 125, 0.9);
+  border-color: rgba(108, 117, 125, 0.3);
+}
+
+.status-pill.danger {
+  background: rgba(217, 75, 75, 0.12);
+  color: #d94b4b;
+  border-color: rgba(217, 75, 75, 0.3);
+}
+
+@media (max-width: 720px) {
+  .employee-toolbar .filter-group {
+    width: 100%;
+  }
+  .employee-toolbar .custom-select {
+    flex: 1 1 200px;
+  }
+}

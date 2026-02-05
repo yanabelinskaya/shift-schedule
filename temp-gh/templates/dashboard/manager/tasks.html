@@ -1,0 +1,100 @@
+{% extends 'dashboard/manager.html' %}
+
+{% block content %}
+  <div class="card dashboard-hero fade-up">
+    <div class="hero-header">
+      <div>
+        <h1>{{ page_title }}</h1>
+        <p class="subtle">{{ page_subtitle }}</p>
+      </div>
+      <div class="hero-actions">
+        <button class="btn btn-primary btn-inline" type="button">Создать задачу</button>
+        <button class="btn btn-ghost btn-inline" type="button">Шаблоны</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <div class="request-filters">
+      <select class="availability-select">
+        <option selected>Неделя 15-21 апреля</option>
+        <option>Неделя 22-28 апреля</option>
+      </select>
+      <select class="availability-select">
+        <option selected>Все сотрудники</option>
+        <option>Елена Кузнецова</option>
+        <option>Игорь Лебедев</option>
+      </select>
+    </div>
+    <div class="pill-set">
+      <button class="pill is-active" type="button">В работе</button>
+      <button class="pill" type="button">Выполнено</button>
+      <button class="pill" type="button">Просрочено</button>
+    </div>
+  </div>
+
+  <section class="card section-block">
+    <div class="section-header">
+      <div>
+        <h2>Список задач</h2>
+        <p class="subtle">Контроль выполнения по сменам.</p>
+      </div>
+      <div class="section-actions">
+        <button class="btn btn-ghost btn-inline btn-sm" type="button">Экспорт</button>
+      </div>
+    </div>
+    <div class="data-table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Для кого</th>
+            <th>Дата/смена</th>
+            <th>Задача</th>
+            <th>Дедлайн</th>
+            <th>Статус</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Елена Кузнецова</td>
+            <td>15 апреля, 09:00-18:00</td>
+            <td>Инвентаризация секции B</td>
+            <td>15 апреля, 17:00</td>
+            <td><span class="status-pill warning">В работе</span></td>
+          </tr>
+          <tr>
+            <td>Игорь Лебедев</td>
+            <td>16 апреля, 10:00-19:00</td>
+            <td>Проверка склада</td>
+            <td>16 апреля, 18:00</td>
+            <td><span class="status-pill success">Выполнено</span></td>
+          </tr>
+          <tr>
+            <td>Мария Соколова</td>
+            <td>18 апреля, 12:00-20:00</td>
+            <td>Обновление витрины</td>
+            <td>18 апреля, 19:00</td>
+            <td><span class="status-pill">Ожидает</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card section-block">
+    <div class="section-header">
+      <div>
+        <h2>Общие задачи для дежурства</h2>
+        <p class="subtle">Видят все сотрудники на смене.</p>
+      </div>
+      <div class="section-actions">
+        <button class="btn btn-ghost btn-inline btn-sm" type="button">Напомнить</button>
+      </div>
+    </div>
+    <div class="mini-list">
+      <div>Сдать смену и заполнить чек-лист</div>
+      <div>Проверить оборудование и фотоотчет</div>
+      <div>Обновить остатки в системе</div>
+    </div>
+  </section>
+{% endblock %}
