@@ -126,6 +126,12 @@ class EmployeeAbsence(models.Model):
 
     class Meta:
         ordering = ["-start_date", "-end_date"]
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(end_date__gte=models.F("start_date")),
+                name="chk_absence_dates_order",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.user_id} {self.absence_type} {self.start_date}..{self.end_date}"
@@ -163,6 +169,10 @@ class EmployeeAvailability(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=["user", "date"], name="unique_employee_availability"),
+            models.CheckConstraint(
+                check=models.Q(end_time__gt=models.F("start_time")),
+                name="chk_availability_time_order",
+            ),
         ]
         ordering = ["date"]
 
@@ -197,6 +207,19 @@ class EmployeeShiftRequest(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "date", "status"], name="idx_shift_user_date_status"),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(start_time__isnull=True)
+                    | models.Q(end_time__isnull=True)
+                    | models.Q(end_time__gt=models.F("start_time"))
+                ),
+                name="chk_shift_request_time_order",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.user_id} {self.request_type} {self.date}"
@@ -252,6 +275,19 @@ class DepartmentTask(models.Model):
 
     class Meta:
         ordering = ["-date", "-created_at"]
+        indexes = [
+            models.Index(fields=["department", "date", "status"], name="idx_task_dept_date_status"),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(start_time__isnull=True)
+                    | models.Q(end_time__isnull=True)
+                    | models.Q(end_time__gt=models.F("start_time"))
+                ),
+                name="chk_task_time_order",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.title} ({self.date})"
@@ -312,6 +348,14 @@ class GlobalSettings(models.Model):
     work_end = models.TimeField(default=time(23, 0))
     work_days = models.CharField(max_length=20, choices=WORK_DAYS_CHOICES, default="daily")
     weekly_hours_norm = models.PositiveIntegerField(default=40)
+    platform_name = models.CharField(max_length=100, default="Conector Shift")
+    support_email = models.EmailField(blank=True, default="")
+    support_phone = models.CharField(max_length=30, blank=True, default="")
+    global_announcement = models.CharField(max_length=255, blank=True, default="")
+    allow_password_reset_requests = models.BooleanField(default=True)
+    backup_retention_days = models.PositiveIntegerField(default=30)
+    task_submission_max_files = models.PositiveIntegerField(default=5)
+    task_submission_max_file_size_mb = models.PositiveIntegerField(default=10)
     ot_threshold = models.PositiveIntegerField(default=12)
     ot_coeff = models.DecimalField(max_digits=4, decimal_places=2, default=Decimal("1.5"))
     shift_templates = models.JSONField(default=_default_shift_templates, blank=True)

@@ -4,8 +4,8 @@
   <div
     class="manager-calendar{% if schedule_approved %} is-locked{% endif %}"
     data-manager-calendar
-    data-approve-url="{% url 'manager-schedule-approve' %}"
-    data-request-update-url="{% url 'manager-shift-request-update' %}"
+    data-approve-url="{% url 'api-manager-availability-approve' %}"
+    data-request-update-url="{% url 'api-manager-shift-requests-decision' %}"
     data-week-start="{{ week_start }}"
     data-week-end="{{ week_end }}"
     data-schedule-approved="{% if schedule_approved %}true{% else %}false{% endif %}"
@@ -160,7 +160,7 @@
                           </div>
                         {% else %}
                           <div class="slot-empty">Пусто</div>
-                          {% if shift_templates and not schedule_approved and not cell.is_absent %}
+                          {% if not schedule_approved and not cell.is_absent %}
                             <button class="btn btn-ghost btn-inline btn-xs" type="button" data-manual-add>
                               Добавить слот
                             </button>

@@ -1,9 +1,0 @@
-stages:
-  - test
-
-test-job:
-  stage: test
-  script:
-    - echo "Начало"
-    - echo "Второй этап"
-    - echo "Конец"

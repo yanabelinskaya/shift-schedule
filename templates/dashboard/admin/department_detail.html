@@ -11,7 +11,7 @@
     data-employee-detail-base="{% url 'admin-user-detail' 0 %}"
   >
     <div class="profile-topbar">
-      <a class="back-link" href="{% url 'admin-departments' %}" aria-label="Назад к списку отделов">
+      <a class="back-link" href="{{ back_url }}" aria-label="Назад к списку отделов">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
@@ -248,7 +248,7 @@
                           <path d="M7 6h10m0 0-3-3m3 3-3 3M17 18H7m0 0 3 3m-3-3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
                         </svg>
                       </button>
-                      <a class="icon-action" href="{% url 'admin-user-detail' employee.id %}" aria-label="Карточка сотрудника">
+                      <a class="icon-action" href="{% url 'admin-user-detail' employee.id %}?next={{ request.get_full_path|urlencode }}" aria-label="Карточка сотрудника">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
                           <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
                           <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.6" />

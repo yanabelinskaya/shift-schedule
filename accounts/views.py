@@ -8,6 +8,7 @@ from django.contrib.auth import login, logout
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.shortcuts import get_object_or_404
+from drf_spectacular.utils import extend_schema
 from rest_framework import generics, status
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.authtoken.models import Token
@@ -19,21 +20,45 @@ from django.utils import timezone
 from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import Department, DepartmentPosition, EmployeeAbsence, EmployeeProfile, PasswordResetRequest
+from .models import (
+    Department,
+    DepartmentPosition,
+    EmployeeAbsence,
+    EmployeeProfile,
+    GlobalSettings,
+    PasswordResetRequest,
+)
+from .object_access import can_manage_employee
+from .pagination import BoundedListMixin, resolve_non_paginated_limit
 from .permissions import IsAdminRole
 from .serializers import (
+    ApiRootSerializer,
     DepartmentArchiveSerializer,
     DepartmentCreateSerializer,
     DepartmentSerializer,
     DepartmentUpdateSerializer,
+    DetailMessageSerializer,
+    EmployeeActivateResponseSerializer,
     EmployeeAbsenceCreateSerializer,
     EmployeeAbsenceSerializer,
+    EmployeeAvatarResponseSerializer,
+    EmployeeAvatarUploadSerializer,
     EmployeeCreateSerializer,
+    EmployeeCreateResponseSerializer,
+    EmployeeDeactivateResponseSerializer,
+    EmployeeIdsRequestSerializer,
+    EmployeeImportRequestSerializer,
+    EmployeeImportResponseSerializer,
     EmployeeSerializer,
     EmployeeUpdateSerializer,
     EmptySerializer,
     LoginSerializer,
+    LoginResponseSerializer,
+    PasswordResetPendingItemSerializer,
+    PasswordResetRequestSerializer,
+    PasswordResetResolveResponseSerializer,
     UserCreateSerializer,
+    UserCreateResponseSerializer,
     UserSerializer,
 )
 
@@ -41,13 +66,19 @@ from .serializers import (
 logger = logging.getLogger(__name__)
 
 
+def _platform_name():
+    settings_obj = GlobalSettings.objects.only("platform_name").first()
+    return (settings_obj.platform_name if settings_obj else "") or "Conector Shift"
+
+
 def _send_credentials_email(user, raw_password):
     if not user.email or not raw_password:
         return False, "Email или пароль отсутствуют."
-    subject = 'Conector Shift — доступ к аккаунту'
+    platform_name = _platform_name()
+    subject = f'{platform_name} — доступ к аккаунту'
     message = (
         f'Здравствуйте, {user.get_full_name() or user.username}!\n\n'
-        'Для вас создан аккаунт в сервисе Conector Shift.\n\n'
+        f'Для вас создан аккаунт в сервисе {platform_name}.\n\n'
         f'Логин: {user.username}\n'
         f'Временный пароль: {raw_password}\n\n'
         'Рекомендуем изменить пароль после первого входа.\n\n'
@@ -70,10 +101,11 @@ def _send_credentials_email(user, raw_password):
 def _send_reset_email(user, raw_password):
     if not user.email or not raw_password:
         return False, "Email или пароль отсутствуют."
-    subject = 'Conector Shift — восстановление доступа'
+    platform_name = _platform_name()
+    subject = f'{platform_name} — восстановление доступа'
     message = (
         f'Здравствуйте, {user.get_full_name() or user.username}!\n\n'
-        'Вы запросили восстановление доступа к Conector Shift.\n\n'
+        f'Вы запросили восстановление доступа к {platform_name}.\n\n'
         f'Логин: {user.username}\n'
         f'Новый пароль: {raw_password}\n\n'
         'Рекомендуем изменить пароль после входа.\n\n'
@@ -237,12 +269,58 @@ def _format_serializer_errors(errors):
     return " ".join(parts)
 
 
+class ApiRootView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    serializer_class = ApiRootSerializer
+
+    @extend_schema(
+        tags=['System'],
+        summary='API root',
+        description='Навигационная точка для основных API-эндпоинтов и документации.',
+        responses={200: ApiRootSerializer},
+    )
+    def get(self, request):
+        base = request.build_absolute_uri
+        return Response(
+            {
+                'schema': base(reverse('schema')),
+                'swagger': base(reverse('swagger-ui')),
+                'redoc': base(reverse('redoc')),
+                'auth_login': base(reverse('api-login')),
+                'auth_me': base(reverse('api-me')),
+                'users': base(reverse('api-user-create')),
+                'departments': base(reverse('api-departments')),
+                'employees': base(reverse('api-employees')),
+                'password_resets': base(reverse('api-password-reset-request')),
+                'admin_settings': base(reverse('api-admin-settings')),
+                'admin_settings_history': base(reverse('api-admin-settings-history')),
+                'admin_system_backups': base(reverse('api-admin-system-backups-create')),
+                'admin_system_monitoring': base(reverse('api-admin-system-monitoring')),
+                'manager_tasks': base(reverse('api-manager-tasks')),
+                'manager_shift_requests': base(reverse('api-manager-shift-requests')),
+                'employee_tasks': base(reverse('api-employee-tasks')),
+                'employee_availability': base(reverse('api-employee-availability')),
+            }
+        )
+
+
 @method_decorator(csrf_exempt, name='dispatch')
 class LoginView(generics.GenericAPIView):
     permission_classes = [AllowAny]
     authentication_classes = []
     serializer_class = LoginSerializer
 
+    @extend_schema(
+        tags=['Authentication'],
+        summary='Авторизация пользователя',
+        description='Проверяет логин/пароль, создаёт токен DRF и возвращает данные текущего пользователя.',
+        request=LoginSerializer,
+        responses={
+            200: LoginResponseSerializer,
+            400: DetailMessageSerializer,
+        },
+    )
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -267,6 +345,13 @@ class LogoutView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = EmptySerializer
 
+    @extend_schema(
+        tags=['Authentication'],
+        summary='Выход из системы',
+        description='Удаляет текущий токен пользователя и завершает сессию.',
+        request=None,
+        responses={204: None},
+    )
     def post(self, request):
         token = getattr(request.user, 'auth_token', None)
         if token:
@@ -279,6 +364,12 @@ class MeView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = UserSerializer
 
+    @extend_schema(
+        tags=['Authentication'],
+        summary='Текущий пользователь',
+        description='Возвращает профиль авторизованного пользователя.',
+        responses={200: UserSerializer},
+    )
     def get(self, request):
         return Response(UserSerializer(request.user).data)
 
@@ -313,8 +404,22 @@ class UserCreateView(generics.CreateAPIView):
             headers=headers,
         )
 
+    @extend_schema(
+        tags=['Users'],
+        summary='Создать пользователя',
+        description='Создаёт пользователя (обычно менеджера/сотрудника) и отправляет временный пароль по email.',
+        request=UserCreateSerializer,
+        responses={
+            201: UserCreateResponseSerializer,
+            400: DetailMessageSerializer,
+            403: DetailMessageSerializer,
+        },
+    )
+    def post(self, request, *args, **kwargs):
+        return self.create(request, *args, **kwargs)
 
-class DepartmentListView(generics.ListCreateAPIView):
+
+class DepartmentListView(BoundedListMixin, generics.ListCreateAPIView):
     permission_classes = [IsAdminRole]
 
     def get_queryset(self):
@@ -333,6 +438,15 @@ class DepartmentListView(generics.ListCreateAPIView):
             return DepartmentCreateSerializer
         return DepartmentSerializer
 
+    @extend_schema(
+        tags=['Departments'],
+        summary='Список отделов',
+        description='Возвращает список отделов с менеджерами, позициями и агрегированными счетчиками.',
+        responses={200: DepartmentSerializer(many=True)},
+    )
+    def get(self, request, *args, **kwargs):
+        return self.list(request, *args, **kwargs)
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -340,14 +454,44 @@ class DepartmentListView(generics.ListCreateAPIView):
         data = DepartmentSerializer(department, context=self.get_serializer_context()).data
         return Response(data, status=status.HTTP_201_CREATED)
 
+    @extend_schema(
+        tags=['Departments'],
+        summary='Создать отдел',
+        description='Создаёт отдел, связывает менеджера и список должностей.',
+        request=DepartmentCreateSerializer,
+        responses={
+            201: DepartmentSerializer,
+            400: DetailMessageSerializer,
+            403: DetailMessageSerializer,
+        },
+    )
+    def post(self, request, *args, **kwargs):
+        return self.create(request, *args, **kwargs)
+
 
 class DepartmentArchiveView(generics.UpdateAPIView):
     serializer_class = DepartmentArchiveSerializer
     permission_classes = [IsAdminRole]
     lookup_url_kwarg = 'department_id'
+    http_method_names = ['patch']
 
     def get_queryset(self):
         return Department.objects.all()
+
+    @extend_schema(
+        tags=['Departments'],
+        summary='Архивировать/разархивировать отдел',
+        description='Обновляет флаг `is_archived` для отдела.',
+        request=DepartmentArchiveSerializer,
+        responses={
+            200: DepartmentSerializer,
+            400: DetailMessageSerializer,
+            403: DetailMessageSerializer,
+            404: DetailMessageSerializer,
+        },
+    )
+    def patch(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', True)
@@ -363,6 +507,18 @@ class DepartmentDetailView(generics.GenericAPIView):
     permission_classes = [IsAdminRole]
     serializer_class = DepartmentUpdateSerializer
 
+    @extend_schema(
+        tags=['Departments'],
+        summary='Обновить отдел',
+        description='Обновляет название, менеджера и должности отдела.',
+        request=DepartmentUpdateSerializer,
+        responses={
+            200: DepartmentSerializer,
+            400: DetailMessageSerializer,
+            403: DetailMessageSerializer,
+            404: DetailMessageSerializer,
+        },
+    )
     def patch(self, request, department_id):
         department = get_object_or_404(Department, id=department_id)
         if department.is_archived:
@@ -415,7 +571,7 @@ class DepartmentDetailView(generics.GenericAPIView):
         return Response(DepartmentSerializer(department).data, status=status.HTTP_200_OK)
 
 
-class EmployeeListCreateView(generics.ListCreateAPIView):
+class EmployeeListCreateView(BoundedListMixin, generics.ListCreateAPIView):
     permission_classes = [IsAdminRole]
 
     def get_queryset(self):
@@ -432,6 +588,15 @@ class EmployeeListCreateView(generics.ListCreateAPIView):
         if self.request.method == 'POST':
             return EmployeeCreateSerializer
         return EmployeeSerializer
+
+    @extend_schema(
+        tags=['Employees'],
+        summary='Список сотрудников',
+        description='Возвращает сотрудников (кроме администраторов) с расширенными полями профиля.',
+        responses={200: EmployeeSerializer(many=True)},
+    )
+    def get(self, request, *args, **kwargs):
+        return self.list(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         user = serializer.save()
@@ -458,11 +623,37 @@ class EmployeeListCreateView(generics.ListCreateAPIView):
             headers=headers,
         )
 
+    @extend_schema(
+        tags=['Employees'],
+        summary='Создать сотрудника',
+        description='Создаёт сотрудника/менеджера, профиль и возвращает временный пароль.',
+        request=EmployeeCreateSerializer,
+        responses={
+            201: EmployeeCreateResponseSerializer,
+            400: DetailMessageSerializer,
+            403: DetailMessageSerializer,
+        },
+    )
+    def post(self, request, *args, **kwargs):
+        return self.create(request, *args, **kwargs)
+
 
 class EmployeeDetailView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = EmployeeUpdateSerializer
 
+    @extend_schema(
+        tags=['Employees'],
+        summary='Обновить сотрудника',
+        description='Обновляет данные сотрудника. Админ может менять все поля, сотрудник — только личные.',
+        request=EmployeeUpdateSerializer,
+        responses={
+            200: EmployeeSerializer,
+            400: DetailMessageSerializer,
+            403: DetailMessageSerializer,
+            404: DetailMessageSerializer,
+        },
+    )
     def patch(self, request, user_id):
         User = get_user_model()
         user = get_object_or_404(User, id=user_id)
@@ -564,37 +755,40 @@ class EmployeeAbsenceView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = EmployeeAbsenceCreateSerializer
 
-    def _get_manager_department(self, manager):
-        department = Department.objects.filter(manager=manager, is_archived=False).first()
-        if not department:
-            profile = getattr(manager, 'profile', None)
-            if profile and profile.department:
-                department = profile.department
-        return department
-
-    def _can_manage_employee(self, actor, employee):
-        if getattr(actor, 'role', None) == 'admin':
-            return True
-        if getattr(actor, 'role', None) != 'manager':
-            return False
-        department = self._get_manager_department(actor)
-        if not department:
-            return False
-        profile = EmployeeProfile.objects.select_related('department').filter(user=employee).first()
-        return bool(profile and profile.department_id == department.id)
-
+    @extend_schema(
+        tags=['Employees'],
+        summary='Список отсутствий сотрудника',
+        description='Возвращает отпуска/больничные сотрудника для админа или менеджера его отдела.',
+        responses={
+            200: EmployeeAbsenceSerializer(many=True),
+            403: DetailMessageSerializer,
+            404: DetailMessageSerializer,
+        },
+    )
     def get(self, request, user_id):
         User = get_user_model()
         user = get_object_or_404(User, id=user_id)
-        if user.role != 'employee' or not self._can_manage_employee(request.user, user):
+        if user.role != 'employee' or not can_manage_employee(request.user, user):
             return Response({'detail': 'Недостаточно прав.'}, status=status.HTTP_403_FORBIDDEN)
         absences = EmployeeAbsence.objects.filter(user=user).order_by('-start_date', '-end_date')
         return Response(EmployeeAbsenceSerializer(absences, many=True).data, status=status.HTTP_200_OK)
 
+    @extend_schema(
+        tags=['Employees'],
+        summary='Создать отсутствие сотрудника',
+        description='Добавляет отпуск или больничный сотруднику с проверкой пересечений.',
+        request=EmployeeAbsenceCreateSerializer,
+        responses={
+            201: EmployeeAbsenceSerializer,
+            400: DetailMessageSerializer,
+            403: DetailMessageSerializer,
+            404: DetailMessageSerializer,
+        },
+    )
     def post(self, request, user_id):
         User = get_user_model()
         user = get_object_or_404(User, id=user_id)
-        if user.role != 'employee' or not self._can_manage_employee(request.user, user):
+        if user.role != 'employee' or not can_manage_employee(request.user, user):
             return Response({'detail': 'Недостаточно прав.'}, status=status.HTTP_403_FORBIDDEN)
         serializer = self.get_serializer(data=request.data, context={'user': user})
         serializer.is_valid(raise_exception=True)
@@ -611,8 +805,19 @@ class EmployeeAbsenceView(generics.GenericAPIView):
 
 class EmployeeImportView(generics.GenericAPIView):
     permission_classes = [IsAdminRole]
-    serializer_class = EmptySerializer
+    serializer_class = EmployeeImportRequestSerializer
 
+    @extend_schema(
+        tags=['Employees'],
+        summary='Импорт сотрудников из файла',
+        description='Импортирует сотрудников из CSV/XLS/XLSX и возвращает список созданных записей и ошибок.',
+        request=EmployeeImportRequestSerializer,
+        responses={
+            200: EmployeeImportResponseSerializer,
+            400: DetailMessageSerializer,
+            403: DetailMessageSerializer,
+        },
+    )
     def post(self, request):
         file_obj = request.FILES.get('file') or request.FILES.get('employees_file')
         if not file_obj:
@@ -667,9 +872,21 @@ class EmployeeImportView(generics.GenericAPIView):
 
 class EmployeeAvatarView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
-    serializer_class = EmptySerializer
+    serializer_class = EmployeeAvatarUploadSerializer
     parser_classes = [MultiPartParser, FormParser]
 
+    @extend_schema(
+        tags=['Employees'],
+        summary='Загрузить аватар сотрудника',
+        description='Заменяет аватар текущего пользователя.',
+        request=EmployeeAvatarUploadSerializer,
+        responses={
+            200: EmployeeAvatarResponseSerializer,
+            400: DetailMessageSerializer,
+            403: DetailMessageSerializer,
+            404: DetailMessageSerializer,
+        },
+    )
     def post(self, request, user_id):
         from django.contrib.auth import get_user_model
 
@@ -690,9 +907,74 @@ class EmployeeAvatarView(generics.GenericAPIView):
 
 class PasswordResetRequestView(generics.GenericAPIView):
     permission_classes = [AllowAny]
-    serializer_class = EmptySerializer
+    serializer_class = PasswordResetRequestSerializer
 
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAdminRole()]
+        return [AllowAny()]
+
+    @extend_schema(
+        tags=['Password Resets'],
+        summary='Список заявок на сброс пароля',
+        description='Возвращает заявки со статусом `pending` для администратора.',
+        request=None,
+        responses={
+            200: PasswordResetPendingItemSerializer(many=True),
+            403: DetailMessageSerializer,
+        },
+    )
+    def get(self, request):
+        pending = (
+            PasswordResetRequest.objects.filter(status='pending')
+            .select_related('user')
+            .order_by('-created_at')
+        )
+        if request.query_params.get('page') or request.query_params.get('page_size'):
+            page = self.paginate_queryset(pending)
+            data = [
+                {
+                    'id': item.id,
+                    'user_id': item.user_id,
+                    'email': item.email,
+                    'full_name': item.user.get_full_name() or item.user.username,
+                    'created_at': item.created_at,
+                }
+                for item in page
+            ]
+            return self.get_paginated_response(data)
+
+        limit = resolve_non_paginated_limit(request)
+        data = [
+            {
+                'id': item.id,
+                'user_id': item.user_id,
+                'email': item.email,
+                'full_name': item.user.get_full_name() or item.user.username,
+                'created_at': item.created_at,
+            }
+            for item in pending[:limit]
+        ]
+        return Response(data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        tags=['Password Resets'],
+        summary='Создать заявку на сброс пароля',
+        description='Создаёт заявку на сброс пароля по корпоративному email.',
+        request=PasswordResetRequestSerializer,
+        responses={
+            200: DetailMessageSerializer,
+            400: DetailMessageSerializer,
+        },
+    )
     def post(self, request):
+        settings_obj = GlobalSettings.objects.only("allow_password_reset_requests").first()
+        if settings_obj is not None and not settings_obj.allow_password_reset_requests:
+            return Response(
+                {'detail': 'Восстановление пароля временно отключено администратором.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         email = request.data.get('email', '').strip()
         if not email:
             return Response({'detail': 'Укажите корпоративную почту.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -715,6 +997,17 @@ class PasswordResetResolveView(generics.GenericAPIView):
     permission_classes = [IsAdminRole]
     serializer_class = EmptySerializer
 
+    @extend_schema(
+        tags=['Password Resets'],
+        summary='Обработать заявку на сброс',
+        description='Генерирует новый пароль по заявке, отправляет его сотруднику и закрывает заявку.',
+        request=None,
+        responses={
+            200: PasswordResetResolveResponseSerializer,
+            403: DetailMessageSerializer,
+            404: DetailMessageSerializer,
+        },
+    )
     def post(self, request, request_id):
         reset_request = get_object_or_404(
             PasswordResetRequest,
@@ -744,8 +1037,19 @@ class PasswordResetResolveView(generics.GenericAPIView):
 
 class EmployeeDeactivateView(generics.GenericAPIView):
     permission_classes = [IsAdminRole]
-    serializer_class = EmptySerializer
+    serializer_class = EmployeeIdsRequestSerializer
 
+    @extend_schema(
+        tags=['Employees'],
+        summary='Деактивировать сотрудников',
+        description='Деактивирует список сотрудников и снимает менеджеров с закреплённых отделов.',
+        request=EmployeeIdsRequestSerializer,
+        responses={
+            200: EmployeeDeactivateResponseSerializer,
+            400: DetailMessageSerializer,
+            403: DetailMessageSerializer,
+        },
+    )
     def post(self, request):
         ids = request.data.get('ids', [])
         if not isinstance(ids, list) or not ids:
@@ -796,8 +1100,19 @@ class EmployeeDeactivateView(generics.GenericAPIView):
 
 class EmployeeActivateView(generics.GenericAPIView):
     permission_classes = [IsAdminRole]
-    serializer_class = EmptySerializer
+    serializer_class = EmployeeIdsRequestSerializer
 
+    @extend_schema(
+        tags=['Employees'],
+        summary='Активировать сотрудников',
+        description='Активирует список сотрудников без изменения текущих паролей.',
+        request=EmployeeIdsRequestSerializer,
+        responses={
+            200: EmployeeActivateResponseSerializer,
+            400: DetailMessageSerializer,
+            403: DetailMessageSerializer,
+        },
+    )
     def post(self, request):
         ids = request.data.get('ids', [])
         if not isinstance(ids, list) or not ids:

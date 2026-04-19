@@ -1,108 +1,348 @@
 {% extends 'dashboard/admin.html' %}
 
 {% block content %}
-  <div class="card dashboard-hero fade-up">
-    <div class="hero-header">
-      <div>
-        <h1>Отчеты компании</h1>
-        <p class="subtle">Сводные показатели по отделам, пользователям и окладам.</p>
-      </div>
-      {% if not print_mode %}
-        <div class="hero-actions">
-          <a class="btn btn-primary btn-inline" href="{% url 'admin-reports-export' %}">Экспорт Excel</a>
-          <a class="btn btn-ghost btn-inline" href="{% url 'admin-reports' %}?print=1" target="_blank" rel="noopener">
-            Скачать PDF
-          </a>
+  <div class="reports-page" data-admin-reports>
+    <div class="card dashboard-hero fade-up">
+      <div class="hero-header">
+        <div>
+          <h1>Мониторинг сайта</h1>
+          <p class="subtle">Загрузка инфраструктуры, ошибки, производительность API и состояние резервного контура.</p>
         </div>
-      {% endif %}
-    </div>
-    <div class="hero-meta">
-      <div class="meta-chip">
-        Отделов: {{ stats.total_departments }} · активных: {{ stats.active_departments }} · архивных: {{ stats.archived_departments }}
+        <div class="hero-actions">
+          <span class="status-pill {{ stats.health_tone }}">{{ stats.health_label }} · {{ stats.health_score }}%</span>
+        </div>
       </div>
-      <div class="meta-chip">
-        Сотрудников: {{ stats.total_users }} · активных: {{ stats.active_users }} · деактивированных: {{ stats.inactive_users }}
+      <div class="hero-meta">
+        <div class="meta-chip">Период: {{ stats.period_label }} ({{ filters.period_days }} дн.)</div>
+        <div class="meta-chip">RPM: {{ stats.requests_per_minute }} · Онлайн: {{ stats.online_users }}</div>
+        <div class="meta-chip">Ошибки 24ч: {{ stats.logs_errors_24h }} · Предупреждения 24ч: {{ stats.logs_warnings_24h }}</div>
+        <div class="meta-chip">Последнее обновление: {{ stats.last_updated }}</div>
       </div>
-      <div class="meta-chip">Последнее обновление: {{ stats.last_updated }}</div>
     </div>
-  </div>
 
-  <div class="stats-grid">
-    <div class="card stat-card">
-      <div class="stat-label">Отделов без менеджера</div>
-      <div class="stat-value">{{ stats.departments_without_manager }}</div>
-      <div class="stat-note">Назначено менеджеров: {{ stats.assigned_managers }}</div>
-    </div>
-    <div class="card stat-card">
-      <div class="stat-label">Средний оклад</div>
-      <div class="stat-value">
-        {% if stats.avg_salary %}{{ stats.avg_salary }} ₽/мес{% else %}—{% endif %}
-      </div>
-      <div class="stat-note">
-        Максимум: {% if stats.max_salary %}{{ stats.max_salary }} ₽/мес{% else %}—{% endif %}
-      </div>
-    </div>
-    <div class="card stat-card">
-      <div class="stat-label">Всего менеджеров</div>
-      <div class="stat-value">{{ stats.managers_total }}</div>
-      <div class="stat-note">По всем отделам</div>
-    </div>
-    <div class="card stat-card">
-      <div class="stat-label">Должностей в базе</div>
-      <div class="stat-value">{{ stats.total_positions }}</div>
-      <div class="stat-note">Справочник должностей по отделам</div>
-    </div>
-  </div>
+    {% if not print_mode %}
+      <section class="card section-block reports-controls">
+        <div class="reports-controls-row">
+          <div class="pill-set reports-presets">
+            {% for option in filters.preset_options %}
+              <a
+                class="pill{% if filters.preset == option.0 %} is-active{% endif %}"
+                href="{% url 'admin-reports' %}?preset={{ option.0 }}{% if option.0 == 'custom' %}&start_date={{ filters.start_date }}&end_date={{ filters.end_date }}{% endif %}"
+              >
+                {{ option.1 }}
+              </a>
+            {% endfor %}
+          </div>
+        </div>
+        <form
+          class="reports-custom-range"
+          method="get"
+          action="{% url 'admin-reports' %}"
+          data-reports-custom-range-form
+          {% if filters.preset != 'custom' %}hidden{% endif %}
+        >
+          <input type="hidden" name="preset" value="custom" />
+          <input type="hidden" name="start_date" value="{{ filters.start_date }}" data-reports-custom-start />
+          <input type="hidden" name="end_date" value="{{ filters.end_date }}" data-reports-custom-end />
+          <label class="filter-group">
+            <span class="filter-label">Дата начала</span>
+            <span class="custom-date reports-date-picker" data-date-picker>
+              <input
+                class="date-input"
+                type="text"
+                value="{{ filters.start_date }}"
+                placeholder="ДД.ММ.ГГГГ"
+                data-date-input
+                data-reports-custom-start-input
+              />
+              <button class="date-trigger" type="button" data-date-trigger aria-label="Открыть календарь даты начала">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 7h16v13H4zM7 3v4M17 3v4M4 11h16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
+              <span class="date-panel" data-date-panel hidden></span>
+            </span>
+          </label>
+          <label class="filter-group">
+            <span class="filter-label">Дата конца</span>
+            <span class="custom-date reports-date-picker" data-date-picker>
+              <input
+                class="date-input"
+                type="text"
+                value="{{ filters.end_date }}"
+                placeholder="ДД.ММ.ГГГГ"
+                data-date-input
+                data-reports-custom-end-input
+              />
+              <button class="date-trigger" type="button" data-date-trigger aria-label="Открыть календарь даты конца">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 7h16v13H4zM7 3v4M17 3v4M4 11h16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
+              <span class="date-panel" data-date-panel hidden></span>
+            </span>
+          </label>
+          <span class="reports-custom-range-hint subtle">Период применится автоматически после выбора обеих дат.</span>
+        </form>
+      </section>
+    {% endif %}
 
-  <section class="card section-block">
-    <div class="section-header">
-      <div>
-        <h2>Ключевая аналитика</h2>
-        <p class="subtle">Топ отделов и распределение сотрудников.</p>
+    <div class="stats-grid">
+      <div class="card stat-card">
+        <div class="stat-label">CPU (1m)</div>
+        <div class="stat-value">
+          {% if stats.cpu_load_percent_1m is not None %}{{ stats.cpu_load_percent_1m|floatformat:1 }}%{% else %}—{% endif %}
+        </div>
+        <div class="stat-note">Текущая загрузка процессора</div>
       </div>
-    </div>
-    <div class="reports-grid">
-      <div class="mini-card">
-        <div class="mini-title">Топ отделов по числу сотрудников</div>
-        {% if top_departments %}
-          <ol class="mini-list">
-            {% for department in top_departments %}
-              <li>{{ department.name }} — {{ department.employees_count }} сотрудников</li>
-            {% endfor %}
-          </ol>
-        {% else %}
-          <div class="mini-note">Нет данных по отделам.</div>
-        {% endif %}
-      </div>
-      <div class="mini-card">
-        <div class="mini-title">Топ должностей</div>
-        {% if top_positions %}
-          <ol class="mini-list">
-            {% for position in top_positions %}
-              <li>{{ position.position }} — {{ position.total }} сотрудников</li>
-            {% endfor %}
-          </ol>
-        {% else %}
-          <div class="mini-note">Нет данных по должностям.</div>
-        {% endif %}
-      </div>
-      <div class="mini-card chart-placeholder">
-        <div class="mini-title">Распределение сотрудников по отделам</div>
-        <div class="chart-bars">
-          {% if department_bars %}
-            {% for item in department_bars %}
-              <span style="height: {{ item.height }}%" title="{{ item.name }} — {{ item.employees_count }}"></span>
-            {% endfor %}
+      <div class="card stat-card">
+        <div class="stat-label">Память</div>
+        <div class="stat-value">
+          {% if stats.memory_used_percent is not None %}{{ stats.memory_used_percent|floatformat:1 }}%{% else %}—{% endif %}
+        </div>
+        <div class="stat-note">
+          {% if stats.memory_used_bytes is not None and stats.memory_total_bytes is not None %}
+            {{ stats.memory_used_bytes|filesizeformat }} / {{ stats.memory_total_bytes|filesizeformat }}
+          {% elif stats.memory_used_bytes is not None %}
+            {{ stats.memory_used_bytes|filesizeformat }} (процесс)
           {% else %}
-            <span style="height: 12%"></span>
+            Данные недоступны
           {% endif %}
         </div>
-        <div class="mini-note">
-          {% if department_bars %}Всего активных отделов: {{ stats.active_departments }}{% else %}Нет данных{% endif %}
+      </div>
+      <div class="card stat-card">
+        <div class="stat-label">Диск</div>
+        <div class="stat-value">
+          {% if stats.disk_used_percent is not None %}{{ stats.disk_used_percent|floatformat:1 }}%{% else %}—{% endif %}
+        </div>
+        <div class="stat-note">
+          {% if stats.disk_used_bytes is not None and stats.disk_total_bytes is not None %}
+            {{ stats.disk_used_bytes|filesizeformat }} / {{ stats.disk_total_bytes|filesizeformat }}
+          {% else %}
+            Данные недоступны
+          {% endif %}
         </div>
       </div>
+      <div class="card stat-card">
+        <div class="stat-label">Запросы (период)</div>
+        <div class="stat-value">{{ stats.logs_total_period }}</div>
+        <div class="stat-note">Активных пользователей за период: {{ stats.active_users_period }}</div>
+      </div>
+      <div class="card stat-card">
+        <div class="stat-label">Ошибки (24ч)</div>
+        <div class="stat-value">{{ stats.logs_errors_24h }}</div>
+        <div class="stat-note">5xx за период: {{ stats.status_5xx }} ({{ stats.status_5xx_rate|floatformat:1 }}%)</div>
+      </div>
+      <div class="card stat-card">
+        <div class="stat-label">Средний отклик (24ч)</div>
+        <div class="stat-value">{% if stats.avg_response_24h_ms %}{{ stats.avg_response_24h_ms }} мс{% else %}—{% endif %}</div>
+        <div class="stat-note">Максимум в период: {% if stats.max_response_period_ms %}{{ stats.max_response_period_ms }} мс{% else %}—{% endif %}</div>
+      </div>
     </div>
-  </section>
+
+    <section class="card section-block">
+      <div class="section-header">
+        <div>
+          <h2>Трафик и ошибки по дням</h2>
+          <p class="subtle">Количество запросов, ошибок и предупреждений за выбранный период.</p>
+        </div>
+      </div>
+      <div
+        class="reports-line-chart"
+        data-reports-line-chart
+        data-chart-source="reports-traffic-data"
+        data-chart-lines="requests,errors,warnings"
+        data-chart-aria="Трафик и ошибки"
+      ></div>
+      <div class="activity-legend">
+        <span class="activity-legend-item"><i class="activity-dot requests"></i>Запросы</span>
+        <span class="activity-legend-item"><i class="activity-dot errors"></i>Ошибки</span>
+        <span class="activity-legend-item"><i class="activity-dot warnings"></i>Предупреждения</span>
+      </div>
+    </section>
+
+    <section class="card section-block">
+      <div class="section-header">
+        <div>
+          <h2>Латентность API</h2>
+          <p class="subtle">Среднее и максимальное время ответа API по дням, мс.</p>
+        </div>
+      </div>
+      <div
+        class="reports-line-chart"
+        data-reports-line-chart
+        data-chart-source="reports-latency-data"
+        data-chart-lines="avg_ms,max_ms"
+        data-chart-aria="Латентность API"
+      ></div>
+      <div class="activity-legend">
+        <span class="activity-legend-item"><i class="activity-dot avg_ms"></i>Среднее</span>
+        <span class="activity-legend-item"><i class="activity-dot max_ms"></i>Максимум</span>
+      </div>
+    </section>
+
+    <section class="card section-block">
+      <div class="section-header">
+        <div>
+          <h2>Загрузка ресурсов по дням</h2>
+          <p class="subtle">Средняя загрузка CPU, памяти и диска по runtime-снимкам запросов.</p>
+        </div>
+      </div>
+      <div
+        class="reports-line-chart"
+        data-reports-line-chart
+        data-chart-source="reports-resource-data"
+        data-chart-lines="cpu,memory,disk"
+        data-chart-aria="Ресурсы сервера"
+      ></div>
+      <div class="activity-legend">
+        <span class="activity-legend-item"><i class="activity-dot cpu"></i>CPU</span>
+        <span class="activity-legend-item"><i class="activity-dot memory"></i>Память</span>
+        <span class="activity-legend-item"><i class="activity-dot disk"></i>Диск</span>
+      </div>
+    </section>
+
+    <div class="reports-grid">
+      <section class="mini-card report-panel">
+        <div class="mini-title">Ресурсы сервера</div>
+        <div class="resource-list">
+          {% for item in resource_cards %}
+            <div class="resource-item">
+              <div class="resource-head">
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value_label }}</strong>
+              </div>
+              <div class="resource-bar">
+                <span class="resource-fill {{ item.tone }}" style="width: {{ item.value|default:0|floatformat:1 }}%"></span>
+              </div>
+              <div class="mini-note">{{ item.meta }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="mini-card report-panel">
+        <div class="mini-title">Критические проблемы</div>
+        <div class="mini-note">Показываются только алерты, которые превысили пороговые значения за выбранный период.</div>
+        <div class="issues-list">
+          {% for issue in critical_issues %}
+            <div class="issue-item {{ issue.tone }}">
+              <div class="issue-title">{{ issue.title }}</div>
+              <div class="mini-note">{{ issue.details }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="mini-card report-panel">
+        <div class="mini-title">Распределение HTTP-статусов</div>
+        <div class="mini-note">2xx — успешные ответы, 3xx — редиректы, 4xx — ошибки клиента, 5xx — ошибки сервера, Other — прочие коды.</div>
+        <div class="stacked-bar" aria-hidden="true">
+          {% for item in status_distribution %}
+            <span class="stacked-segment {{ item.code }}" style="width: {{ item.share|floatformat:1 }}%"></span>
+          {% endfor %}
+        </div>
+        <div class="stacked-legend">
+          {% for item in status_distribution %}
+            <span>{{ item.label }}: {{ item.value }}</span>
+          {% endfor %}
+        </div>
+      </section>
+    </div>
+
+    <section class="card section-block">
+      <div class="section-header">
+        <div>
+          <h2>Топ API эндпоинтов</h2>
+          <p class="subtle">Самые нагруженные маршруты по количеству запросов за период.</p>
+        </div>
+      </div>
+      <div class="data-table-wrap data-table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Метод</th>
+              <th>Путь</th>
+              <th>Запросов</th>
+              <th>Ошибок</th>
+              <th>Error rate</th>
+              <th>Средний отклик</th>
+              <th>Пик отклика</th>
+              <th>Последний запрос</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if top_endpoints %}
+              {% for endpoint in top_endpoints %}
+                <tr>
+                  <td>{{ endpoint.method }}</td>
+                  <td>{{ endpoint.path }}</td>
+                  <td>{{ endpoint.total }}</td>
+                  <td>{{ endpoint.errors }}</td>
+                  <td>{{ endpoint.error_rate|floatformat:1 }}%</td>
+                  <td>{% if endpoint.avg_duration_ms %}{{ endpoint.avg_duration_ms }} мс{% else %}—{% endif %}</td>
+                  <td>{% if endpoint.max_duration_ms %}{{ endpoint.max_duration_ms }} мс{% else %}—{% endif %}</td>
+                  <td>{% if endpoint.last_seen %}{{ endpoint.last_seen|date:"d.m.Y H:i" }}{% else %}—{% endif %}</td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="8">За выбранный период нет данных по API.</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card section-block">
+      <div class="section-header">
+        <div>
+          <h2>Контур резервирования</h2>
+          <p class="subtle">Состояние бэкапов и восстановлений за выбранный период.</p>
+        </div>
+      </div>
+      <div class="reports-grid">
+        <div class="mini-card report-panel">
+          <div class="mini-title">Бэкапы за период</div>
+          <div class="mini-metrics">
+            <div>
+              <div class="mini-metric-label">Создано</div>
+              <div class="mini-metric-value">{{ stats.backups_created_period }}</div>
+            </div>
+            <div>
+              <div class="mini-metric-label">Неуспешно</div>
+              <div class="mini-metric-value">{{ stats.failed_backups_period }}</div>
+            </div>
+            <div>
+              <div class="mini-metric-label">Восстановлено</div>
+              <div class="mini-metric-value">{{ stats.restored_backups_period }}</div>
+            </div>
+            <div>
+              <div class="mini-metric-label">Объем</div>
+              <div class="mini-metric-value">{{ stats.backup_size_period|filesizeformat }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mini-card report-panel">
+          <div class="mini-title">Последний готовый бэкап</div>
+          {% if stats.last_backup %}
+            <div class="mini-note">{{ stats.last_backup.file_name }}</div>
+            <div class="mini-note">Создан: {{ stats.last_backup.created_at|date:"d.m.Y H:i" }}</div>
+            <div class="mini-note">Размер: {{ stats.last_backup.file_size|filesizeformat }}</div>
+            <div class="mini-note">Возраст: {{ stats.last_backup_age_hours }} ч</div>
+          {% else %}
+            <div class="mini-note">Готовые бэкапы не найдены.</div>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+  </div>
+
+  {{ traffic_chart|json_script:"reports-traffic-data" }}
+  {{ latency_chart|json_script:"reports-latency-data" }}
+  {{ resource_chart|json_script:"reports-resource-data" }}
 
   {% if print_mode %}
     <script>

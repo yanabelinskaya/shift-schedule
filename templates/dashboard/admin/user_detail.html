@@ -9,7 +9,7 @@
     data-employee-role="{{ employee.role }}"
   >
     <div class="profile-topbar">
-      <a class="back-link" href="{% url 'admin-users' %}" aria-label="Назад к списку сотрудников">
+      <a class="back-link" href="{{ back_url }}" aria-label="Назад к списку сотрудников">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
         </svg>

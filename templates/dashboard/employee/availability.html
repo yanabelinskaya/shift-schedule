@@ -4,11 +4,11 @@
   <div
     class="availability-page"
     data-employee-availability
-    data-availability-update-url="{% url 'employee-availability-update' %}"
+    data-availability-update-url="{% url 'api-employee-availability' %}"
     data-default-start="{{ default_start }}"
     data-default-end="{{ default_end }}"
     data-availability-locked="{% if is_locked %}true{% else %}false{% endif %}"
-    data-shift-request-url="{% url 'employee-shift-request-create' %}"
+    data-shift-request-url="{% url 'api-employee-shift-requests' %}"
   >
     <div class="card dashboard-hero fade-up">
       <div class="hero-header">

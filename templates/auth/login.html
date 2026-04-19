@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Вход | Conector Shift</title>
+  <title>Вход | {{ site_config.platform_name|default:"Conector Shift" }}</title>
   <link rel="icon" type="image/png" href="{% static 'img/logo.png' %}" />
   <link rel="stylesheet" href="{% static 'css/app.css' %}" />
 </head>
@@ -17,7 +17,7 @@
             <img src="{% static 'img/Group.svg' %}" alt="Логотип" />
           </div>
           <div class="brand-text">
-            <div class="brand-name">Conector Shift</div>
+            <div class="brand-name">{{ site_config.platform_name|default:"Conector Shift" }}</div>
             <div class="brand-sub">Графики</div>
           </div>
         </div>
@@ -91,44 +91,63 @@
                 </span>
               </label>
               <div class="form-row">
-                <label><input type="checkbox" name="remember" /> Запомнить меня</label>
-                <button class="link-button" type="button" data-action="open-reset">Забыли пароль?</button>
+                <label class="remember-label">
+                  <span class="checkbox">
+                    <input type="checkbox" name="remember" {% if remember_checked %}checked{% endif %} />
+                    <span class="checkbox-mark"></span>
+                  </span>
+                  <span>Запомнить меня</span>
+                </label>
+                {% if site_config.allow_password_reset_requests %}
+                  <button class="link-button" type="button" data-action="open-reset">Забыли пароль?</button>
+                {% else %}
+                  <span class="subtle">Восстановление отключено</span>
+                {% endif %}
               </div>
               <button class="btn btn-primary" type="submit">Войти</button>
             </form>
-            <div class="helper">Доступ к сайту выдаёт администратор.</div>
+            <div class="helper">
+              Доступ к сайту выдаёт администратор.
+              {% if site_config.support_email or site_config.support_phone %}
+                Поддержка:
+                {% if site_config.support_email %}{{ site_config.support_email }}{% endif %}
+                {% if site_config.support_phone %}{% if site_config.support_email %} · {% endif %}{{ site_config.support_phone }}{% endif %}.
+              {% endif %}
+            </div>
           </div>
         </div>
       </section>
     </main>
   </div>
 
-  <div class="modal" data-modal="reset-password" aria-hidden="true">
-    <div class="modal-overlay" data-action="close-modal"></div>
-    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="reset-password-title">
-      <div class="modal-header">
-        <div>
-          <h2 id="reset-password-title">Восстановление доступа</h2>
-          <p class="subtle">Введите корпоративную почту, чтобы отправить запрос администратору.</p>
+  {% if site_config.allow_password_reset_requests %}
+    <div class="modal" data-modal="reset-password" aria-hidden="true">
+      <div class="modal-overlay" data-action="close-modal"></div>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="reset-password-title">
+        <div class="modal-header">
+          <div>
+            <h2 id="reset-password-title">Восстановление доступа</h2>
+            <p class="subtle">Введите корпоративную почту, чтобы отправить запрос администратору.</p>
+          </div>
+          <button class="icon-action" type="button" data-action="close-modal" aria-label="Закрыть">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6l12 12M18 6l-12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            </svg>
+          </button>
         </div>
-        <button class="icon-action" type="button" data-action="close-modal" aria-label="Закрыть">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M6 6l12 12M18 6l-12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-          </svg>
-        </button>
+        <form class="form" data-reset-form data-reset-url="{% url 'api-password-reset-request' %}">
+          <div class="form-message" data-reset-message hidden></div>
+          <label>
+            Корпоративная почта
+            <input type="email" name="email" placeholder="name@company.ru" autocomplete="email" required />
+          </label>
+          <div class="modal-actions">
+            <button class="btn btn-primary" type="submit">Отправить запрос</button>
+          </div>
+        </form>
       </div>
-      <form class="form" data-reset-form data-reset-url="{% url 'api-password-reset-request' %}">
-        <div class="form-message" data-reset-message hidden></div>
-        <label>
-          Корпоративная почта
-          <input type="email" name="email" placeholder="name@company.ru" autocomplete="email" required />
-        </label>
-        <div class="modal-actions">
-          <button class="btn btn-primary" type="submit">Отправить запрос</button>
-        </div>
-      </form>
     </div>
-  </div>
+  {% endif %}
 
   <script src="{% static 'js/app.js' %}"></script>
 </body>

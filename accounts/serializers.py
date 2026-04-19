@@ -3,6 +3,7 @@ import secrets
 from django.contrib.auth import authenticate, get_user_model
 import re
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from django.utils import timezone
@@ -21,6 +22,19 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('id', 'username', 'email', 'first_name', 'last_name', 'role')
+
+
+class LoginResponseSerializer(serializers.Serializer):
+    token = serializers.CharField()
+    user = UserSerializer()
+    session_key = serializers.CharField()
+
+
+class UserCreateResponseSerializer(serializers.Serializer):
+    user = UserSerializer()
+    temporary_password = serializers.CharField()
+    password_sent = serializers.BooleanField()
+    email_error = serializers.CharField(allow_blank=True)
 
 
 class LoginSerializer(serializers.Serializer):
@@ -78,19 +92,23 @@ class DepartmentSerializer(serializers.ModelSerializer):
             'is_archived',
         )
 
+    @extend_schema_field(serializers.CharField())
     def get_manager_name(self, obj):
         manager = getattr(obj, 'manager', None)
         if not manager:
             return ''
         return manager.get_full_name() or manager.username
 
+    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
     def get_positions(self, obj):
         return list(obj.positions.order_by('title').values_list('title', flat=True))
 
+    @extend_schema_field(serializers.IntegerField())
     def get_positions_count(self, obj):
         value = getattr(obj, 'positions_count', None)
         return value if value is not None else obj.positions.count()
 
+    @extend_schema_field(serializers.IntegerField())
     def get_employees_count(self, obj):
         value = getattr(obj, 'employees_count', None)
         return value if value is not None else obj.employees.count()
@@ -255,6 +273,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
             'status_label',
         )
 
+    @extend_schema_field(serializers.CharField())
     def get_full_name(self, obj):
         profile = getattr(obj, 'profile', None)
         name_parts = [obj.last_name, obj.first_name]
@@ -262,9 +281,11 @@ class EmployeeSerializer(serializers.ModelSerializer):
             name_parts.append(profile.middle_name)
         return " ".join(part for part in name_parts if part).strip() or obj.username
 
+    @extend_schema_field(serializers.CharField())
     def get_status_label(self, obj):
         return 'Активен' if obj.is_active else 'Неактивен'
 
+    @extend_schema_field(serializers.CharField())
     def get_avatar_url(self, obj):
         profile = getattr(obj, 'profile', None)
         avatar = getattr(profile, 'avatar', None) if profile else None
@@ -291,9 +312,11 @@ class EmployeeAbsenceSerializer(serializers.ModelSerializer):
             'created_at',
         )
 
+    @extend_schema_field(serializers.IntegerField())
     def get_days(self, obj):
         return (obj.end_date - obj.start_date).days + 1
 
+    @extend_schema_field(serializers.CharField())
     def get_status(self, obj):
         today = timezone.localdate()
         if obj.start_date <= today <= obj.end_date:
@@ -301,6 +324,105 @@ class EmployeeAbsenceSerializer(serializers.ModelSerializer):
         if obj.end_date < today:
             return 'past'
         return 'upcoming'
+
+
+class EmployeeCreateResponseSerializer(serializers.Serializer):
+    user = EmployeeSerializer()
+    temporary_password = serializers.CharField()
+    password_sent = serializers.BooleanField()
+    email_error = serializers.CharField(allow_blank=True)
+
+
+class EmployeeImportRequestSerializer(serializers.Serializer):
+    file = serializers.FileField(required=False)
+    employees_file = serializers.FileField(required=False)
+
+
+class EmployeeImportResponseSerializer(serializers.Serializer):
+    created = EmployeeSerializer(many=True)
+    errors = serializers.ListField(child=serializers.CharField())
+    created_count = serializers.IntegerField()
+    error_count = serializers.IntegerField()
+    passwords_sent = serializers.IntegerField()
+
+
+class EmployeeAvatarUploadSerializer(serializers.Serializer):
+    avatar = serializers.ImageField()
+
+
+class EmployeeAvatarResponseSerializer(serializers.Serializer):
+    avatar_url = serializers.CharField()
+
+
+class EmployeeIdsRequestSerializer(serializers.Serializer):
+    ids = serializers.ListField(child=serializers.IntegerField(min_value=1), allow_empty=False)
+
+
+class DeactivatedManagerDepartmentSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+    is_archived = serializers.BooleanField()
+    detail_url = serializers.CharField()
+
+
+class DeactivatedManagerSerializer(serializers.Serializer):
+    manager_id = serializers.IntegerField()
+    manager_name = serializers.CharField()
+    departments = DeactivatedManagerDepartmentSerializer(many=True)
+
+
+class EmployeeDeactivateResponseSerializer(serializers.Serializer):
+    updated_ids = serializers.ListField(child=serializers.IntegerField())
+    manager_departments = DeactivatedManagerSerializer(many=True)
+
+
+class EmployeeActivateResponseSerializer(serializers.Serializer):
+    updated_ids = serializers.ListField(child=serializers.IntegerField())
+    password_unchanged = serializers.BooleanField()
+
+
+class DetailMessageSerializer(serializers.Serializer):
+    detail = serializers.CharField()
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class PasswordResetPendingItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    user_id = serializers.IntegerField()
+    email = serializers.EmailField()
+    full_name = serializers.CharField()
+    created_at = serializers.DateTimeField()
+
+
+class PasswordResetResolveResponseSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField()
+    email = serializers.EmailField()
+    full_name = serializers.CharField()
+    password_sent = serializers.BooleanField()
+    email_error = serializers.CharField(allow_blank=True)
+
+
+class ApiRootSerializer(serializers.Serializer):
+    schema = serializers.CharField()
+    swagger = serializers.CharField()
+    redoc = serializers.CharField()
+    auth_login = serializers.CharField()
+    auth_me = serializers.CharField()
+    users = serializers.CharField()
+    departments = serializers.CharField()
+    employees = serializers.CharField()
+    password_resets = serializers.CharField()
+    admin_settings = serializers.CharField()
+    admin_settings_history = serializers.CharField()
+    admin_system_backups = serializers.CharField()
+    admin_system_monitoring = serializers.CharField()
+    manager_tasks = serializers.CharField()
+    manager_shift_requests = serializers.CharField()
+    employee_tasks = serializers.CharField()
+    employee_availability = serializers.CharField()
 
 
 class EmployeeAbsenceCreateSerializer(serializers.Serializer):

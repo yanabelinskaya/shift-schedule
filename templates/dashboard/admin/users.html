@@ -130,7 +130,7 @@
           <button class="tab-pill" type="button" data-status="inactive">Деактивированные</button>
         </div>
       </div>
-      <div class="table-meta">
+      <div class="table-meta" data-bulk-bar>
         <span data-bulk-hint>Выберите сотрудников для массовых действий.</span>
         <div class="bulk-actions">
           <button class="btn btn-ghost btn-inline btn-sm" type="button" data-bulk-activate hidden>Активировать</button>
@@ -179,7 +179,7 @@
                 </td>
                 <td>
                   <div class="table-actions">
-                    <a class="icon-action" href="{% url 'admin-user-detail' employee.id %}" aria-label="Подробнее о сотруднике">
+                    <a class="icon-action" href="{% url 'admin-user-detail' employee.id %}?next={{ request.get_full_path|urlencode }}" aria-label="Подробнее о сотруднике">
                       <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
                         <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.6" />

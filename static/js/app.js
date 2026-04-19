@@ -598,7 +598,10 @@
       if (!detailBaseUrl) {
         return "#";
       }
-      return detailBaseUrl.replace(/0\/?$/, `${id}/`);
+      const baseUrl = detailBaseUrl.replace(/0\/?$/, `${id}/`);
+      const nextValue = encodeURIComponent(`${window.location.pathname}${window.location.search}`);
+      const separator = baseUrl.includes("?") ? "&" : "?";
+      return `${baseUrl}${separator}next=${nextValue}`;
     };
 
     const renderEmployeeRow = (employee) => {
@@ -667,8 +670,8 @@
       const selectedRows = getSelectedRows();
       const activeRows = selectedRows.filter((row) => row.dataset.active === "true");
       const inactiveRows = selectedRows.filter((row) => row.dataset.active === "false");
+      bulkHint.hidden = false;
       if (selectedRows.length) {
-        bulkHint.hidden = true;
         bulkDeactivateButton.hidden = activeRows.length === 0;
         bulkActivateButton.hidden = inactiveRows.length === 0;
         if (activeRows.length) {
@@ -680,7 +683,6 @@
       } else {
         bulkActivateButton.hidden = true;
         bulkDeactivateButton.hidden = true;
-        bulkHint.hidden = false;
         bulkDeactivateButton.textContent = "Деактивировать";
         bulkActivateButton.textContent = "Активировать";
       }
@@ -1516,6 +1518,15 @@
       });
     }
 
+    if (tableBody) {
+      tableBody.querySelectorAll("[data-select-row]").forEach((checkbox) => {
+        checkbox.checked = false;
+      });
+    }
+    if (selectAllCheckbox) {
+      selectAllCheckbox.checked = false;
+      selectAllCheckbox.indeterminate = false;
+    }
     applyFiltersAndPagination();
   }
 
@@ -3179,18 +3190,22 @@
     const cancelButton = root.querySelector("[data-settings-cancel]");
     const messageEl = root.querySelector("[data-settings-message]");
     const inputs = Array.from(root.querySelectorAll("[data-settings-input]"));
-    const tagWrappers = Array.from(root.querySelectorAll("[data-settings-tags]"));
-    const summaryHours = root.querySelector("[data-summary-hours]");
-    const summaryOt = root.querySelector("[data-summary-ot]");
-    const summaryShifts = root.querySelector("[data-summary-shifts]");
-    const summaryWeekly = root.querySelector("[data-summary-weekly]");
+    const summaryPlatform = root.querySelector("[data-summary-platform]");
+    const summarySupport = root.querySelector("[data-summary-support]");
+    const summaryReset = root.querySelector("[data-summary-reset]");
+    const summaryBackup = root.querySelector("[data-summary-backup]");
     const summaryUpdate = root.querySelector("[data-summary-update]");
-    const timeCalendar = root.querySelector("[data-time-calendar]");
 
     const historyButton = root.querySelector("[data-settings-history]");
     const historyList = root.querySelector("[data-history-list]");
     const historyEmpty = root.querySelector("[data-history-empty]");
     const historyMessage = root.querySelector("[data-history-message]");
+    const announcementField = root.querySelector("[data-announcement-field]");
+    const announcementInput = root.querySelector("[data-announcement-input]");
+    const announcementCounter = root.querySelector("[data-announcement-counter]");
+    const announcementMaxLength = announcementInput
+      ? Number(announcementInput.getAttribute("maxlength") || 0)
+      : 0;
 
     const showMessage = (element, text, type) => {
       if (!element) {
@@ -3208,212 +3223,52 @@
       }
     };
 
-    const formatCoeff = (value) => String(value || "").replace(".", ",");
-
-    const parseHour = (value) => {
-      if (!value) {
-        return 0;
-      }
-      const [hours] = String(value).split(":");
-      const parsed = Number(hours);
-      return Number.isNaN(parsed) ? 0 : parsed;
-    };
-
-    const renderTimeCalendar = () => {
-      if (!timeCalendar) {
+    const syncAnnouncementUi = () => {
+      if (!announcementInput || !announcementCounter) {
         return;
       }
-      const startInput = root.querySelector("[name='work_start']");
-      const endInput = root.querySelector("[name='work_end']");
-      const startValue = startInput ? startInput.value : "07:00";
-      const endValue = endInput ? endInput.value : "23:00";
-      const startHour = parseHour(startValue);
-      const endHour = parseHour(endValue);
-
-      timeCalendar.innerHTML = "";
-
-      const label = document.createElement("div");
-      label.className = "time-calendar-label";
-      label.textContent = `Ядро: ${startValue}–${endValue}`;
-
-      const grid = document.createElement("div");
-      grid.className = "time-calendar-grid";
-
-      for (let hour = 0; hour < 24; hour += 1) {
-        const cell = document.createElement("div");
-        cell.className = "time-slot";
-        cell.textContent = `${String(hour).padStart(2, "0")}:00`;
-        const isActive =
-          startHour <= endHour
-            ? hour >= startHour && hour < endHour
-            : hour >= startHour || hour < endHour;
-        if (isActive) {
-          cell.classList.add("is-active");
-        }
-        grid.append(cell);
+      const currentLength = String(announcementInput.value || "").length;
+      if (announcementMaxLength > 0) {
+        announcementCounter.textContent = `${currentLength}/${announcementMaxLength}`;
+      } else {
+        announcementCounter.textContent = String(currentLength);
       }
-
-      timeCalendar.append(label, grid);
-    };
-
-    const formatShiftValue = (value) => {
-      const raw = String(value || "").trim();
-      if (!raw) {
-        return "";
-      }
-      const normalized = raw.replace(/[–—]/g, "-");
-      let parts = normalized.split("-");
-      if (parts.length !== 2) {
-        parts = normalized.split(/\s+/);
-      }
-      if (parts.length !== 2) {
-        return "";
-      }
-      const parsePart = (part) => {
-        const cleaned = String(part || "").trim();
-        if (!cleaned) {
-          return null;
-        }
-        const colonMatch = cleaned.match(/^(\d{1,2})(?::(\d{1,2}))?$/);
-        if (colonMatch) {
-          const hours = Number(colonMatch[1]);
-          const minutes = colonMatch[2] ? Number(colonMatch[2]) : 0;
-          if (hours > 23 || minutes > 59) {
-            return null;
-          }
-          return { hours, minutes };
-        }
-        const digits = cleaned.replace(/\D/g, "");
-        if (!digits) {
-          return null;
-        }
-        let hours = 0;
-        let minutes = 0;
-        if (digits.length <= 2) {
-          hours = Number(digits);
-          minutes = 0;
-        } else if (digits.length === 3) {
-          hours = Number(digits.slice(0, 1));
-          minutes = Number(digits.slice(1));
-        } else if (digits.length === 4) {
-          hours = Number(digits.slice(0, 2));
-          minutes = Number(digits.slice(2));
-        } else {
-          return null;
-        }
-        if (hours > 23 || minutes > 59) {
-          return null;
-        }
-        return { hours, minutes };
-      };
-      const start = parsePart(parts[0]);
-      const end = parsePart(parts[1]);
-      if (!start || !end) {
-        return "";
-      }
-      const pad = (num) => String(num).padStart(2, "0");
-      return `${pad(start.hours)}:${pad(start.minutes)}-${pad(end.hours)}:${pad(end.minutes)}`;
-    };
-
-    const setTagInputState = (wrapper, isEditing) => {
-      if (!wrapper) {
-        return;
-      }
-      wrapper.classList.toggle("is-disabled", !isEditing);
-      const input = wrapper.querySelector("[data-tag-field]");
-      const addButton = wrapper.querySelector("[data-tag-add]");
-      if (input) {
-        input.disabled = !isEditing;
-      }
-      if (addButton) {
-        addButton.disabled = !isEditing;
-      }
-      wrapper.querySelectorAll(".tag-remove").forEach((button) => {
-        button.disabled = !isEditing;
-      });
-    };
-
-    const getShiftCount = () => {
-      const wrapper = tagWrappers[0];
-      if (!wrapper) {
-        return 0;
-      }
-      return wrapper.querySelectorAll("[data-tag-value]").length;
-    };
-
-    const initShiftValidation = () => {
-      const wrapper = tagWrappers[0];
-      if (!wrapper) {
-        return;
-      }
-      const input = wrapper.querySelector("[data-tag-field]");
-      const addButton = wrapper.querySelector("[data-tag-add]");
-      if (!input) {
-        return;
-      }
-
-      const applyFormat = (event) => {
-        if (input.disabled) {
-          return;
-        }
-        const formatted = formatShiftValue(input.value);
-        if (!formatted && String(input.value || "").trim()) {
-          showMessage(messageEl, "Введите слот в формате 07:00-15:00.", "error");
-          if (event) {
-            event.preventDefault();
-            event.stopImmediatePropagation();
-          }
-          return;
-        }
-        if (formatted) {
-          input.value = formatted;
-          showMessage(messageEl, "", null);
-        }
-      };
-
-      if (addButton) {
-        addButton.addEventListener("click", applyFormat, true);
-      }
-      input.addEventListener(
-        "keydown",
-        (event) => {
-          if (event.key === "Enter") {
-            applyFormat(event);
-          }
-        },
-        true,
+      announcementCounter.classList.toggle(
+        "is-near-limit",
+        announcementMaxLength > 0 && currentLength >= Math.floor(announcementMaxLength * 0.9),
       );
-      input.addEventListener("blur", () => {
-        applyFormat();
-      });
+      if (announcementField) {
+        announcementField.classList.toggle("is-disabled", announcementInput.disabled);
+      }
     };
 
     const updateSummaries = (options = {}) => {
-      const startInput = root.querySelector("[name='work_start']");
-      const endInput = root.querySelector("[name='work_end']");
-      const workDays = root.querySelector("[name='work_days']");
-      const weeklyNorm = root.querySelector("[name='weekly_hours_norm']");
-      const otThreshold = root.querySelector("[name='ot_threshold']");
-      const otCoeff = root.querySelector("[name='ot_coeff']");
+      const platformName = root.querySelector("[name='platform_name']");
+      const supportEmail = root.querySelector("[name='support_email']");
+      const supportPhone = root.querySelector("[name='support_phone']");
+      const allowReset = root.querySelector("[name='allow_password_reset_requests']");
+      const backupRetention = root.querySelector("[name='backup_retention_days']");
       const updatedAt = options.updatedAt;
 
-      if (summaryHours && startInput && endInput) {
-        const label =
-          workDays && workDays.selectedOptions && workDays.selectedOptions.length
-            ? workDays.selectedOptions[0].textContent
-            : "Ежедневно";
-        summaryHours.textContent = `Ядро: ${label} · ${startInput.value}–${endInput.value}`;
+      if (summaryPlatform && platformName) {
+        summaryPlatform.textContent = `Платформа: ${platformName.value || "Conector Shift"}`;
       }
-      if (summaryWeekly && weeklyNorm) {
-        summaryWeekly.textContent = `Норма: ${weeklyNorm.value || 0} ч/нед`;
+      if (summarySupport) {
+        const email = supportEmail ? String(supportEmail.value || "").trim() : "";
+        const phone = supportPhone ? String(supportPhone.value || "").trim() : "";
+        let supportLabel = "не указана";
+        if (email && phone) {
+          supportLabel = `${email} · ${phone}`;
+        } else if (email || phone) {
+          supportLabel = email || phone;
+        }
+        summarySupport.textContent = `Поддержка: ${supportLabel}`;
       }
-      if (summaryOt && otThreshold && otCoeff) {
-        summaryOt.textContent = `Переработка: >${otThreshold.value} ч/день · ${formatCoeff(
-          otCoeff.value,
-        )}x`;
+      if (summaryReset && allowReset) {
+        summaryReset.textContent = `Восстановление пароля: ${allowReset.checked ? "включено" : "отключено"}`;
       }
-      if (summaryShifts) {
-        summaryShifts.textContent = `Типы слотов: ${getShiftCount()}`;
+      if (summaryBackup && backupRetention) {
+        summaryBackup.textContent = `Хранение бэкапов: ${backupRetention.value || 0} дн`;
       }
       if (summaryUpdate && updatedAt) {
         const parsed = new Date(updatedAt);
@@ -3433,15 +3288,6 @@
         input,
         value: input.type === "checkbox" ? input.checked : input.value,
       })),
-      tags: tagWrappers.map((wrapper) => {
-        const list = wrapper.querySelector("[data-tag-list]");
-        const storage = wrapper.querySelector("[data-tag-storage]");
-        return {
-          wrapper,
-          listHtml: list ? list.innerHTML : "",
-          storageValue: storage ? storage.value : "",
-        };
-      }),
     });
 
     const restoreState = (state) => {
@@ -3461,20 +3307,7 @@
           refreshCustomSelect(entry.input.closest("[data-custom-select]"));
         }
       });
-      state.tags.forEach((entry) => {
-        if (!entry.wrapper) {
-          return;
-        }
-        const list = entry.wrapper.querySelector("[data-tag-list]");
-        const storage = entry.wrapper.querySelector("[data-tag-storage]");
-        if (list) {
-          list.innerHTML = entry.listHtml;
-        }
-        if (storage) {
-          storage.value = entry.storageValue;
-        }
-      });
-      renderTimeCalendar();
+      syncAnnouncementUi();
     };
 
     let isEditing = false;
@@ -3484,7 +3317,7 @@
     const setEditingState = (nextState) => {
       isEditing = nextState;
       if (editButton) {
-        editButton.textContent = isEditing ? "Сохранить изменения" : "Обновить шаблоны";
+        editButton.textContent = isEditing ? "Сохранить изменения" : "Редактировать";
       }
       if (cancelButton) {
         cancelButton.hidden = !isEditing;
@@ -3495,46 +3328,26 @@
           refreshCustomSelect(input.closest("[data-custom-select]"));
         }
       });
-      tagWrappers.forEach((wrapper) => setTagInputState(wrapper, isEditing));
-    };
-
-    const getTagsPayload = () => {
-      const wrapper = tagWrappers[0];
-      if (!wrapper) {
-        return [];
-      }
-      const storage = wrapper.querySelector("[data-tag-storage]");
-      if (!storage) {
-        return [];
-      }
-      try {
-        const parsed = JSON.parse(storage.value || "[]");
-        return Array.isArray(parsed) ? parsed : [];
-      } catch (error) {
-        return [];
-      }
+      syncAnnouncementUi();
     };
 
     const buildPayload = () => {
-      const getInput = (name) => root.querySelector(`[name='${name}']`);
-      const startInput = getInput("work_start");
-      const endInput = getInput("work_end");
-      const workDays = getInput("work_days");
-      const weeklyNorm = getInput("weekly_hours_norm");
-      const otThreshold = getInput("ot_threshold");
-      const otCoeff = getInput("ot_coeff");
-      const allowCustom = getInput("allow_custom_shifts");
-
-      return {
-        work_start: startInput ? startInput.value : "07:00",
-        work_end: endInput ? endInput.value : "23:00",
-        work_days: workDays ? workDays.value : "daily",
-        weekly_hours_norm: weeklyNorm ? Number(weeklyNorm.value) : 40,
-        ot_threshold: otThreshold ? Number(otThreshold.value) : 12,
-        ot_coeff: otCoeff ? otCoeff.value : "1.5",
-        shift_templates: getTagsPayload(),
-        allow_custom_shifts: allowCustom ? allowCustom.checked : true,
-      };
+      const payload = {};
+      inputs.forEach((input) => {
+        if (!input.name) {
+          return;
+        }
+        if (input.type === "checkbox") {
+          payload[input.name] = input.checked;
+          return;
+        }
+        if (input.type === "number") {
+          payload[input.name] = Number(input.value || 0);
+          return;
+        }
+        payload[input.name] = String(input.value || "").trim();
+      });
+      return payload;
     };
 
     const saveSettings = async () => {
@@ -3564,7 +3377,6 @@
         setEditingState(false);
         originalState = captureState();
         updateSummaries({ updatedAt: data.updated_at });
-        renderTimeCalendar();
         historyLoaded = false;
         showMessage(messageEl, "Настройки сохранены и применены.", "success");
       } catch (error) {
@@ -3600,20 +3412,14 @@
     inputs.forEach((input) => {
       input.addEventListener("change", () => {
         updateSummaries();
-        renderTimeCalendar();
       });
     });
 
-    tagWrappers.forEach((wrapper) => {
-      const list = wrapper.querySelector("[data-tag-list]");
-      if (!list || !window.MutationObserver) {
-        return;
-      }
-      const observer = new MutationObserver(() => {
-        updateSummaries();
+    if (announcementInput) {
+      announcementInput.addEventListener("input", () => {
+        syncAnnouncementUi();
       });
-      observer.observe(list, { childList: true });
-    });
+    }
 
     const formatHistoryDate = (value) => {
       if (!value) {
@@ -3721,14 +3527,14 @@
 
     setEditingState(false);
     updateSummaries();
-    renderTimeCalendar();
-    initShiftValidation();
+    syncAnnouncementUi();
   };
 
   const initAdminSystem = () => {
     const systemRoot = document.querySelector("[data-admin-system]");
     const bodyCreateUrl = document.body.dataset.backupCreateUrl || "";
     const createButtons = Array.from(document.querySelectorAll("[data-action='create-backup']"));
+    const exportLogsButtons = Array.from(document.querySelectorAll("[data-action='export-logs']"));
     const createUrl = (systemRoot && systemRoot.dataset.backupCreateUrl) || bodyCreateUrl || "";
     const monitoringUrl = systemRoot ? systemRoot.dataset.monitoringUrl || "" : "";
     const messageEl = systemRoot ? systemRoot.querySelector("[data-system-message]") : null;
@@ -3748,8 +3554,19 @@
     const restoreConfirmButton = restoreModal
       ? restoreModal.querySelector("[data-action='confirm-restore']")
       : null;
+    const downloadModal = document.querySelector("[data-modal='download-backup']");
+    const downloadNameEl = downloadModal ? downloadModal.querySelector("[data-download-name]") : null;
+    const downloadConfirmButton = downloadModal
+      ? downloadModal.querySelector("[data-action='confirm-download-backup']")
+      : null;
+    const exportLogsModal = document.querySelector("[data-modal='export-logs']");
+    const exportLogsConfirmButton = exportLogsModal
+      ? exportLogsModal.querySelector("[data-action='confirm-export-logs']")
+      : null;
     let pendingRestoreUrl = "";
     let pendingRestoreRow = null;
+    let pendingDownloadUrl = "";
+    let pendingExportLogsUrl = "";
 
     const showMessage = (text, type, options = {}) => {
       const targetEl = messageEl || globalMessageEl;
@@ -3792,6 +3609,13 @@
       buttons.forEach((button) => {
         setLoading(button, isLoading);
       });
+    };
+
+    const navigateTo = (url) => {
+      if (!url) {
+        return;
+      }
+      window.location.assign(url);
     };
 
     const formatDateTime = (value) => {
@@ -3856,6 +3680,7 @@
       if (backup.download_url) {
         const downloadLink = document.createElement("a");
         downloadLink.className = "icon-action";
+        downloadLink.dataset.action = "download-backup";
         downloadLink.href = backup.download_url;
         downloadLink.setAttribute("aria-label", "Скачать бэкап");
         downloadLink.innerHTML = `
@@ -4014,8 +3839,44 @@
       });
     }
 
+    if (exportLogsButtons.length) {
+      exportLogsButtons.forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          pendingExportLogsUrl = button.getAttribute("href") || "";
+          if (exportLogsModal) {
+            openModal(exportLogsModal);
+          } else {
+            const confirmed = window.confirm("Вы хотите экспортировать логи?");
+            if (confirmed) {
+              navigateTo(pendingExportLogsUrl);
+            }
+          }
+        });
+      });
+    }
+
     if (backupTableBody) {
       backupTableBody.addEventListener("click", (event) => {
+        const downloadLink = event.target.closest("[data-action='download-backup']");
+        if (downloadLink) {
+          event.preventDefault();
+          pendingDownloadUrl = downloadLink.getAttribute("href") || "";
+          const row = downloadLink.closest("tr");
+          if (downloadNameEl) {
+            downloadNameEl.textContent = row?.querySelector("td")?.textContent || "";
+          }
+          if (downloadModal) {
+            openModal(downloadModal);
+          } else {
+            const confirmed = window.confirm("Вы хотите скачать резервную копию?");
+            if (confirmed) {
+              navigateTo(pendingDownloadUrl);
+            }
+          }
+          return;
+        }
+
         const restoreButton = event.target.closest("[data-action='restore-backup']");
         if (!restoreButton) {
           return;
@@ -4037,6 +3898,36 @@
       });
     }
 
+    if (downloadConfirmButton) {
+      downloadConfirmButton.addEventListener("click", () => {
+        if (!pendingDownloadUrl) {
+          showMessage("URL скачивания бэкапа не задан.", "error");
+          return;
+        }
+        if (downloadModal) {
+          closeModal(downloadModal);
+        }
+        const downloadUrl = pendingDownloadUrl;
+        pendingDownloadUrl = "";
+        navigateTo(downloadUrl);
+      });
+    }
+
+    if (exportLogsConfirmButton) {
+      exportLogsConfirmButton.addEventListener("click", () => {
+        if (!pendingExportLogsUrl) {
+          showMessage("URL экспорта логов не задан.", "error");
+          return;
+        }
+        if (exportLogsModal) {
+          closeModal(exportLogsModal);
+        }
+        const exportUrl = pendingExportLogsUrl;
+        pendingExportLogsUrl = "";
+        navigateTo(exportUrl);
+      });
+    }
+
     if (restoreConfirmButton) {
       restoreConfirmButton.addEventListener("click", async () => {
         if (!pendingRestoreUrl) {
@@ -4053,6 +3944,390 @@
         pendingRestoreRow = null;
       });
     }
+  };
+
+  const initAdminReports = () => {
+    const root = document.querySelector("[data-admin-reports]");
+    if (!root) {
+      return;
+    }
+
+    const customRangeForm = root.querySelector("[data-reports-custom-range-form]");
+    const customStartInput = root.querySelector("[data-reports-custom-start-input]");
+    const customEndInput = root.querySelector("[data-reports-custom-end-input]");
+    const customStartField = root.querySelector("[data-reports-custom-start]");
+    const customEndField = root.querySelector("[data-reports-custom-end]");
+
+    const escapeHtml = (value) =>
+      String(value).replace(/[&<>"']/g, (char) => {
+        if (char === "&") return "&amp;";
+        if (char === "<") return "&lt;";
+        if (char === ">") return "&gt;";
+        if (char === '"') return "&quot;";
+        return "&#39;";
+      });
+
+    const parsePayload = (sourceId) => {
+      if (!sourceId) {
+        return null;
+      }
+      const payloadNode = document.getElementById(sourceId);
+      if (!payloadNode) {
+        return null;
+      }
+      try {
+        return JSON.parse(payloadNode.textContent || "{}");
+      } catch (error) {
+        return null;
+      }
+    };
+
+    const toSeries = (value) =>
+      Array.isArray(value)
+        ? value.map((item) => {
+            const number = Number(item);
+            return Number.isFinite(number) && number >= 0 ? number : 0;
+          })
+        : [];
+
+    const parseInputDate = (value) => {
+      const trimmed = String(value || "").trim();
+      if (!trimmed) {
+        return null;
+      }
+      const dotMatch = trimmed.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+      if (dotMatch) {
+        const [, day, month, year] = dotMatch;
+        return new Date(Number(year), Number(month) - 1, Number(day));
+      }
+      const dashMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (dashMatch) {
+        const [, year, month, day] = dashMatch;
+        return new Date(Number(year), Number(month) - 1, Number(day));
+      }
+      return null;
+    };
+
+    const formatDisplayDate = (date) => {
+      if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+        return "";
+      }
+      const day = String(date.getDate()).padStart(2, "0");
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const year = date.getFullYear();
+      return `${day}.${month}.${year}`;
+    };
+
+    const formatIsoDate = (date) => {
+      if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+        return "";
+      }
+      const day = String(date.getDate()).padStart(2, "0");
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const year = date.getFullYear();
+      return `${year}-${month}-${day}`;
+    };
+
+    const initDatePickers = () => {
+      const pickers = Array.from(root.querySelectorAll("[data-date-picker]"));
+      if (!pickers.length) {
+        return;
+      }
+      const monthNames = [
+        "Январь",
+        "Февраль",
+        "Март",
+        "Апрель",
+        "Май",
+        "Июнь",
+        "Июль",
+        "Август",
+        "Сентябрь",
+        "Октябрь",
+        "Ноябрь",
+        "Декабрь",
+      ];
+      const weekdayLabels = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+
+      const renderCalendar = (panel, state) => {
+        panel.innerHTML = "";
+        const header = document.createElement("div");
+        header.className = "date-panel-header";
+        const prev = document.createElement("button");
+        prev.type = "button";
+        prev.textContent = "‹";
+        const next = document.createElement("button");
+        next.type = "button";
+        next.textContent = "›";
+        const label = document.createElement("div");
+        label.textContent = `${monthNames[state.viewDate.getMonth()]} ${state.viewDate.getFullYear()}`;
+        header.append(prev, label, next);
+        panel.append(header);
+
+        const grid = document.createElement("div");
+        grid.className = "date-panel-grid";
+        weekdayLabels.forEach((dayLabel) => {
+          const cell = document.createElement("div");
+          cell.className = "date-panel-weekday";
+          cell.textContent = dayLabel;
+          grid.append(cell);
+        });
+
+        const year = state.viewDate.getFullYear();
+        const month = state.viewDate.getMonth();
+        const firstDay = new Date(year, month, 1);
+        const startOffset = (firstDay.getDay() + 6) % 7;
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const daysInPrev = new Date(year, month, 0).getDate();
+
+        for (let i = 0; i < 42; i += 1) {
+          const dayIndex = i - startOffset + 1;
+          const cell = document.createElement("div");
+          cell.className = "date-panel-day";
+          let cellDate;
+          if (dayIndex <= 0) {
+            const day = daysInPrev + dayIndex;
+            cellDate = new Date(year, month - 1, day);
+            cell.classList.add("is-muted");
+          } else if (dayIndex > daysInMonth) {
+            const day = dayIndex - daysInMonth;
+            cellDate = new Date(year, month + 1, day);
+            cell.classList.add("is-muted");
+          } else {
+            cellDate = new Date(year, month, dayIndex);
+          }
+          cell.textContent = String(cellDate.getDate());
+          if (
+            state.selectedDate
+            && cellDate.toDateString() === state.selectedDate.toDateString()
+          ) {
+            cell.classList.add("is-selected");
+          }
+          cell.addEventListener("click", () => {
+            state.selectedDate = cellDate;
+            state.input.value = formatDisplayDate(cellDate);
+            state.panel.hidden = true;
+            state.input.dispatchEvent(new Event("change", { bubbles: true }));
+          });
+          grid.append(cell);
+        }
+
+        panel.append(grid);
+
+        prev.addEventListener("click", () => {
+          state.viewDate = new Date(year, month - 1, 1);
+          renderCalendar(panel, state);
+        });
+        next.addEventListener("click", () => {
+          state.viewDate = new Date(year, month + 1, 1);
+          renderCalendar(panel, state);
+        });
+      };
+
+      pickers.forEach((picker) => {
+        if (picker.dataset.dateReady === "true") {
+          return;
+        }
+        picker.dataset.dateReady = "true";
+        const input = picker.querySelector("[data-date-input]");
+        const panel = picker.querySelector("[data-date-panel]");
+        const trigger = picker.querySelector("[data-date-trigger]");
+        if (!input || !panel || !trigger) {
+          return;
+        }
+        const initialDate = parseInputDate(input.value) || new Date();
+        const state = {
+          input,
+          panel,
+          viewDate: new Date(initialDate.getFullYear(), initialDate.getMonth(), 1),
+          selectedDate: parseInputDate(input.value),
+        };
+        const openPanel = () => {
+          state.selectedDate = parseInputDate(input.value);
+          state.viewDate = state.selectedDate
+            ? new Date(state.selectedDate.getFullYear(), state.selectedDate.getMonth(), 1)
+            : new Date();
+          panel.hidden = false;
+          renderCalendar(panel, state);
+        };
+        trigger.addEventListener("click", (event) => {
+          event.stopPropagation();
+          openPanel();
+        });
+        input.addEventListener("focus", openPanel);
+      });
+
+      document.addEventListener("click", (event) => {
+        pickers.forEach((picker) => {
+          const panel = picker.querySelector("[data-date-panel]");
+          if (!panel) {
+            return;
+          }
+          if (!picker.contains(event.target)) {
+            panel.hidden = true;
+          }
+        });
+      });
+    };
+
+    const syncCustomRange = () => {
+      if (!customRangeForm || !customStartInput || !customEndInput || !customStartField || !customEndField) {
+        return;
+      }
+      const startDate = parseInputDate(customStartInput.value);
+      const endDate = parseInputDate(customEndInput.value);
+      if (!startDate || !endDate) {
+        return;
+      }
+      if (startDate > endDate) {
+        return;
+      }
+      customStartInput.value = formatDisplayDate(startDate);
+      customEndInput.value = formatDisplayDate(endDate);
+      const startIso = formatIsoDate(startDate);
+      const endIso = formatIsoDate(endDate);
+      if (!startIso || !endIso) {
+        return;
+      }
+      const isSamePeriod = customStartField.value === startIso && customEndField.value === endIso;
+      customStartField.value = startIso;
+      customEndField.value = endIso;
+      if (!isSamePeriod) {
+        customRangeForm.submit();
+      }
+    };
+
+    if (customStartInput && customEndInput) {
+      const initialStartDate = parseInputDate(customStartInput.value);
+      const initialEndDate = parseInputDate(customEndInput.value);
+      if (initialStartDate) {
+        customStartInput.value = formatDisplayDate(initialStartDate);
+      }
+      if (initialEndDate) {
+        customEndInput.value = formatDisplayDate(initialEndDate);
+      }
+      customStartInput.addEventListener("change", syncCustomRange);
+      customEndInput.addEventListener("change", syncCustomRange);
+    }
+    initDatePickers();
+
+    const renderLineChart = (chartHost, payload, lineKeys, ariaLabel) => {
+      if (!chartHost || !payload || !lineKeys.length) {
+        return;
+      }
+
+      const labels = Array.isArray(payload.labels) ? payload.labels.map((item) => String(item)) : [];
+      const series = {};
+      lineKeys.forEach((key) => {
+        series[key] = toSeries(payload.series && payload.series[key]);
+      });
+
+      let length = labels.length;
+      lineKeys.forEach((key) => {
+        length = Math.min(length, series[key].length);
+      });
+
+      if (!length) {
+        chartHost.innerHTML = "<div class='reports-line-empty'>Нет данных за выбранный период</div>";
+        return;
+      }
+
+      const allValues = [];
+      lineKeys.forEach((key) => {
+        allValues.push(...series[key].slice(0, length));
+      });
+      const maxValue = Math.max(1, Number(payload.max_value) || 0, ...allValues);
+
+      const width = 960;
+      const height = 280;
+      const padding = { top: 16, right: 16, bottom: 28, left: 38 };
+      const plotWidth = width - padding.left - padding.right;
+      const plotHeight = height - padding.top - padding.bottom;
+
+      const pointAt = (index, value) => {
+        const x = padding.left + (length === 1 ? plotWidth / 2 : (index / (length - 1)) * plotWidth);
+        const y = padding.top + plotHeight - (value / maxValue) * plotHeight;
+        return { x: Number(x.toFixed(2)), y: Number(y.toFixed(2)) };
+      };
+
+      const buildPath = (values) => {
+        let path = "";
+        values.slice(0, length).forEach((value, index) => {
+          const point = pointAt(index, value);
+          path += index === 0 ? `M ${point.x} ${point.y}` : ` L ${point.x} ${point.y}`;
+        });
+        return path;
+      };
+
+      const buildPoints = (values, cssClass) =>
+        values
+          .slice(0, length)
+          .map((value, index) => {
+            const point = pointAt(index, value);
+            return `<circle class=\"reports-point ${cssClass}\" cx=\"${point.x}\" cy=\"${point.y}\" r=\"2.8\"></circle>`;
+          })
+          .join("");
+
+      const yTicks = 4;
+      const horizontalGrid = [];
+      const yLabels = [];
+      for (let tick = 0; tick <= yTicks; tick += 1) {
+        const ratio = tick / yTicks;
+        const y = Number((padding.top + ratio * plotHeight).toFixed(2));
+        const value = Math.round(maxValue - ratio * maxValue);
+        horizontalGrid.push(
+          `<line class=\"reports-line-grid\" x1=\"${padding.left}\" y1=\"${y}\" x2=\"${width - padding.right}\" y2=\"${y}\"></line>`,
+        );
+        yLabels.push(
+          `<text class=\"reports-line-label\" x=\"${padding.left - 8}\" y=\"${y + 4}\" text-anchor=\"end\">${value}</text>`,
+        );
+      }
+
+      const xLabels = [];
+      const labelStep = length <= 10 ? 1 : Math.ceil(length / 10);
+      for (let index = 0; index < length; index += labelStep) {
+        const point = pointAt(index, 0);
+        xLabels.push(
+          `<text class=\"reports-line-label\" x=\"${point.x}\" y=\"${height - 6}\" text-anchor=\"middle\">${escapeHtml(labels[index])}</text>`,
+        );
+      }
+      if ((length - 1) % labelStep !== 0) {
+        const point = pointAt(length - 1, 0);
+        xLabels.push(
+          `<text class=\"reports-line-label\" x=\"${point.x}\" y=\"${height - 6}\" text-anchor=\"middle\">${escapeHtml(labels[length - 1])}</text>`,
+        );
+      }
+
+      const paths = lineKeys
+        .map((key) => `<path class=\"reports-line ${key}\" d=\"${buildPath(series[key])}\"></path>`)
+        .join("");
+      const points = lineKeys
+        .map((key) => buildPoints(series[key], key))
+        .join("");
+
+      chartHost.innerHTML = `
+        <svg viewBox=\"0 0 ${width} ${height}\" role=\"img\" aria-label=\"${escapeHtml(ariaLabel || "График отчета")}\">
+          ${horizontalGrid.join("")}
+          <line class=\"reports-line-axis\" x1=\"${padding.left}\" y1=\"${padding.top}\" x2=\"${padding.left}\" y2=\"${height - padding.bottom}\"></line>
+          <line class=\"reports-line-axis\" x1=\"${padding.left}\" y1=\"${height - padding.bottom}\" x2=\"${width - padding.right}\" y2=\"${height - padding.bottom}\"></line>
+          ${yLabels.join("")}
+          ${xLabels.join("")}
+          ${paths}
+          ${points}
+        </svg>
+      `;
+    };
+
+    const chartHosts = Array.from(root.querySelectorAll("[data-reports-line-chart]"));
+    chartHosts.forEach((host) => {
+      const sourceId = host.dataset.chartSource || "";
+      const payload = parsePayload(sourceId);
+      const lineKeys = String(host.dataset.chartLines || "")
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      renderLineChart(host, payload, lineKeys, host.dataset.chartAria || "График");
+    });
   };
 
   const initEmployeeAvailability = () => {
@@ -4255,7 +4530,16 @@
             return;
           }
           if (lastSavedEl) {
-            const label = data.updated_label || "Сохранено";
+            let label = data.updated_label || "";
+            if (!label && data.updated_at) {
+              const parsedDate = new Date(data.updated_at);
+              if (!Number.isNaN(parsedDate.getTime())) {
+                label = parsedDate.toLocaleString("ru-RU");
+              }
+            }
+            if (!label) {
+              label = "Сохранено";
+            }
             lastSavedEl.textContent = `Последнее сохранение: ${label}`;
             lastSavedEl.classList.add("success");
             lastSavedEl.classList.remove("warning");
@@ -4689,6 +4973,25 @@
     const filesInput = root.querySelector("[data-task-detail-files]");
     const filesLabel = root.querySelector("[data-task-detail-files-label]");
     const submissionsList = root.querySelector("[data-task-detail-submissions]");
+    const statusLabels = {
+      todo: "Назначена",
+      in_progress: "В работе",
+      done: "Выполнено",
+    };
+    const statusTones = {
+      todo: "muted",
+      in_progress: "warning",
+      done: "success",
+    };
+
+    const updateStatusUI = (status, data = {}) => {
+      if (!statusPill || !status) {
+        return;
+      }
+      statusPill.textContent = data.status_label || statusLabels[status] || status;
+      statusPill.classList.remove("muted", "warning", "success", "danger");
+      statusPill.classList.add(data.status_tone || statusTones[status] || "muted");
+    };
 
     if (filesInput && filesLabel) {
       filesInput.addEventListener("change", () => {
@@ -4765,12 +5068,15 @@
             }
             data.submissions.forEach((submission) => {
               const item = document.createElement("li");
-              if (submission.created_label || submission.author) {
+              const createdLabel = submission.created_label
+                || (submission.created_at ? new Date(submission.created_at).toLocaleString("ru-RU") : "");
+              const authorName = submission.author || submission.author_name || "";
+              if (createdLabel || authorName) {
                 const meta = document.createElement("div");
                 meta.className = "submission-meta";
-                const metaText = submission.author
-                  ? `${submission.created_label} · ${submission.author}`
-                  : submission.created_label;
+                const metaText = authorName
+                  ? `${createdLabel} · ${authorName}`
+                  : createdLabel;
                 meta.textContent = metaText || "";
                 item.append(meta);
               }
@@ -4780,13 +5086,15 @@
                 comment.textContent = submission.comment;
                 item.append(comment);
               }
-              if (submission.file_url) {
+              const fileUrl = submission.file_url || submission.attachment_url;
+              const fileName = submission.file_name || submission.attachment_name || "Файл";
+              if (fileUrl) {
                 const link = document.createElement("a");
                 link.className = "submission-file";
-                link.href = submission.file_url;
+                link.href = fileUrl;
                 link.target = "_blank";
                 link.rel = "noopener";
-                link.textContent = submission.file_name || "Файл";
+                link.textContent = fileName;
                 item.append(link);
               }
               submissionsList.prepend(item);
@@ -4809,6 +5117,7 @@
 
   initAdminSettings();
   initAdminSystem();
+  initAdminReports();
   initEmployeeAvailability();
   initEmployeeTasks();
   initEmployeeTaskDetail();
@@ -4870,9 +5179,14 @@
 
     const buildEmployeeDetailUrl = (id) => {
       if (!employeeDetailBase) {
-        return `/dashboard/admin/users/${id}/`;
+        const fallbackBase = `/dashboard/admin/users/${id}/`;
+        const nextValue = encodeURIComponent(`${window.location.pathname}${window.location.search}`);
+        return `${fallbackBase}?next=${nextValue}`;
       }
-      return employeeDetailBase.replace(/0\/?$/, `${id}/`);
+      const baseUrl = employeeDetailBase.replace(/0\/?$/, `${id}/`);
+      const nextValue = encodeURIComponent(`${window.location.pathname}${window.location.search}`);
+      const separator = baseUrl.includes("?") ? "&" : "?";
+      return `${baseUrl}${separator}next=${nextValue}`;
     };
 
     const showMessage = (text, type) => {

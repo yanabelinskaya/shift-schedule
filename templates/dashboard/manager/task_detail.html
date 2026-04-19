@@ -5,7 +5,7 @@
     <div class="card dashboard-hero fade-up">
       <div class="hero-header">
         <div>
-          <a class="back-link" href="{% url 'manager-tasks' %}">Назад к задачам</a>
+          <a class="back-link" href="{{ back_url }}">Назад к задачам</a>
           <h1>{{ task.title }}</h1>
           <p class="subtle">Срок: {{ task_due_label }}</p>
         </div>
@@ -31,7 +31,7 @@
           <p class="subtle">Описание и история сдач.</p>
         </div>
         <div class="section-actions">
-          <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'manager-task-edit' task.id %}">Редактировать</a>
+          <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'manager-task-edit' task.id %}?next={{ request.get_full_path|urlencode }}">Редактировать</a>
         </div>
       </div>
 

@@ -14,7 +14,7 @@
           <p class="subtle">{{ page_subtitle }}</p>
         </div>
         <div class="hero-actions">
-          <a class="btn btn-primary btn-inline" href="{% url 'manager-task-create' %}?week={{ week_offset }}">Создать задачу</a>
+          <a class="btn btn-primary btn-inline" href="{% url 'manager-task-create' %}?week={{ week_offset }}&next={{ request.get_full_path|urlencode }}">Создать задачу</a>
         </div>
       </div>
       <div class="hero-meta">
@@ -181,7 +181,7 @@
                             {% if cell.has_slot %}
                               <a
                                 class="btn btn-ghost btn-inline btn-xs"
-                                href="{% url 'manager-task-create' %}?type=employee&employee={{ row.id }}&date={{ cell.date }}&start={{ cell.start }}&end={{ cell.end }}&week={{ week_offset }}"
+                                href="{% url 'manager-task-create' %}?type=employee&employee={{ row.id }}&date={{ cell.date }}&start={{ cell.start }}&end={{ cell.end }}&week={{ week_offset }}&next={{ request.get_full_path|urlencode }}"
                               >
                                 Добавить задачу
                               </a>
@@ -257,7 +257,7 @@
                   </td>
                   <td>
                     <div class="task-row-actions">
-                      <a class="icon-action" href="{% url 'manager-task-detail' task.id %}" title="Открыть">
+                      <a class="icon-action" href="{% url 'manager-task-detail' task.id %}?next={{ request.get_full_path|urlencode }}" title="Открыть">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
                           <path d="M4 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
                           <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.6" />
@@ -280,7 +280,7 @@
                           class="icon-action"
                           type="button"
                           data-task-extend
-                          data-extend-url="{% url 'manager-task-extend' task.id %}"
+                          data-extend-url="{% url 'api-manager-task-extend' task.id %}"
                           title="Продлить"
                         >
                           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -288,12 +288,12 @@
                           </svg>
                         </button>
                       {% endif %}
-                      <a class="icon-action" href="{% url 'manager-task-edit' task.id %}" title="Редактировать">
+                      <a class="icon-action" href="{% url 'manager-task-edit' task.id %}?next={{ request.get_full_path|urlencode }}" title="Редактировать">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
                           <path d="M4 20h4l10-10-4-4L4 16v4zM14 6l4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
                         </svg>
                       </a>
-                      <button class="icon-action danger" type="button" data-task-delete data-delete-url="{% url 'manager-task-delete' task.id %}" title="Удалить">
+                      <button class="icon-action danger" type="button" data-task-delete data-delete-url="{% url 'api-manager-task-detail' task.id %}" title="Удалить">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
                           <path d="M5 7h14M9 7V5h6v2M9 10v7M15 10v7M7 7l1 12h8l1-12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
                         </svg>
@@ -353,8 +353,8 @@
           <p class="subtle">Видят все сотрудники отдела или смены, можно прикладывать комментарии и файлы.</p>
         </div>
         <div class="section-actions">
-          <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'manager-task-create' %}?type=department&week={{ week_offset }}">Общая задача</a>
-          <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'manager-task-create' %}?type=slot&week={{ week_offset }}">Для слота</a>
+          <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'manager-task-create' %}?type=department&week={{ week_offset }}&next={{ request.get_full_path|urlencode }}">Общая задача</a>
+          <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'manager-task-create' %}?type=slot&week={{ week_offset }}&next={{ request.get_full_path|urlencode }}">Для слота</a>
         </div>
       </div>
       {% if shared_tasks %}
@@ -400,7 +400,7 @@
                   </td>
                   <td>
                     <div class="task-row-actions">
-                      <a class="icon-action" href="{% url 'manager-task-detail' task.id %}" title="Открыть">
+                      <a class="icon-action" href="{% url 'manager-task-detail' task.id %}?next={{ request.get_full_path|urlencode }}" title="Открыть">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
                           <path d="M4 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
                           <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.6" />
@@ -423,7 +423,7 @@
                           class="icon-action"
                           type="button"
                           data-task-extend
-                          data-extend-url="{% url 'manager-task-extend' task.id %}"
+                          data-extend-url="{% url 'api-manager-task-extend' task.id %}"
                           title="Продлить"
                         >
                           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -431,12 +431,12 @@
                           </svg>
                         </button>
                       {% endif %}
-                      <a class="icon-action" href="{% url 'manager-task-edit' task.id %}" title="Редактировать">
+                      <a class="icon-action" href="{% url 'manager-task-edit' task.id %}?next={{ request.get_full_path|urlencode }}" title="Редактировать">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
                           <path d="M4 20h4l10-10-4-4L4 16v4zM14 6l4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
                         </svg>
                       </a>
-                      <button class="icon-action danger" type="button" data-task-delete data-delete-url="{% url 'manager-task-delete' task.id %}" title="Удалить">
+                      <button class="icon-action danger" type="button" data-task-delete data-delete-url="{% url 'api-manager-task-detail' task.id %}" title="Удалить">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
                           <path d="M5 7h14M9 7V5h6v2M9 10v7M15 10v7M7 7l1 12h8l1-12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
                         </svg>

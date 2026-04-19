@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 import os
 from pathlib import Path
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -45,20 +46,31 @@ def _get_bool(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _get_csv_list(name: str) -> list[str]:
+    raw = os.getenv(name, "")
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "")
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "").strip()
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = _get_bool("DJANGO_DEBUG", True)
+DEBUG = _get_bool("DJANGO_DEBUG", False)
 
-ALLOWED_HOSTS = [
-    host.strip()
-    for host in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",")
-    if host.strip()
-]
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = "dev-only-insecure-secret-key-change-in-env"
+    else:
+        raise ImproperlyConfigured("Set DJANGO_SECRET_KEY for production deployments.")
+
+ALLOWED_HOSTS = _get_csv_list("DJANGO_ALLOWED_HOSTS")
+if DEBUG and not ALLOWED_HOSTS:
+    ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+
+CSRF_TRUSTED_ORIGINS = _get_csv_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 
 
 # Application definition
@@ -99,6 +111,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'accounts.context_processors.site_config',
             ],
         },
     },
@@ -118,10 +131,32 @@ DATABASES = {
         'PASSWORD': os.getenv('DB_PASSWORD', ''),
         'HOST': os.getenv('DB_HOST', 'localhost'),
         'PORT': os.getenv('DB_PORT', '5432'),
+        'CONN_MAX_AGE': int(os.getenv('DB_CONN_MAX_AGE', '60')),
+        'CONN_HEALTH_CHECKS': _get_bool('DB_CONN_HEALTH_CHECKS', True),
     }
 }
 
 AUTH_USER_MODEL = 'accounts.User'
+
+try:
+    API_DEFAULT_PAGE_SIZE = max(1, int(os.getenv('API_DEFAULT_PAGE_SIZE', '25')))
+except (TypeError, ValueError):
+    API_DEFAULT_PAGE_SIZE = 25
+
+try:
+    API_MAX_PAGE_SIZE = max(API_DEFAULT_PAGE_SIZE, int(os.getenv('API_MAX_PAGE_SIZE', '100')))
+except (TypeError, ValueError):
+    API_MAX_PAGE_SIZE = 100
+
+try:
+    API_DEFAULT_LIST_LIMIT = max(1, int(os.getenv('API_DEFAULT_LIST_LIMIT', '100')))
+except (TypeError, ValueError):
+    API_DEFAULT_LIST_LIMIT = 100
+
+try:
+    API_MAX_LIST_LIMIT = max(API_DEFAULT_LIST_LIMIT, int(os.getenv('API_MAX_LIST_LIMIT', '250')))
+except (TypeError, ValueError):
+    API_MAX_LIST_LIMIT = 250
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -132,15 +167,55 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_PAGINATION_CLASS': 'accounts.pagination.OptionalPageNumberPagination',
+    'EXCEPTION_HANDLER': 'accounts.api_errors.custom_exception_handler',
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': os.getenv('DRF_THROTTLE_ANON', '60/min'),
+        'user': os.getenv('DRF_THROTTLE_USER', '300/min'),
+    },
 }
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Shift Schedule API',
-    'DESCRIPTION': 'Authentication and user management endpoints.',
+    'DESCRIPTION': (
+        'Полный API для управления пользователями, отделами, сотрудниками '
+        'и заявками на сброс пароля в системе Shift Schedule.'
+    ),
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SCHEMA_PATH_PREFIX': '/api',
+    'TAGS': [
+        {'name': 'System', 'description': 'Навигация API и служебные точки.'},
+        {'name': 'Authentication', 'description': 'Вход, выход и данные текущего пользователя.'},
+        {'name': 'Users', 'description': 'Создание пользователей администратором.'},
+        {'name': 'Departments', 'description': 'Управление отделами, менеджерами и должностями.'},
+        {'name': 'Employees', 'description': 'Управление сотрудниками, аватарами, отсутствиями и импортом.'},
+        {'name': 'Password Resets', 'description': 'Запрос и обработка восстановления пароля.'},
+        {'name': 'Admin', 'description': 'Административные операции: настройки и системные действия.'},
+        {'name': 'Manager', 'description': 'Операции менеджера: графики, запросы и задачи.'},
+        {'name': 'Employee', 'description': 'Операции сотрудника: доступность, запросы и задачи.'},
+    ],
+    'ENUM_NAME_OVERRIDES': {
+        'RoleEnum': [('admin', 'Администратор'), ('manager', 'Менеджер'), ('employee', 'Сотрудник')],
+        'AvailabilityPriorityEnum': [('high', 'Очень хочу'), ('mid', 'Ок'), ('low', 'Не хочу')],
+        'TaskPriorityEnum': [('high', 'Высокий'), ('mid', 'Средний'), ('low', 'Низкий')],
+        'TaskTypeEnum': [('employee', 'Сотруднику'), ('slot', 'Для слота'), ('department', 'Для отдела')],
+        'TaskStatusEnum': [('todo', 'Назначена'), ('in_progress', 'В работе'), ('done', 'Выполнено')],
+        'ShiftRequestStatusEnum': [('pending', 'На рассмотрении'), ('approved', 'Одобрено'), ('rejected', 'Отклонено')],
+        'DecisionEnum': [('approved', 'approved'), ('rejected', 'rejected')],
+    },
     'SWAGGER_UI_SETTINGS': {
         'persistAuthorization': True,
+        'displayRequestDuration': True,
+        'filter': True,
+        'docExpansion': 'list',
+        'defaultModelsExpandDepth': 2,
+        'defaultModelExpandDepth': 2,
     },
     'AUTHENTICATION_WHITELIST': [
         'rest_framework.authentication.TokenAuthentication',
@@ -186,6 +261,56 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+BACKUP_STORAGE_DIR = Path(os.getenv('BACKUP_STORAGE_DIR', str(BASE_DIR / 'backups'))).expanduser()
+try:
+    BACKUP_RETENTION_DAYS = max(0, int(os.getenv('BACKUP_RETENTION_DAYS', '30')))
+except (TypeError, ValueError):
+    BACKUP_RETENTION_DAYS = 30
+
+try:
+    TASK_SUBMISSION_MAX_FILE_SIZE = max(1, int(os.getenv('TASK_SUBMISSION_MAX_FILE_SIZE', str(10 * 1024 * 1024))))
+except (TypeError, ValueError):
+    TASK_SUBMISSION_MAX_FILE_SIZE = 10 * 1024 * 1024
+
+try:
+    TASK_SUBMISSION_MAX_FILES = max(1, int(os.getenv('TASK_SUBMISSION_MAX_FILES', '5')))
+except (TypeError, ValueError):
+    TASK_SUBMISSION_MAX_FILES = 5
+
+_default_submission_extensions = [
+    'pdf',
+    'doc',
+    'docx',
+    'xls',
+    'xlsx',
+    'csv',
+    'txt',
+    'png',
+    'jpg',
+    'jpeg',
+    'webp',
+]
+TASK_SUBMISSION_ALLOWED_EXTENSIONS = {
+    ext.lower().lstrip('.')
+    for ext in (_get_csv_list('TASK_SUBMISSION_ALLOWED_EXTENSIONS') or _default_submission_extensions)
+}
+
+_default_submission_content_types = [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/csv',
+    'text/plain',
+    'image/png',
+    'image/jpeg',
+    'image/webp',
+]
+TASK_SUBMISSION_ALLOWED_CONTENT_TYPES = {
+    mime.lower()
+    for mime in (_get_csv_list('TASK_SUBMISSION_ALLOWED_CONTENT_TYPES') or _default_submission_content_types)
+}
 
 EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
 EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
@@ -219,3 +344,20 @@ LOGGING = {
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_URL = '/login/'
+
+SECURE_CONTENT_TYPE_NOSNIFF = _get_bool('DJANGO_SECURE_CONTENT_TYPE_NOSNIFF', True)
+SECURE_REFERRER_POLICY = os.getenv('DJANGO_SECURE_REFERRER_POLICY', 'strict-origin-when-cross-origin')
+X_FRAME_OPTIONS = os.getenv('DJANGO_X_FRAME_OPTIONS', 'DENY')
+
+SECURE_SSL_REDIRECT = _get_bool('DJANGO_SECURE_SSL_REDIRECT', not DEBUG)
+SESSION_COOKIE_SECURE = _get_bool('DJANGO_SESSION_COOKIE_SECURE', not DEBUG)
+CSRF_COOKIE_SECURE = _get_bool('DJANGO_CSRF_COOKIE_SECURE', not DEBUG)
+
+SECURE_HSTS_SECONDS = int(os.getenv('DJANGO_SECURE_HSTS_SECONDS', '31536000' if not DEBUG else '0'))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _get_bool('DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS', not DEBUG)
+SECURE_HSTS_PRELOAD = _get_bool('DJANGO_SECURE_HSTS_PRELOAD', not DEBUG)
+
+_proxy_header = os.getenv('DJANGO_SECURE_PROXY_SSL_HEADER', '').strip()
+if _proxy_header and ',' in _proxy_header:
+    _proxy_name, _proxy_value = [part.strip() for part in _proxy_header.split(',', 1)]
+    SECURE_PROXY_SSL_HEADER = (_proxy_name, _proxy_value)

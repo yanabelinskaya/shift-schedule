@@ -1,6 +1,14 @@
 from django.urls import path
 
+from .admin_api import (
+    AdminSettingsHistoryView,
+    AdminSettingsView,
+    AdminSystemBackupCreateView,
+    AdminSystemBackupRestoreView,
+    AdminSystemMonitoringView,
+)
 from .views import (
+    ApiRootView,
     DepartmentArchiveView,
     DepartmentDetailView,
     DepartmentListView,
@@ -18,8 +26,24 @@ from .views import (
     PasswordResetResolveView,
     UserCreateView,
 )
+from .workforce_api import (
+    EmployeeAvailabilityView,
+    EmployeeShiftRequestListCreateView,
+    EmployeeTaskDetailView,
+    EmployeeTaskListView,
+    EmployeeTaskStatusUpdateView,
+    EmployeeTaskSubmissionCreateView,
+    ManagerAvailabilityOverviewView,
+    ManagerScheduleApproveView,
+    ManagerShiftRequestDecisionView,
+    ManagerShiftRequestListView,
+    ManagerTaskDetailView,
+    ManagerTaskExtendView,
+    ManagerTaskListCreateView,
+)
 
 urlpatterns = [
+    path('', ApiRootView.as_view(), name='api-root'),
     path('auth/login/', LoginView.as_view(), name='api-login'),
     path('auth/logout/', LogoutView.as_view(), name='api-logout'),
     path('auth/me/', MeView.as_view(), name='api-me'),
@@ -36,4 +60,26 @@ urlpatterns = [
     path('employees/activate/', EmployeeActivateView.as_view(), name='api-employees-activate'),
     path('password-resets/', PasswordResetRequestView.as_view(), name='api-password-reset-request'),
     path('password-resets/<int:request_id>/resolve/', PasswordResetResolveView.as_view(), name='api-password-reset-resolve'),
+    path('admin/settings/', AdminSettingsView.as_view(), name='api-admin-settings'),
+    path('admin/settings/history/', AdminSettingsHistoryView.as_view(), name='api-admin-settings-history'),
+    path('admin/system/backups/', AdminSystemBackupCreateView.as_view(), name='api-admin-system-backups-create'),
+    path(
+        'admin/system/backups/<int:backup_id>/restore/',
+        AdminSystemBackupRestoreView.as_view(),
+        name='api-admin-system-backups-restore',
+    ),
+    path('admin/system/monitoring/', AdminSystemMonitoringView.as_view(), name='api-admin-system-monitoring'),
+    path('manager/availability/overview/', ManagerAvailabilityOverviewView.as_view(), name='api-manager-availability-overview'),
+    path('manager/availability/approve/', ManagerScheduleApproveView.as_view(), name='api-manager-availability-approve'),
+    path('manager/shift-requests/', ManagerShiftRequestListView.as_view(), name='api-manager-shift-requests'),
+    path('manager/shift-requests/decision/', ManagerShiftRequestDecisionView.as_view(), name='api-manager-shift-requests-decision'),
+    path('manager/tasks/', ManagerTaskListCreateView.as_view(), name='api-manager-tasks'),
+    path('manager/tasks/<int:task_id>/', ManagerTaskDetailView.as_view(), name='api-manager-task-detail'),
+    path('manager/tasks/<int:task_id>/extend/', ManagerTaskExtendView.as_view(), name='api-manager-task-extend'),
+    path('employee/availability/', EmployeeAvailabilityView.as_view(), name='api-employee-availability'),
+    path('employee/shift-requests/', EmployeeShiftRequestListCreateView.as_view(), name='api-employee-shift-requests'),
+    path('employee/tasks/', EmployeeTaskListView.as_view(), name='api-employee-tasks'),
+    path('employee/tasks/<int:task_id>/', EmployeeTaskDetailView.as_view(), name='api-employee-task-detail'),
+    path('employee/tasks/<int:task_id>/status/', EmployeeTaskStatusUpdateView.as_view(), name='api-employee-task-status'),
+    path('employee/tasks/<int:task_id>/submissions/', EmployeeTaskSubmissionCreateView.as_view(), name='api-employee-task-submission'),
 ]

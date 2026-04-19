@@ -71,7 +71,7 @@
               </div>
               <a
                 class="icon-action"
-                href="{% url 'admin-department-detail' department.id %}"
+                href="{% url 'admin-department-detail' department.id %}?next={{ request.get_full_path|urlencode }}"
                 data-detail-link
                 aria-label="Подробнее об отделе"
               >

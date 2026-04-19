@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Личный кабинет | Conector Shift</title>
+  <title>Личный кабинет | {{ site_config.platform_name|default:"Conector Shift" }}</title>
   <link rel="icon" type="image/png" href="{% static 'img/logo.png' %}" />
   <link rel="stylesheet" href="{% static 'css/app.css' %}" />
   <link rel="stylesheet" href="{% static 'css/employee.css' %}" />
@@ -15,7 +15,7 @@
       <div class="sidebar-header">
         <div class="brand">
           <div class="brand-text">
-            <div class="brand-name">Conector Shift</div>
+            <div class="brand-name">{{ site_config.platform_name|default:"Conector Shift" }}</div>
             <div class="brand-sub">Личный кабинет</div>
           </div>
         </div>
@@ -26,29 +26,48 @@
         </button>
       </div>
 
-      <div class="sidebar-section">
+      <div class="sidebar-section sidebar-section-nav">
         <div class="sidebar-label">Навигация</div>
         <nav class="sidebar-nav">
-          <a class="sidebar-link{% if active_tab == 'schedule' %} active{% endif %}" href="{% url 'employee-dashboard' %}">
-            <span class="nav-icon">S</span>
-            Мой график
+          <a class="sidebar-link{% if active_tab == 'schedule' %} active{% endif %}" href="{% url 'employee-dashboard' %}" title="Мой график" aria-label="Мой график">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" role="presentation">
+                <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"></rect>
+                <path d="M8 3.5v3M16 3.5v3M3.5 9.5h17M8 13h.01M12 13h.01M16 13h.01M8 17h.01M12 17h.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+              </svg>
+            </span>
+            <span class="nav-text">Мой график</span>
           </a>
-          <a class="sidebar-link{% if active_tab == 'availability' %} active{% endif %}" href="{% url 'employee-availability' %}">
-            <span class="nav-icon">A</span>
-            Доступность
+          <a class="sidebar-link{% if active_tab == 'availability' %} active{% endif %}" href="{% url 'employee-availability' %}" title="Доступность" aria-label="Доступность">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" role="presentation">
+                <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"></circle>
+                <path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+              </svg>
+            </span>
+            <span class="nav-text">Доступность</span>
           </a>
-          <a class="sidebar-link{% if active_tab == 'tasks' %} active{% endif %}" href="{% url 'employee-tasks' %}">
-            <span class="nav-icon">T</span>
-            Задачи
+          <a class="sidebar-link{% if active_tab == 'tasks' %} active{% endif %}" href="{% url 'employee-tasks' %}" title="Задачи" aria-label="Задачи">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" role="presentation">
+                <path d="M9 5h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.8"></path>
+                <path d="M5 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10M11 10h6M11 14h6M11 18h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+              </svg>
+            </span>
+            <span class="nav-text">Задачи</span>
           </a>
-          <a class="sidebar-link{% if active_tab == 'notifications' %} active{% endif %}" href="{% url 'employee-notifications' %}">
-            <span class="nav-icon">N</span>
-            Уведомления
+          <a class="sidebar-link{% if active_tab == 'notifications' %} active{% endif %}" href="{% url 'employee-notifications' %}" title="Уведомления" aria-label="Уведомления">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" role="presentation">
+                <path d="M9.5 19a2.5 2.5 0 0 0 5 0M6 16h12l-1.5-2.5v-3a4.5 4.5 0 1 0-9 0v3L6 16Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+              </svg>
+            </span>
+            <span class="nav-text">Уведомления</span>
           </a>
         </nav>
       </div>
 
-      <div class="sidebar-section">
+      <div class="sidebar-section sidebar-section-extra">
         <div class="sidebar-label">Следующий слот</div>
         <div class="sidebar-card">
           <h2>{{ next_slot_title }}</h2>
@@ -60,6 +79,12 @@
 
       <div class="sidebar-footer">
         ООО "Конектор" / Сотрудник
+        {% if site_config.support_email or site_config.support_phone %}
+          <br />
+          Поддержка:
+          {% if site_config.support_email %}{{ site_config.support_email }}{% endif %}
+          {% if site_config.support_phone %}{% if site_config.support_email %} · {% endif %}{{ site_config.support_phone }}{% endif %}
+        {% endif %}
       </div>
     </aside>
 
@@ -87,7 +112,7 @@
             </span>
             <span class="sr-only">Переключить тему</span>
           </button>
-          <a class="profile-button" href="{% url 'profile' %}" aria-label="Профиль">
+          <a class="profile-button" href="{% url 'profile' %}?next={{ request.get_full_path|urlencode }}" aria-label="Профиль">
             <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
               <circle cx="12" cy="8" r="4" fill="currentColor"></circle>
               <path d="M4 20c1.6-3.8 5-6 8-6s6.4 2.2 8 6" fill="currentColor"></path>
@@ -105,6 +130,9 @@
       </header>
 
       <section class="content">
+        {% if site_config.global_announcement %}
+          <div class="card site-announcement">{{ site_config.global_announcement }}</div>
+        {% endif %}
         {% block content %}{% endblock %}
       </section>
     </main>

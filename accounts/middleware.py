@@ -1,7 +1,7 @@
 import time
 
 from .models import SystemLogEntry
-from .system_utils import maybe_create_daily_backup
+from .system_utils import collect_runtime_metrics, maybe_create_daily_backup
 
 
 class ActivityLogMiddleware:
@@ -37,6 +37,7 @@ class ActivityLogMiddleware:
             if not ip_address:
                 ip_address = request.META.get("REMOTE_ADDR")
 
+            runtime_meta = collect_runtime_metrics()
             SystemLogEntry.objects.create(
                 action=action,
                 user=user_obj,
@@ -47,6 +48,7 @@ class ActivityLogMiddleware:
                 ip_address=ip_address or None,
                 user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
                 duration_ms=duration_ms,
+                meta=runtime_meta,
             )
         except Exception:
             # Never block responses because of logging failures.

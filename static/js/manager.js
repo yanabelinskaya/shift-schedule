@@ -1521,9 +1521,8 @@ const initManagerCalendar = (calendarRoot) => {
         deleteConfirm.disabled = true;
         try {
           const response = await fetch(pendingDeleteUrl, {
-            method: "POST",
+            method: "DELETE",
             headers: {
-              "X-Requested-With": "XMLHttpRequest",
               "X-CSRFToken": getCookie("csrftoken"),
             },
             credentials: "same-origin",

@@ -4,17 +4,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Админ-консоль | Conector Shift</title>
+  <title>Админ-консоль | {{ site_config.platform_name|default:"Conector Shift" }}</title>
   <link rel="icon" type="image/png" href="{% static 'img/logo.png' %}" />
   <link rel="stylesheet" href="{% static 'css/app.css' %}" />
 </head>
-<body class="dashboard-page admin-page" data-backup-create-url="{% url 'admin-system-backup-create' %}">
+<body class="dashboard-page admin-page" data-backup-create-url="{% url 'api-admin-system-backups-create' %}">
   <div class="app-shell">
     <aside class="sidebar admin-sidebar">
       <div class="sidebar-header">
         <div class="brand">
           <div class="brand-text">
-            <div class="brand-name">Conector Shift</div>
+            <div class="brand-name">{{ site_config.platform_name|default:"Conector Shift" }}</div>
             <div class="brand-sub">Админ-консоль</div>
           </div>
         </div>
@@ -25,33 +25,58 @@
         </button>
       </div>
 
-      <div class="sidebar-section">
+      <div class="sidebar-section sidebar-section-nav">
         <div class="sidebar-label">Разделы</div>
         <nav class="sidebar-nav">
-          <a class="sidebar-link{% if active_tab == 'users' %} active{% endif %}" href="{% url 'admin-users' %}">
-            <span class="nav-icon">U</span>
-            Пользователи
+          <a class="sidebar-link{% if active_tab == 'users' %} active{% endif %}" href="{% url 'admin-users' %}" title="Пользователи" aria-label="Пользователи">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" role="presentation">
+                <path d="M16 21v-1.5a4.5 4.5 0 0 0-4.5-4.5h-4A4.5 4.5 0 0 0 3 19.5V21M14 5.5a3.5 3.5 0 1 1-7 0a3.5 3.5 0 0 1 7 0Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+                <path d="M21 21v-1a4 4 0 0 0-3-3.87M14.5 3.2a3.5 3.5 0 0 1 0 6.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+              </svg>
+            </span>
+            <span class="nav-text">Пользователи</span>
           </a>
-          <a class="sidebar-link{% if active_tab == 'departments' %} active{% endif %}" href="{% url 'admin-departments' %}">
-            <span class="nav-icon">D</span>
-            Отделы
+          <a class="sidebar-link{% if active_tab == 'departments' %} active{% endif %}" href="{% url 'admin-departments' %}" title="Отделы" aria-label="Отделы">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" role="presentation">
+                <path d="M3 21h18M5 21V7.5A1.5 1.5 0 0 1 6.5 6H11v15M11 21h8V4.5A1.5 1.5 0 0 0 17.5 3H12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+                <path d="M8 10h.01M8 13h.01M8 16h.01M14 10h2M14 14h2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+              </svg>
+            </span>
+            <span class="nav-text">Отделы</span>
           </a>
-          <a class="sidebar-link{% if active_tab == 'settings' %} active{% endif %}" href="{% url 'admin-settings' %}">
-            <span class="nav-icon">S</span>
-            Настройки
+          <a class="sidebar-link{% if active_tab == 'settings' %} active{% endif %}" href="{% url 'admin-settings' %}" title="Настройки" aria-label="Настройки">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" role="presentation">
+                <path d="M12 8.5a3.5 3.5 0 1 0 0 7a3.5 3.5 0 0 0 0-7Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+                <path d="M19.4 13.5a1 1 0 0 0 .2 1.1l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1 1 0 0 0-1.1-.2a1 1 0 0 0-.6.9V18a2 2 0 1 1-4 0v-.2a1 1 0 0 0-.6-.9a1 1 0 0 0-1.1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1 1 0 0 0 .2-1.1a1 1 0 0 0-.9-.6H6a2 2 0 1 1 0-4h.2a1 1 0 0 0 .9-.6a1 1 0 0 0-.2-1.1l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1 1 0 0 0 1.1.2h.1a1 1 0 0 0 .6-.9V6a2 2 0 1 1 4 0v.2a1 1 0 0 0 .6.9a1 1 0 0 0 1.1-.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1 1 0 0 0-.2 1.1v.1a1 1 0 0 0 .9.6H18a2 2 0 1 1 0 4h-.2a1 1 0 0 0-.9.6Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
+              </svg>
+            </span>
+            <span class="nav-text">Настройки</span>
           </a>
-          <a class="sidebar-link{% if active_tab == 'reports' %} active{% endif %}" href="{% url 'admin-reports' %}">
-            <span class="nav-icon">R</span>
-            Отчеты
+          <a class="sidebar-link{% if active_tab == 'reports' %} active{% endif %}" href="{% url 'admin-reports' %}" title="Отчеты" aria-label="Отчеты">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" role="presentation">
+                <path d="M4 20V10M10 20V4M16 20v-7M22 20h-2M6 10H2M12 4H8M18 13h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+              </svg>
+            </span>
+            <span class="nav-text">Отчеты</span>
           </a>
-          <a class="sidebar-link{% if active_tab == 'system' %} active{% endif %}" href="{% url 'admin-system' %}">
-            <span class="nav-icon">X</span>
-            Система
+          <a class="sidebar-link{% if active_tab == 'system' %} active{% endif %}" href="{% url 'admin-system' %}" title="Система" aria-label="Система">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" role="presentation">
+                <rect x="4" y="4" width="16" height="6" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"></rect>
+                <rect x="4" y="14" width="16" height="6" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"></rect>
+                <path d="M8 7h.01M8 17h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+              </svg>
+            </span>
+            <span class="nav-text">Система</span>
           </a>
         </nav>
       </div>
       
-      <div class="sidebar-section">
+      <div class="sidebar-section sidebar-section-extra">
         <div class="sidebar-label">Быстрые действия</div>
         <div class="quick-actions">
           <button class="btn btn-ghost btn-inline" type="button" data-action="create-backup">Создать бэкап</button>
@@ -60,6 +85,12 @@
 
       <div class="sidebar-footer">
         ООО "Конектор" · Админ доступ
+        {% if site_config.support_email or site_config.support_phone %}
+          <br />
+          Поддержка:
+          {% if site_config.support_email %}{{ site_config.support_email }}{% endif %}
+          {% if site_config.support_phone %}{% if site_config.support_email %} · {% endif %}{{ site_config.support_phone }}{% endif %}
+        {% endif %}
       </div>
     </aside>
 
@@ -98,6 +129,9 @@
       </header>
 
       <section class="content">
+        {% if site_config.global_announcement %}
+          <div class="card site-announcement">{{ site_config.global_announcement }}</div>
+        {% endif %}
         <div class="form-message" data-global-system-message hidden></div>
         <form method="post" style="display: none;">{% csrf_token %}</form>
         {% block content %}{% endblock %}

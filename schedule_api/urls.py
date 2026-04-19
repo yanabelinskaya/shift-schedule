@@ -21,7 +21,8 @@ from django.templatetags.static import static as static_url
 from django.urls import include, path
 from django.views.generic.base import RedirectView
 from accounts.web_views import login_view
-from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
+from rest_framework.permissions import IsAuthenticated
 
 urlpatterns = [
     path('', login_view, name='login'),
@@ -29,8 +30,22 @@ urlpatterns = [
     path('favicon.ico', RedirectView.as_view(url=static_url('favicon.ico'), permanent=True), name='favicon'),
     path('', include('accounts.web_urls')),
     path('api/', include('accounts.api_urls')),
-    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
-    path('swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/schema/', SpectacularAPIView.as_view(permission_classes=[IsAuthenticated]), name='schema'),
+    path(
+        'api/docs/swagger/',
+        SpectacularSwaggerView.as_view(url_name='schema', permission_classes=[IsAuthenticated]),
+        name='api-swagger-ui',
+    ),
+    path(
+        'api/docs/redoc/',
+        SpectacularRedocView.as_view(url_name='schema', permission_classes=[IsAuthenticated]),
+        name='redoc',
+    ),
+    path(
+        'swagger/',
+        SpectacularSwaggerView.as_view(url_name='schema', permission_classes=[IsAuthenticated]),
+        name='swagger-ui',
+    ),
     path('admin/', admin.site.urls),
 ]
 

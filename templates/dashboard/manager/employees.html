@@ -118,7 +118,7 @@
                 </td>
                 <td>
                   <div class="table-actions">
-                    <a class="icon-action" href="{% url 'manager-employee-detail' employee.id %}" aria-label="Открыть карточку сотрудника">
+                    <a class="icon-action" href="{% url 'manager-employee-detail' employee.id %}?next={{ request.get_full_path|urlencode }}" aria-label="Открыть карточку сотрудника">
                       <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
                         <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.6" />
