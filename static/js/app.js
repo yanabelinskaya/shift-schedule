@@ -5689,6 +5689,138 @@
     }
   };
 
+  // ── SPA navigation for employee shell ───────────────────────────────
+  const initSpaNavigation = () => {
+    const contentEl = document.querySelector("[data-spa-content]");
+    if (!contentEl) return;
+
+    // Map URL prefixes to sidebar tab ids
+    const TAB_PREFIXES = [
+      ["/dashboard/employee/tasks", "tasks"],
+      ["/dashboard/employee/sprint", "sprint"],
+      ["/dashboard/employee/requests", "requests"],
+      ["/dashboard/employee/chat", "chat"],
+      ["/dashboard/employee/profile", "profile"],
+      ["/dashboard/employee/", "dashboard"],
+    ];
+
+    const tabFromPath = (path) => {
+      for (const [prefix, tab] of TAB_PREFIXES) {
+        if (path.startsWith(prefix)) return tab;
+      }
+      return "";
+    };
+
+    const updateSidebarActive = (path) => {
+      const active = tabFromPath(path);
+      document.querySelectorAll(".sidebar-link").forEach((link) => {
+        const linkTab = tabFromPath(new URL(link.href, location.origin).pathname);
+        link.classList.toggle("active", !!linkTab && linkTab === active);
+      });
+    };
+
+    const reinitPage = () => {
+      if (typeof initCustomSelects === "function") initCustomSelects(contentEl);
+      initEmployeeAvailability();
+      initEmployeeTasks();
+      initEmployeeTasksV2();
+      initEmployeeTaskDetail();
+    };
+
+    const navigate = async (url, push = true) => {
+      // Close any open slide panel and restore scroll
+      const openPanel = document.querySelector("[data-task-slide-panel].is-open");
+      if (openPanel) {
+        openPanel.classList.remove("is-open");
+        openPanel.setAttribute("aria-hidden", "true");
+        document.body.style.overflow = "";
+      }
+
+      // Fade out
+      contentEl.classList.add("spa-transitioning");
+
+      let html;
+      try {
+        const resp = await fetch(url, {
+          credentials: "same-origin",
+          headers: { "X-Requested-With": "XMLHttpRequest" },
+        });
+        if (!resp.ok || resp.redirected && !resp.url.includes("/dashboard/employee/")) {
+          window.location.href = url;
+          return;
+        }
+        html = await resp.text();
+      } catch {
+        window.location.href = url;
+        return;
+      }
+
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, "text/html");
+      const newContent = doc.querySelector("[data-spa-content]");
+      if (!newContent) {
+        window.location.href = url;
+        return;
+      }
+
+      // Update title
+      const newTitle = doc.querySelector("title");
+      if (newTitle) document.title = newTitle.textContent;
+
+      // Swap inner HTML (keep announcement if already shown)
+      contentEl.innerHTML = newContent.innerHTML;
+      contentEl.dataset.activeTab = newContent.dataset.activeTab || "";
+
+      if (push) history.pushState({ spaUrl: url }, "", url);
+
+      updateSidebarActive(new URL(url, location.origin).pathname);
+
+      // Scroll content area to top
+      contentEl.parentElement?.scrollTo?.(0, 0);
+      window.scrollTo(0, 0);
+
+      // Fade in
+      contentEl.classList.remove("spa-transitioning");
+
+      reinitPage();
+    };
+
+    // Intercept only employee nav links and profile button
+    document.addEventListener("click", (e) => {
+      const link = e.target.closest("a[href]");
+      if (!link) return;
+
+      const href = link.href;
+      if (!href) return;
+
+      let url;
+      try { url = new URL(href); } catch { return; }
+
+      // Only same-origin employee dashboard pages
+      if (url.origin !== location.origin) return;
+      if (!url.pathname.startsWith("/dashboard/employee/")) return;
+
+      // Let logout and file links go through normally
+      if (url.pathname.includes("/logout")) return;
+      if (link.getAttribute("target") === "_blank" || link.hasAttribute("download")) return;
+      // Let task panel partial pass through (handled by AJAX in initEmployeeTasksV2)
+      if (url.pathname.includes("/panel/")) return;
+
+      e.preventDefault();
+      if (url.href !== location.href) navigate(url.href);
+    });
+
+    // Handle browser back/forward
+    window.addEventListener("popstate", (e) => {
+      const url = e.state?.spaUrl || location.href;
+      navigate(url, false);
+    });
+
+    // Set initial history entry
+    history.replaceState({ spaUrl: location.href }, "", location.href);
+    updateSidebarActive(location.pathname);
+  };
+
   initAdminSettings();
   initAdminSystem();
   initAdminReports();
@@ -5696,6 +5828,7 @@
   initEmployeeTasks();
   initEmployeeTasksV2();
   initEmployeeTaskDetail();
+  initSpaNavigation();
   const initDepartmentDetail = () => {
     const detailRoot = document.querySelector("[data-department-detail]");
     if (!detailRoot) {

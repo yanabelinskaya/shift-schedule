@@ -377,6 +377,12 @@ a {
   padding: 8px 36px 40px;
   display: grid;
   align-items: start;
+  transition: opacity 0.16s ease;
+}
+
+.content.spa-transitioning {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .login-grid {

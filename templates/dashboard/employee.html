@@ -130,9 +130,9 @@
         </div>
       </header>
 
-      <section class="content">
+      <section class="content" data-spa-content data-active-tab="{{ active_tab }}">
         {% if site_config.global_announcement %}
-          <div class="card site-announcement">{{ site_config.global_announcement }}</div>
+          <div class="card site-announcement" data-spa-announcement>{{ site_config.global_announcement }}</div>
         {% endif %}
         {% block content %}{% endblock %}
       </section>
