@@ -1047,7 +1047,14 @@ def admin_reports_export(request):
     open_tasks_by_department = {
         row['department_id']: row['total']
         for row in (
-            DepartmentTask.objects.filter(status__in=['todo', 'in_progress'])
+            DepartmentTask.objects.filter(
+                status__in=[
+                    DepartmentTask.TaskStatus.AWAITING_CONFIRMATION,
+                    DepartmentTask.TaskStatus.CONFIRMED,
+                    DepartmentTask.TaskStatus.CONFLICT,
+                    DepartmentTask.TaskStatus.IN_PROGRESS,
+                ]
+            )
             .values('department_id')
             .annotate(total=Count('id'))
         )
@@ -1055,7 +1062,15 @@ def admin_reports_export(request):
     overdue_tasks_by_department = {
         row['department_id']: row['total']
         for row in (
-            DepartmentTask.objects.filter(status__in=['todo', 'in_progress'], date__lt=today)
+            DepartmentTask.objects.filter(
+                status__in=[
+                    DepartmentTask.TaskStatus.AWAITING_CONFIRMATION,
+                    DepartmentTask.TaskStatus.CONFIRMED,
+                    DepartmentTask.TaskStatus.CONFLICT,
+                    DepartmentTask.TaskStatus.IN_PROGRESS,
+                ],
+                date__lt=today,
+            )
             .values('department_id')
             .annotate(total=Count('id'))
         )
@@ -1141,7 +1156,7 @@ def admin_reports_export(request):
         created_at__lt=period_end_dt_exclusive,
     ).count()
     tasks_done_period = DepartmentTask.objects.filter(
-        status='done',
+        status=DepartmentTask.TaskStatus.COMPLETED,
         updated_at__gte=period_start_dt,
         updated_at__lt=period_end_dt_exclusive,
     ).count()
@@ -1156,8 +1171,29 @@ def admin_reports_export(request):
         ('Пользователей (без админов)', User.objects.exclude(role='admin').count()),
         ('Активных пользователей', User.objects.exclude(role='admin').filter(is_active=True).count()),
         ('Отделов активных', Department.objects.filter(is_archived=False).count()),
-        ('Задач открытых', DepartmentTask.objects.filter(status__in=['todo', 'in_progress']).count()),
-        ('Задач просроченных', DepartmentTask.objects.filter(status__in=['todo', 'in_progress'], date__lt=today).count()),
+        (
+            'Задач открытых',
+            DepartmentTask.objects.filter(
+                status__in=[
+                    DepartmentTask.TaskStatus.AWAITING_CONFIRMATION,
+                    DepartmentTask.TaskStatus.CONFIRMED,
+                    DepartmentTask.TaskStatus.CONFLICT,
+                    DepartmentTask.TaskStatus.IN_PROGRESS,
+                ]
+            ).count(),
+        ),
+        (
+            'Задач просроченных',
+            DepartmentTask.objects.filter(
+                status__in=[
+                    DepartmentTask.TaskStatus.AWAITING_CONFIRMATION,
+                    DepartmentTask.TaskStatus.CONFIRMED,
+                    DepartmentTask.TaskStatus.CONFLICT,
+                    DepartmentTask.TaskStatus.IN_PROGRESS,
+                ],
+                date__lt=today,
+            ).count(),
+        ),
         ('Задач создано за период', tasks_created_period),
         ('Задач закрыто за период', tasks_done_period),
         ('Запросов создано за период', requests_created_period),

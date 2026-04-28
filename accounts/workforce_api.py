@@ -15,19 +15,29 @@ from rest_framework.response import Response
 
 from .concurrency import (
     assert_optimistic_lock,
-    assert_queryset_optimistic_lock,
     set_resource_version_header,
+)
+from .availability import (
+    ensure_employee_base_availability,
+    get_week_start,
+    resolve_range_availability,
 )
 from .object_access import can_manage_employee, require_employee_task_access, require_manager_department
 from .pagination import BoundedListMixin
 from .serializers import DetailMessageSerializer
 from .models import (
+    Department,
     DepartmentTask,
     EmployeeAbsence,
-    EmployeeAvailability,
+    EmployeeAvailabilityOverride,
+    EmployeeBaseAvailability,
+    EmployeePlannedLoad,
     EmployeeProfile,
     EmployeeShiftRequest,
     GlobalSettings,
+    LeaveRequest,
+    Sprint,
+    Substitution,
     TaskSubmission,
 )
 from .permissions import IsEmployeeRole, IsManagerRole
@@ -53,6 +63,46 @@ def _parse_week_offset(value, default=0):
         return int(raw)
     except (TypeError, ValueError):
         return default
+
+
+TASK_STATUS_LABELS = {
+    DepartmentTask.TaskStatus.AWAITING_CONFIRMATION: 'Новая',
+    DepartmentTask.TaskStatus.CONFIRMED: 'Взята',
+    DepartmentTask.TaskStatus.IN_PROGRESS: 'В работе',
+    DepartmentTask.TaskStatus.ON_REVIEW: 'На проверке',
+    DepartmentTask.TaskStatus.COMPLETED: 'Выполнена',
+    DepartmentTask.TaskStatus.RETURNED: 'Возвращена на доработку',
+    DepartmentTask.TaskStatus.CONFLICT: 'Конфликт',
+}
+
+TASK_STATUS_TONES = {
+    DepartmentTask.TaskStatus.AWAITING_CONFIRMATION: 'muted',
+    DepartmentTask.TaskStatus.CONFIRMED: 'info',
+    DepartmentTask.TaskStatus.IN_PROGRESS: 'warning',
+    DepartmentTask.TaskStatus.ON_REVIEW: 'info',
+    DepartmentTask.TaskStatus.COMPLETED: 'success',
+    DepartmentTask.TaskStatus.RETURNED: 'danger',
+    DepartmentTask.TaskStatus.CONFLICT: 'danger',
+}
+
+EMPLOYEE_STATUS_TRANSITIONS = {
+    DepartmentTask.TaskStatus.AWAITING_CONFIRMATION: set(),
+    DepartmentTask.TaskStatus.CONFIRMED: {
+        DepartmentTask.TaskStatus.IN_PROGRESS,
+    },
+    DepartmentTask.TaskStatus.IN_PROGRESS: {
+        DepartmentTask.TaskStatus.ON_REVIEW,
+    },
+    DepartmentTask.TaskStatus.ON_REVIEW: set(),
+    DepartmentTask.TaskStatus.COMPLETED: set(),
+    DepartmentTask.TaskStatus.RETURNED: {
+        DepartmentTask.TaskStatus.IN_PROGRESS,
+    },
+    DepartmentTask.TaskStatus.CONFLICT: {
+        DepartmentTask.TaskStatus.CONFIRMED,
+        DepartmentTask.TaskStatus.IN_PROGRESS,
+    },
+}
 
 
 def _validate_submission_attachments(attachments):
@@ -103,23 +153,50 @@ class SimpleEmployeeSerializer(serializers.Serializer):
     name = serializers.CharField()
 
 
-class AvailabilityEntrySerializer(serializers.ModelSerializer):
-    user_id = serializers.IntegerField(source='user.id', read_only=True)
+class AvailabilityEntrySerializer(serializers.Serializer):
+    user_id = serializers.IntegerField()
+    date = serializers.DateField()
+    is_available = serializers.BooleanField()
+    start_time = serializers.TimeField(allow_null=True, required=False)
+    end_time = serializers.TimeField(allow_null=True, required=False)
+    mode = serializers.CharField()
+    source = serializers.CharField()
+    override_type = serializers.CharField(allow_blank=True, required=False)
+    absence_type = serializers.CharField(allow_blank=True, required=False)
+
+
+class BaseAvailabilityRuleSerializer(serializers.ModelSerializer):
+    user_id = serializers.IntegerField(source="user_id", read_only=True)
 
     class Meta:
-        model = EmployeeAvailability
+        model = EmployeeBaseAvailability
+        fields = ("user_id", "weekday", "mode", "start_time", "end_time", "updated_at")
+
+
+class AvailabilityOverrideSerializer(serializers.ModelSerializer):
+    user_id = serializers.IntegerField(source="user_id", read_only=True)
+
+    class Meta:
+        model = EmployeeAvailabilityOverride
         fields = (
-            'id',
-            'user_id',
-            'date',
-            'is_available',
-            'start_time',
-            'end_time',
-            'priority',
-            'is_approved',
-            'approved_at',
-            'updated_at',
+            "id",
+            "user_id",
+            "date",
+            "override_type",
+            "start_time",
+            "end_time",
+            "note",
+            "created_at",
+            "updated_at",
         )
+
+
+class PlannedLoadSerializer(serializers.ModelSerializer):
+    user_id = serializers.IntegerField(source="user_id", read_only=True)
+
+    class Meta:
+        model = EmployeePlannedLoad
+        fields = ("user_id", "week_start", "target_mode", "target_value", "note", "updated_at")
 
 
 class AbsenceEntrySerializer(serializers.ModelSerializer):
@@ -214,8 +291,6 @@ class DepartmentTaskSerializer(serializers.ModelSerializer):
             'created_by_id',
             'created_by_name',
             'date',
-            'start_time',
-            'end_time',
             'due_time',
             'title',
             'description',
@@ -240,9 +315,9 @@ class DepartmentTaskSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(serializers.BooleanField())
     def get_is_overdue(self, obj):
-        if obj.status == 'done':
+        if obj.status == DepartmentTask.TaskStatus.COMPLETED:
             return False
-        due = obj.due_time or obj.end_time
+        due = obj.due_time
         now = timezone.localtime()
         if obj.date < now.date():
             return True
@@ -260,9 +335,11 @@ class ManagerAvailabilityOverviewSerializer(serializers.Serializer):
     week_start = serializers.DateField()
     week_end = serializers.DateField()
     week_offset = serializers.IntegerField()
-    schedule_approved = serializers.BooleanField()
     employees = SimpleEmployeeSerializer(many=True)
     availability = AvailabilityEntrySerializer(many=True)
+    base_availability = BaseAvailabilityRuleSerializer(many=True)
+    overrides = AvailabilityOverrideSerializer(many=True)
+    planned_loads = PlannedLoadSerializer(many=True)
     absences = AbsenceEntrySerializer(many=True)
     shift_requests = ShiftRequestSerializer(many=True)
 
@@ -301,8 +378,6 @@ class ManagerTaskCreateSerializer(serializers.Serializer):
     task_type = serializers.ChoiceField(choices=DepartmentTask.TASK_TYPES, default='employee')
     assigned_to = serializers.IntegerField(required=False, allow_null=True)
     date = serializers.DateField()
-    start_time = serializers.TimeField(required=False, allow_null=True, format='%H:%M', input_formats=['%H:%M'])
-    end_time = serializers.TimeField(required=False, allow_null=True, format='%H:%M', input_formats=['%H:%M'])
     due_time = serializers.TimeField(required=False, allow_null=True, format='%H:%M', input_formats=['%H:%M'])
     priority = serializers.ChoiceField(choices=DepartmentTask.PRIORITY_CHOICES, default='mid')
 
@@ -314,8 +389,6 @@ class ManagerTaskUpdateSerializer(serializers.Serializer):
     task_type = serializers.ChoiceField(choices=DepartmentTask.TASK_TYPES, required=False)
     assigned_to = serializers.IntegerField(required=False, allow_null=True)
     date = serializers.DateField(required=False)
-    start_time = serializers.TimeField(required=False, allow_null=True, format='%H:%M', input_formats=['%H:%M'])
-    end_time = serializers.TimeField(required=False, allow_null=True, format='%H:%M', input_formats=['%H:%M'])
     due_time = serializers.TimeField(required=False, allow_null=True, format='%H:%M', input_formats=['%H:%M'])
     priority = serializers.ChoiceField(choices=DepartmentTask.PRIORITY_CHOICES, required=False)
     status = serializers.ChoiceField(choices=DepartmentTask.STATUS_CHOICES, required=False)
@@ -327,17 +400,35 @@ class ManagerTaskExtendSerializer(serializers.Serializer):
     due_time = serializers.TimeField(required=False, allow_null=True, format='%H:%M', input_formats=['%H:%M'])
 
 
-class EmployeeAvailabilityDaySerializer(serializers.Serializer):
-    date = serializers.DateField()
-    is_available = serializers.BooleanField()
+class EmployeeBaseAvailabilityItemSerializer(serializers.Serializer):
+    weekday = serializers.IntegerField(min_value=0, max_value=6)
+    mode = serializers.ChoiceField(choices=[choice[0] for choice in EmployeeBaseAvailability.MODE_CHOICES])
     start_time = serializers.TimeField(required=False, allow_null=True, format='%H:%M', input_formats=['%H:%M'])
     end_time = serializers.TimeField(required=False, allow_null=True, format='%H:%M', input_formats=['%H:%M'])
-    priority = serializers.ChoiceField(choices=EmployeeAvailability.PRIORITY_CHOICES, default='mid')
+
+
+class EmployeeAvailabilityOverrideItemSerializer(serializers.Serializer):
+    date = serializers.DateField()
+    override_type = serializers.ChoiceField(
+        choices=[choice[0] for choice in EmployeeAvailabilityOverride.OVERRIDE_TYPE_CHOICES]
+    )
+    start_time = serializers.TimeField(required=False, allow_null=True, format='%H:%M', input_formats=['%H:%M'])
+    end_time = serializers.TimeField(required=False, allow_null=True, format='%H:%M', input_formats=['%H:%M'])
+    note = serializers.CharField(required=False, allow_blank=True)
+
+
+class EmployeePlannedLoadItemSerializer(serializers.Serializer):
+    week_start = serializers.DateField()
+    target_mode = serializers.ChoiceField(choices=[choice[0] for choice in EmployeePlannedLoad.TARGET_MODE_CHOICES])
+    target_value = serializers.IntegerField(required=False, allow_null=True, min_value=0)
+    note = serializers.CharField(required=False, allow_blank=True)
 
 
 class EmployeeAvailabilityUpdateSerializer(serializers.Serializer):
-    if_match = serializers.DateTimeField(required=False)
-    days = EmployeeAvailabilityDaySerializer(many=True)
+    base = EmployeeBaseAvailabilityItemSerializer(many=True, required=False)
+    overrides = EmployeeAvailabilityOverrideItemSerializer(many=True, required=False)
+    clear_override_dates = serializers.ListField(child=serializers.DateField(), required=False)
+    load_plan = EmployeePlannedLoadItemSerializer(required=False)
 
 
 class EmployeeAvailabilityUpdateResponseSerializer(serializers.Serializer):
@@ -384,7 +475,7 @@ class ManagerAvailabilityOverviewView(generics.GenericAPIView):
     @extend_schema(
         tags=['Manager'],
         summary='Обзор графика отдела',
-        description='Возвращает доступности, отсутствия и запросы сотрудников отдела по неделе.',
+        description='Возвращает доступность сотрудников (база + исключения) и загрузку по неделе.',
         responses={200: ManagerAvailabilityOverviewSerializer, 400: DetailMessageSerializer},
     )
     def get(self, request):
@@ -393,6 +484,7 @@ class ManagerAvailabilityOverviewView(generics.GenericAPIView):
         week_offset = _parse_week_offset(request.query_params.get('week'), default=1)
         week_start = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
         week_end = week_start + timedelta(days=6)
+        settings_obj = GlobalSettings.objects.first() or GlobalSettings.objects.create()
 
         profiles = EmployeeProfile.objects.select_related('user').filter(
             department=department,
@@ -405,7 +497,41 @@ class ManagerAvailabilityOverviewView(generics.GenericAPIView):
             for profile in profiles
         ]
 
-        availability = EmployeeAvailability.objects.filter(user_id__in=user_ids, date__range=(week_start, week_end))
+        availability = []
+        for profile in profiles:
+            resolved = resolve_range_availability(
+                profile.user,
+                week_start,
+                week_end,
+                settings_obj=settings_obj,
+            )
+            for day_date, state in resolved.items():
+                availability.append(
+                    {
+                        'user_id': profile.user_id,
+                        'date': day_date,
+                        'is_available': bool(state.get('is_available')),
+                        'start_time': state.get('start_time'),
+                        'end_time': state.get('end_time'),
+                        'mode': state.get('mode') or 'off',
+                        'source': state.get('source') or 'base',
+                        'override_type': state.get('override_type') or '',
+                        'absence_type': state.get('absence_type') or '',
+                    }
+                )
+
+        base_availability = EmployeeBaseAvailability.objects.filter(user_id__in=user_ids).order_by(
+            'user_id',
+            'weekday',
+        )
+        overrides = EmployeeAvailabilityOverride.objects.filter(
+            user_id__in=user_ids,
+            date__range=(week_start, week_end),
+        ).order_by('date', 'id')
+        planned_loads = EmployeePlannedLoad.objects.filter(
+            user_id__in=user_ids,
+            week_start=week_start,
+        )
         absences = EmployeeAbsence.objects.filter(
             user_id__in=user_ids,
             start_date__lte=week_end,
@@ -416,21 +542,17 @@ class ManagerAvailabilityOverviewView(generics.GenericAPIView):
             date__range=(week_start, week_end),
         ).order_by('-created_at')
 
-        schedule_approved = EmployeeAvailability.objects.filter(
-            user_id__in=user_ids,
-            date__range=(week_start, week_end),
-            is_approved=True,
-        ).exists()
-
         payload = {
             'department_id': department.id,
             'department_name': department.name,
             'week_start': week_start,
             'week_end': week_end,
             'week_offset': week_offset,
-            'schedule_approved': schedule_approved,
             'employees': employees,
             'availability': availability,
+            'base_availability': base_availability,
+            'overrides': overrides,
+            'planned_loads': planned_loads,
             'absences': absences,
             'shift_requests': shift_requests,
         }
@@ -443,104 +565,19 @@ class ManagerScheduleApproveView(generics.GenericAPIView):
 
     @extend_schema(
         tags=['Manager'],
-        summary='Утвердить график отдела',
+        summary='Устаревший эндпоинт утверждения графика',
         request=ManagerScheduleApproveRequestSerializer,
         responses={200: ManagerScheduleApproveResponseSerializer, 400: DetailMessageSerializer},
     )
     def post(self, request):
-        require_manager_department(request.user)
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-
-        date_values = data['dates']
-        assignments = data['assignments']
-
-        user_ids = list(
-            EmployeeProfile.objects.filter(department=department, user__role='employee').values_list('user_id', flat=True)
+        raise ValidationError(
+            {
+                'detail': (
+                    'Этап утверждения графика отключен. '
+                    'Используйте доступность сотрудников и назначение задач без блокировок.'
+                )
+            }
         )
-        if not user_ids:
-            raise ValidationError({'detail': 'Нет сотрудников для утверждения графика.'})
-
-        absence_by_user_date = {}
-        if user_ids and date_values:
-            range_start = min(date_values)
-            range_end = max(date_values)
-            date_set = set(date_values)
-            absences = EmployeeAbsence.objects.filter(
-                user_id__in=user_ids,
-                start_date__lte=range_end,
-                end_date__gte=range_start,
-            )
-            for absence in absences:
-                start_date = max(absence.start_date, range_start)
-                end_date = min(absence.end_date, range_end)
-                current = start_date
-                while current <= end_date:
-                    if current in date_set:
-                        key = (absence.user_id, current)
-                        if absence.absence_type == 'sick' or key not in absence_by_user_date:
-                            absence_by_user_date[key] = absence.absence_type
-                    current += timedelta(days=1)
-
-        entries = EmployeeAvailability.objects.filter(user_id__in=user_ids, date__in=date_values)
-        entries_map = {(entry.user_id, entry.date): entry for entry in entries}
-
-        with transaction.atomic():
-            entries.update(is_approved=True, approved_by=None, approved_at=None)
-            approved_at = timezone.now()
-            approved_count = 0
-
-            for item in assignments:
-                user_id = item['user_id']
-                day_date = item['date']
-                start_time = item['start_time']
-                end_time = item['end_time']
-
-                if user_id not in user_ids or day_date not in date_values:
-                    continue
-                if absence_by_user_date.get((user_id, day_date)):
-                    continue
-
-                entry = entries_map.get((user_id, day_date))
-                if entry:
-                    entry.is_available = True
-                    entry.start_time = start_time
-                    entry.end_time = end_time
-                    entry.is_approved = True
-                    entry.approved_by = request.user
-                    entry.approved_at = approved_at
-                    entry.save(
-                        update_fields=[
-                            'is_available',
-                            'start_time',
-                            'end_time',
-                            'is_approved',
-                            'approved_by',
-                            'approved_at',
-                            'updated_at',
-                        ]
-                    )
-                else:
-                    EmployeeAvailability.objects.create(
-                        user_id=user_id,
-                        date=day_date,
-                        is_available=True,
-                        start_time=start_time,
-                        end_time=end_time,
-                        priority='mid',
-                        is_approved=True,
-                        approved_by=request.user,
-                        approved_at=approved_at,
-                    )
-                approved_count += 1
-
-        payload = {
-            'ok': True,
-            'approved': approved_count,
-            'approved_at': timezone.localtime(approved_at),
-        }
-        return Response(ManagerScheduleApproveResponseSerializer(payload).data)
 
 
 class ManagerShiftRequestListView(BoundedListMixin, generics.ListAPIView):
@@ -599,33 +636,24 @@ class ManagerShiftRequestDecisionView(generics.GenericAPIView):
             settings_obj = GlobalSettings.objects.first() or GlobalSettings.objects.create()
             start_time = shift_request.start_time or settings_obj.work_start
             end_time = shift_request.end_time or settings_obj.work_end
-            entry, _ = EmployeeAvailability.objects.get_or_create(
+            override_type = 'partial'
+            override_start = start_time
+            override_end = end_time
+            if shift_request.request_type == 'replacement':
+                override_type = 'unavailable'
+                override_start = None
+                override_end = None
+
+            EmployeeAvailabilityOverride.objects.update_or_create(
                 user_id=shift_request.user_id,
                 date=shift_request.date,
                 defaults={
-                    'is_available': True,
-                    'start_time': start_time,
-                    'end_time': end_time,
-                    'priority': 'mid',
+                    'override_type': override_type,
+                    'start_time': override_start,
+                    'end_time': override_end,
+                    'note': (shift_request.reason or '')[:255],
+                    'created_by': request.user,
                 },
-            )
-            entry.is_available = shift_request.request_type != 'replacement'
-            entry.start_time = start_time
-            entry.end_time = end_time
-            entry.is_approved = True
-            entry.approved_by = request.user
-            entry.approved_at = timezone.now()
-            entry.save(
-                update_fields=[
-                    'is_available',
-                    'start_time',
-                    'end_time',
-                    'priority',
-                    'is_approved',
-                    'approved_by',
-                    'approved_at',
-                    'updated_at',
-                ]
             )
 
         return Response({'ok': True, 'status': decision})
@@ -653,7 +681,8 @@ class ManagerTaskListCreateView(BoundedListMixin, generics.ListCreateAPIView):
         queryset = DepartmentTask.objects.filter(department=department, date__range=(week_start, week_end))
 
         status_filter = (self.request.query_params.get('status') or '').strip().lower()
-        if status_filter in {'todo', 'in_progress', 'done'}:
+        allowed_statuses = {choice[0] for choice in DepartmentTask.TaskStatus.choices}
+        if status_filter in allowed_statuses:
             queryset = queryset.filter(status=status_filter)
 
         priority_filter = (self.request.query_params.get('priority') or '').strip().lower()
@@ -661,7 +690,7 @@ class ManagerTaskListCreateView(BoundedListMixin, generics.ListCreateAPIView):
             queryset = queryset.filter(priority=priority_filter)
 
         type_filter = (self.request.query_params.get('type') or '').strip().lower()
-        if type_filter in {'employee', 'slot', 'department'}:
+        if type_filter in {'employee', 'department'}:
             queryset = queryset.filter(task_type=type_filter)
 
         employee_param = (self.request.query_params.get('employee') or '').strip()
@@ -671,15 +700,13 @@ class ManagerTaskListCreateView(BoundedListMixin, generics.ListCreateAPIView):
             except (TypeError, ValueError):
                 employee_id = None
             if employee_id:
-                if type_filter == 'slot':
-                    queryset = queryset.filter(task_type='slot')
-                elif type_filter == 'department':
+                if type_filter == 'department':
                     queryset = queryset.filter(task_type='department')
                 elif type_filter == 'employee':
                     queryset = queryset.filter(assigned_to_id=employee_id)
                 else:
                     queryset = queryset.filter(
-                        Q(assigned_to_id=employee_id) | Q(task_type='slot') | Q(task_type='department')
+                        Q(assigned_to_id=employee_id) | Q(task_type='department')
                     )
 
         return queryset.select_related('assigned_to', 'created_by').order_by('-date', '-created_at')
@@ -709,28 +736,17 @@ class ManagerTaskListCreateView(BoundedListMixin, generics.ListCreateAPIView):
             if not assigned_to or not EmployeeProfile.objects.filter(user=assigned_to, department=department).exists():
                 raise ValidationError({'detail': 'Сотрудник не найден.'})
 
-        start_time = data.get('start_time')
-        end_time = data.get('end_time')
-        due_time = data.get('due_time') or end_time
-
-        if start_time and end_time and start_time >= end_time:
-            raise ValidationError({'detail': 'Время окончания должно быть позже начала.'})
-        if data['task_type'] == 'slot' and (start_time is None or end_time is None):
-            raise ValidationError({'detail': 'Для слота укажите время.'})
-
         task = DepartmentTask.objects.create(
             department=department,
             created_by=request.user,
             assigned_to=assigned_to,
             date=data['date'],
-            start_time=start_time,
-            end_time=end_time,
-            due_time=due_time,
+            due_time=data.get('due_time'),
             title=data['title'].strip(),
             description=(data.get('description') or '').strip(),
             task_type=data['task_type'],
             priority=data.get('priority', 'mid'),
-            status='todo',
+            status=DepartmentTask.TaskStatus.AWAITING_CONFIRMATION,
         )
         return Response(DepartmentTaskSerializer(task).data, status=status.HTTP_201_CREATED)
 
@@ -787,19 +803,8 @@ class ManagerTaskDetailView(generics.GenericAPIView):
             assigned_to = user_model.objects.filter(id=assigned_to_id, role='employee', is_active=True).first()
             if not assigned_to or not EmployeeProfile.objects.filter(user=assigned_to, department=department).exists():
                 raise ValidationError({'detail': 'Сотрудник не найден.'})
-        elif 'assigned_to' in data or task_type in {'slot', 'department'}:
+        elif 'assigned_to' in data or task_type == 'department':
             assigned_to = None
-
-        start_time = data.get('start_time', task.start_time)
-        end_time = data.get('end_time', task.end_time)
-        due_time = data.get('due_time', task.due_time)
-        if 'end_time' in data and 'due_time' not in data:
-            due_time = end_time
-
-        if start_time and end_time and start_time >= end_time:
-            raise ValidationError({'detail': 'Время окончания должно быть позже начала.'})
-        if task_type == 'slot' and (start_time is None or end_time is None):
-            raise ValidationError({'detail': 'Для слота укажите время.'})
 
         if 'title' in data:
             title = data['title'].strip()
@@ -812,9 +817,7 @@ class ManagerTaskDetailView(generics.GenericAPIView):
         task.task_type = task_type
         task.assigned_to = assigned_to
         task.date = data.get('date', task.date)
-        task.start_time = start_time
-        task.end_time = end_time
-        task.due_time = due_time
+        task.due_time = data.get('due_time', task.due_time)
         task.priority = data.get('priority', task.priority)
         if 'status' in data:
             task.status = data['status']
@@ -851,7 +854,7 @@ class ManagerTaskExtendView(generics.GenericAPIView):
         assert_optimistic_lock(request, task, client_version=serializer.validated_data.get('if_match'))
 
         new_date = serializer.validated_data['date']
-        due_time = serializer.validated_data.get('due_time') or task.due_time or task.end_time
+        due_time = serializer.validated_data.get('due_time') or task.due_time
 
         task.date = new_date
         task.due_time = due_time
@@ -864,52 +867,44 @@ class EmployeeAvailabilityView(generics.GenericAPIView):
     permission_classes = [IsEmployeeRole]
     serializer_class = EmployeeAvailabilityUpdateSerializer
 
-    @extend_schema(tags=['Employee'], summary='Доступность сотрудника на неделю')
+    @extend_schema(tags=['Employee'], summary='Доступность сотрудника (база + исключения)')
     def get(self, request):
         today = timezone.localdate()
         week_offset = _parse_week_offset(request.query_params.get('week'), default=0)
-
         week_start = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
         week_end = week_start + timedelta(days=6)
-        is_current_week = week_offset == 0
-
         settings_obj = GlobalSettings.objects.first() or GlobalSettings.objects.create()
-        entries = list(
-            EmployeeAvailability.objects.filter(
-                user=request.user,
-                date__range=(week_start, week_end),
-            )
-        )
-        entries_map = {entry.date: entry for entry in entries}
-        week_updated_at = max((entry.updated_at for entry in entries), default=None)
+        ensure_employee_base_availability(request.user, settings_obj=settings_obj)
 
-        current_week_start = today - timedelta(days=today.weekday())
-        current_week_friday = current_week_start + timedelta(days=4)
-        next_week_start = current_week_start + timedelta(days=7)
-        next_week_end = next_week_start + timedelta(days=6)
-        next_week_edit_closed = today > current_week_friday
-
-        week_is_approved = EmployeeAvailability.objects.filter(
+        base_rules = EmployeeBaseAvailability.objects.filter(user=request.user).order_by("weekday")
+        week_overrides = EmployeeAvailabilityOverride.objects.filter(
             user=request.user,
             date__range=(week_start, week_end),
-            is_approved=True,
-        ).exists()
+        ).order_by("date")
+        planned_load = EmployeePlannedLoad.objects.filter(
+            user=request.user,
+            week_start=week_start,
+        ).first()
 
-        is_next_week = week_start == next_week_start and week_end == next_week_end
-        is_locked = is_current_week or week_is_approved or (is_next_week and next_week_edit_closed)
-
+        week_resolved = resolve_range_availability(
+            request.user,
+            week_start,
+            week_end,
+            settings_obj=settings_obj,
+        )
         days = []
-        for i in range(7):
-            day = week_start + timedelta(days=i)
-            entry = entries_map.get(day)
+        for day_date in sorted(week_resolved.keys()):
+            state = week_resolved[day_date]
             days.append(
                 {
-                    'date': day,
-                    'is_available': entry.is_available if entry else False,
-                    'start_time': entry.start_time if entry else settings_obj.work_start,
-                    'end_time': entry.end_time if entry else settings_obj.work_end,
-                    'priority': entry.priority if entry else 'mid',
-                    'is_approved': bool(entry and entry.is_approved),
+                    "date": day_date,
+                    "is_available": bool(state.get("is_available")),
+                    "start_time": state.get("start_time"),
+                    "end_time": state.get("end_time"),
+                    "mode": state.get("mode") or "off",
+                    "source": state.get("source") or "base",
+                    "override_type": state.get("override_type") or "",
+                    "absence_type": state.get("absence_type") or "",
                 }
             )
 
@@ -918,9 +913,9 @@ class EmployeeAvailabilityView(generics.GenericAPIView):
                 'week_start': week_start,
                 'week_end': week_end,
                 'week_offset': week_offset,
-                'is_locked': is_locked,
-                'week_is_approved': week_is_approved,
-                'week_updated_at': timezone.localtime(week_updated_at).isoformat() if week_updated_at else None,
+                'base': BaseAvailabilityRuleSerializer(base_rules, many=True).data,
+                'overrides': AvailabilityOverrideSerializer(week_overrides, many=True).data,
+                'planned_load': PlannedLoadSerializer(planned_load).data if planned_load else None,
                 'days': days,
             }
         )
@@ -935,76 +930,123 @@ class EmployeeAvailabilityView(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         validated_data = serializer.validated_data
-        updates_map = {item['date']: item for item in validated_data['days']}
-        if not updates_map:
-            raise ValidationError({'detail': 'Нет данных для сохранения.'})
-
         settings_obj = GlobalSettings.objects.first() or GlobalSettings.objects.create()
-        dates = list(updates_map.keys())
-        today = timezone.localdate()
-        current_week_start = today - timedelta(days=today.weekday())
-        current_week_end = current_week_start + timedelta(days=6)
-        current_week_friday = current_week_start + timedelta(days=4)
-        next_week_start = current_week_end + timedelta(days=1)
-        next_week_end = next_week_start + timedelta(days=6)
+        ensure_employee_base_availability(request.user, settings_obj=settings_obj)
+        changed_dates = set()
+        base_was_updated = False
 
-        if any(current_week_start <= day <= current_week_end for day in dates):
-            return Response({'detail': 'Текущая неделя заблокирована для редактирования.'}, status=status.HTTP_403_FORBIDDEN)
+        base_payload = validated_data.get("base") or []
+        overrides_payload = validated_data.get("overrides") or []
+        clear_dates = validated_data.get("clear_override_dates") or []
+        load_payload = validated_data.get("load_plan")
 
-        if EmployeeAvailability.objects.filter(user=request.user, date__in=dates, is_approved=True).exists():
-            return Response({'detail': 'График уже подтвержден менеджером.'}, status=status.HTTP_403_FORBIDDEN)
-
-        if today > current_week_friday and any(next_week_start <= day <= next_week_end for day in dates):
-            return Response(
-                {'detail': 'Редактирование следующей недели доступно только до пятницы.'},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        existing_entries = EmployeeAvailability.objects.filter(user=request.user, date__in=dates)
-        assert_queryset_optimistic_lock(
-            request,
-            existing_entries,
-            client_version=validated_data.get('if_match'),
-        )
-        existing_map = {entry.date: entry for entry in existing_entries}
+        if not (base_payload or overrides_payload or clear_dates or load_payload):
+            raise ValidationError({"detail": "Нет данных для сохранения."})
 
         with transaction.atomic():
-            for payload_item in updates_map.values():
-                start_time = payload_item.get('start_time') or settings_obj.work_start
-                end_time = payload_item.get('end_time') or settings_obj.work_end
-                entry = existing_map.get(payload_item['date'])
-                if entry:
-                    entry.is_available = payload_item['is_available']
-                    entry.start_time = start_time
-                    entry.end_time = end_time
-                    entry.priority = payload_item.get('priority', 'mid')
-                    entry.is_approved = False
-                    entry.approved_by = None
-                    entry.approved_at = None
-                    entry.save(
-                        update_fields=[
-                            'is_available',
-                            'start_time',
-                            'end_time',
-                            'priority',
-                            'is_approved',
-                            'approved_by',
-                            'approved_at',
-                            'updated_at',
-                        ]
-                    )
+            for item in base_payload:
+                mode = item["mode"]
+                start_time = item.get("start_time")
+                end_time = item.get("end_time")
+                if mode == "fixed":
+                    start_time = start_time or settings_obj.work_start
+                    end_time = end_time or settings_obj.work_end
+                    if start_time >= end_time:
+                        raise ValidationError({"detail": "В базовой доступности время окончания должно быть позже начала."})
                 else:
-                    EmployeeAvailability.objects.create(
+                    start_time = None
+                    end_time = None
+                EmployeeBaseAvailability.objects.update_or_create(
+                    user=request.user,
+                    weekday=item["weekday"],
+                    defaults={
+                        "mode": mode,
+                        "start_time": start_time,
+                        "end_time": end_time,
+                    },
+                )
+                base_was_updated = True
+
+            if clear_dates:
+                EmployeeAvailabilityOverride.objects.filter(
+                    user=request.user,
+                    date__in=clear_dates,
+                ).delete()
+                changed_dates.update(clear_dates)
+
+            for item in overrides_payload:
+                override_type = item["override_type"]
+                start_time = item.get("start_time")
+                end_time = item.get("end_time")
+                if override_type == "partial":
+                    start_time = start_time or settings_obj.work_start
+                    end_time = end_time or settings_obj.work_end
+                    if start_time >= end_time:
+                        raise ValidationError({"detail": "В исключении время окончания должно быть позже начала."})
+                else:
+                    start_time = None
+                    end_time = None
+                EmployeeAvailabilityOverride.objects.update_or_create(
+                    user=request.user,
+                    date=item["date"],
+                    defaults={
+                        "override_type": override_type,
+                        "start_time": start_time,
+                        "end_time": end_time,
+                        "note": (item.get("note") or "")[:255],
+                        "created_by": request.user,
+                    },
+                )
+                changed_dates.add(item["date"])
+
+            if load_payload:
+                week_start = get_week_start(load_payload["week_start"])
+                target_mode = load_payload["target_mode"]
+                target_value = load_payload.get("target_value")
+                if target_mode == "none":
+                    EmployeePlannedLoad.objects.filter(
                         user=request.user,
-                        date=payload_item['date'],
-                        is_available=payload_item['is_available'],
-                        start_time=start_time,
-                        end_time=end_time,
-                        priority=payload_item.get('priority', 'mid'),
+                        week_start=week_start,
+                    ).delete()
+                else:
+                    EmployeePlannedLoad.objects.update_or_create(
+                        user=request.user,
+                        week_start=week_start,
+                        defaults={
+                            "target_mode": target_mode,
+                            "target_value": target_value,
+                            "note": (load_payload.get("note") or "")[:255],
+                        },
                     )
 
+            conflict_queryset = DepartmentTask.objects.filter(
+                assigned_to=request.user,
+                status__in=[
+                    DepartmentTask.TaskStatus.AWAITING_CONFIRMATION,
+                    DepartmentTask.TaskStatus.CONFIRMED,
+                    DepartmentTask.TaskStatus.IN_PROGRESS,
+                ],
+            )
+            if changed_dates:
+                conflict_queryset = conflict_queryset.filter(date__in=sorted(changed_dates))
+            elif base_was_updated:
+                conflict_queryset = conflict_queryset.filter(date__gte=timezone.localdate())
+            else:
+                conflict_queryset = conflict_queryset.none()
+
+            conflicted_count = conflict_queryset.update(
+                status=DepartmentTask.TaskStatus.CONFLICT,
+                updated_at=timezone.now(),
+            )
+
         updated_at = timezone.localtime(timezone.now())
-        return Response({'ok': True, 'updated_at': updated_at.isoformat()})
+        return Response(
+            {
+                "ok": True,
+                "updated_at": updated_at.isoformat(),
+                "conflicted_tasks": conflicted_count,
+            }
+        )
 
 
 class EmployeeShiftRequestListCreateView(BoundedListMixin, generics.ListCreateAPIView):
@@ -1071,22 +1113,13 @@ class EmployeeTaskListView(BoundedListMixin, generics.ListAPIView):
         assigned_tasks = base_tasks.filter(task_type='employee', assigned_to=user)
         department_tasks = base_tasks.filter(task_type='department')
 
-        availability_entries = list(EmployeeAvailability.objects.filter(user=user, is_available=True))
-        slot_tasks = DepartmentTask.objects.none()
-        if availability_entries:
-            slot_filters = Q()
-            for entry in availability_entries:
-                slot_filters |= Q(date=entry.date, start_time=entry.start_time, end_time=entry.end_time)
-            if slot_filters:
-                slot_tasks = base_tasks.filter(task_type='slot').filter(slot_filters)
-
-        queryset = (assigned_tasks | slot_tasks | department_tasks).distinct().select_related('assigned_to', 'created_by')
+        queryset = (assigned_tasks | department_tasks).distinct().select_related('assigned_to', 'created_by')
 
         view_mode = (self.request.query_params.get('view') or 'active').strip().lower()
         if view_mode == 'archive':
-            queryset = queryset.filter(status='done')
+            queryset = queryset.filter(status=DepartmentTask.TaskStatus.COMPLETED)
         else:
-            queryset = queryset.exclude(status='done')
+            queryset = queryset.exclude(status=DepartmentTask.TaskStatus.COMPLETED)
 
         return queryset.order_by('-date', '-created_at')
 
@@ -1129,22 +1162,19 @@ class EmployeeTaskStatusUpdateView(generics.GenericAPIView):
         serializer.is_valid(raise_exception=True)
         status_value = serializer.validated_data['status']
 
-        status_order = {'todo': 0, 'in_progress': 1, 'done': 2}
-        if status_order.get(status_value, 0) < status_order.get(task.status, 0):
-            raise ValidationError({'detail': 'Нельзя вернуть задачу назад.'})
-
-        if task.status != status_value:
+        if status_value != task.status:
+            allowed_statuses = EMPLOYEE_STATUS_TRANSITIONS.get(task.status, set())
+            if status_value not in allowed_statuses:
+                raise ValidationError({'detail': 'Недопустимый переход статуса задачи.'})
             task.status = status_value
             task.save(update_fields=['status', 'updated_at'])
 
-        status_labels = {'todo': 'Назначена', 'in_progress': 'В работе', 'done': 'Выполнено'}
-        status_tones = {'todo': 'muted', 'in_progress': 'warning', 'done': 'success'}
         return Response(
             {
                 'ok': True,
                 'status': task.status,
-                'status_label': status_labels.get(task.status, 'Назначена'),
-                'status_tone': status_tones.get(task.status, 'muted'),
+                'status_label': TASK_STATUS_LABELS.get(task.status, task.get_status_display()),
+                'status_tone': TASK_STATUS_TONES.get(task.status, 'muted'),
             }
         )
 
@@ -1190,18 +1220,608 @@ class EmployeeTaskSubmissionCreateView(generics.GenericAPIView):
                 )
             )
 
-        if task.task_type != 'department' and task.status != 'done':
-            task.status = 'done'
+        if task.task_type != 'department' and task.status != DepartmentTask.TaskStatus.COMPLETED:
+            task.status = DepartmentTask.TaskStatus.COMPLETED
             task.save(update_fields=['status', 'updated_at'])
-
-        status_labels = {'todo': 'Назначена', 'in_progress': 'В работе', 'done': 'Выполнено'}
-        status_tones = {'todo': 'muted', 'in_progress': 'warning', 'done': 'success'}
 
         payload = {
             'ok': True,
             'status': task.status,
-            'status_label': status_labels.get(task.status, 'Назначена'),
-            'status_tone': status_tones.get(task.status, 'success'),
+            'status_label': TASK_STATUS_LABELS.get(task.status, task.get_status_display()),
+            'status_tone': TASK_STATUS_TONES.get(task.status, 'success'),
             'submissions': TaskSubmissionSerializer(created_submissions, many=True).data,
         }
         return Response(payload)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+_LEAVE_TYPE_LABELS = {'vacation': 'Отпуск', 'sick': 'Больничный'}
+_LEAVE_STATUS_LABELS = {'pending': 'На рассмотрении', 'approved': 'Одобрено', 'rejected': 'Отклонено'}
+_LEAVE_STATUS_TONES = {'pending': 'warning', 'approved': 'success', 'rejected': 'danger'}
+_SPRINT_STATUS_LABELS = {'planning': 'Планирование', 'active': 'Активен', 'completed': 'Завершён'}
+_SPRINT_STATUS_TONES = {'planning': 'neutral', 'active': 'success', 'completed': 'muted'}
+
+
+# ---------------------------------------------------------------------------
+# Serializers – Sprint
+# ---------------------------------------------------------------------------
+
+class SprintTaskSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    title = serializers.CharField()
+    priority = serializers.CharField()
+    priority_label = serializers.SerializerMethodField()
+    status = serializers.CharField()
+    status_label = serializers.SerializerMethodField()
+    status_tone = serializers.SerializerMethodField()
+    taken_by_id = serializers.IntegerField(allow_null=True)
+    taken_name = serializers.SerializerMethodField()
+
+    def get_priority_label(self, obj):
+        return dict(DepartmentTask.PRIORITY_CHOICES).get(obj.priority, obj.priority)
+
+    def get_status_label(self, obj):
+        return TASK_STATUS_LABELS.get(obj.status, obj.get_status_display())
+
+    def get_status_tone(self, obj):
+        return TASK_STATUS_TONES.get(obj.status, 'muted')
+
+    def get_taken_name(self, obj):
+        return _format_user_name(obj.taken_by) if obj.taken_by_id else None
+
+
+class SprintSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    title = serializers.CharField()
+    goal = serializers.CharField(allow_blank=True)
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+    status = serializers.CharField()
+    status_label = serializers.SerializerMethodField()
+    status_tone = serializers.SerializerMethodField()
+    tasks_total = serializers.SerializerMethodField()
+    tasks_done = serializers.SerializerMethodField()
+
+    def get_status_label(self, obj):
+        return _SPRINT_STATUS_LABELS.get(obj.status, obj.status)
+
+    def get_status_tone(self, obj):
+        return _SPRINT_STATUS_TONES.get(obj.status, 'neutral')
+
+    def get_tasks_total(self, obj):
+        return obj.tasks.count()
+
+    def get_tasks_done(self, obj):
+        return obj.tasks.filter(status=DepartmentTask.TaskStatus.COMPLETED).count()
+
+
+class SprintCreateSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=200)
+    goal = serializers.CharField(required=False, allow_blank=True)
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+
+    def validate(self, data):
+        if data['end_date'] < data['start_date']:
+            raise ValidationError({'end_date': 'Дата окончания не может быть раньше даты начала.'})
+        return data
+
+
+class SprintStatusUpdateSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=['planning', 'active', 'completed'])
+
+
+# ---------------------------------------------------------------------------
+# Serializers – Leave Requests
+# ---------------------------------------------------------------------------
+
+class LeaveRequestSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    request_type = serializers.CharField()
+    type_label = serializers.SerializerMethodField()
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+    comment = serializers.CharField()
+    status = serializers.CharField()
+    status_label = serializers.SerializerMethodField()
+    status_tone = serializers.SerializerMethodField()
+    rejection_reason = serializers.CharField()
+    employee_name = serializers.SerializerMethodField()
+
+    def get_type_label(self, obj):
+        return _LEAVE_TYPE_LABELS.get(obj.request_type, obj.request_type)
+
+    def get_status_label(self, obj):
+        return _LEAVE_STATUS_LABELS.get(obj.status, obj.status)
+
+    def get_status_tone(self, obj):
+        return _LEAVE_STATUS_TONES.get(obj.status, 'neutral')
+
+    def get_employee_name(self, obj):
+        return _format_user_name(obj.user)
+
+
+class LeaveRequestCreateSerializer(serializers.Serializer):
+    request_type = serializers.ChoiceField(choices=['vacation', 'sick'])
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+    comment = serializers.CharField(required=False, allow_blank=True, default='')
+
+    def validate(self, data):
+        if data['end_date'] < data['start_date']:
+            raise ValidationError({'end_date': 'Дата окончания не может быть раньше даты начала.'})
+        return data
+
+
+class LeaveRequestReviewSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=['approve', 'reject'])
+    rejection_reason = serializers.CharField(required=False, allow_blank=True, default='')
+
+    def validate(self, data):
+        if data['action'] == 'reject' and not data.get('rejection_reason', '').strip():
+            pass  # reason is optional
+        return data
+
+
+# ---------------------------------------------------------------------------
+# Serializers – Substitution
+# ---------------------------------------------------------------------------
+
+class SubstitutionSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    absent_user_id = serializers.IntegerField()
+    absent_name = serializers.SerializerMethodField()
+    substitute_user_id = serializers.IntegerField()
+    substitute_name = serializers.SerializerMethodField()
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+    note = serializers.CharField()
+    is_active = serializers.SerializerMethodField()
+
+    def get_absent_name(self, obj):
+        return _format_user_name(obj.absent_user)
+
+    def get_substitute_name(self, obj):
+        return _format_user_name(obj.substitute_user)
+
+    def get_is_active(self, obj):
+        today = date.today()
+        return obj.start_date <= today <= obj.end_date
+
+
+class SubstitutionCreateSerializer(serializers.Serializer):
+    absent_user_id = serializers.IntegerField()
+    substitute_user_id = serializers.IntegerField()
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+    note = serializers.CharField(required=False, allow_blank=True, default='')
+
+    def validate(self, data):
+        if data['end_date'] < data['start_date']:
+            raise ValidationError({'end_date': 'Дата окончания не может быть раньше даты начала.'})
+        if data['absent_user_id'] == data['substitute_user_id']:
+            raise ValidationError({'substitute_user_id': 'Замещающий не может совпадать с отсутствующим.'})
+        return data
+
+
+# ---------------------------------------------------------------------------
+# Serializers – Team
+# ---------------------------------------------------------------------------
+
+class TeamMemberSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.SerializerMethodField()
+    email = serializers.EmailField()
+    is_active = serializers.BooleanField()
+    active_tasks = serializers.IntegerField()
+    absence_status = serializers.SerializerMethodField()
+
+    def get_name(self, obj):
+        return _format_user_name(obj)
+
+    def get_absence_status(self, obj):
+        today = date.today()
+        absence = EmployeeAbsence.objects.filter(
+            user=obj,
+            start_date__lte=today,
+            end_date__gte=today,
+        ).first()
+        if absence:
+            return absence.reason or 'Отсутствует'
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Employee – Sprint views
+# ---------------------------------------------------------------------------
+
+class EmployeeCurrentSprintView(generics.GenericAPIView):
+    permission_classes = [IsEmployeeRole]
+
+    @extend_schema(
+        tags=['Employee'],
+        summary='Текущий активный спринт сотрудника',
+        responses={200: dict},
+    )
+    def get(self, request):
+        profile = get_object_or_404(EmployeeProfile, user=request.user)
+        if not profile.department_id:
+            return Response({'sprint': None, 'tasks': []})
+
+        sprint = Sprint.objects.filter(
+            department_id=profile.department_id,
+            status='active',
+        ).first()
+        if not sprint:
+            return Response({'sprint': None, 'tasks': []})
+
+        tasks = list(sprint.tasks.select_related('taken_by').order_by('priority', 'title'))
+        sprint_data = SprintSerializer(sprint).data
+        sprint_data['tasks'] = SprintTaskSerializer(tasks, many=True).data
+        sprint_data['tasks_mine'] = sum(1 for t in tasks if t.taken_by_id == request.user.id)
+        sprint_data['tasks_free'] = sum(1 for t in tasks if not t.taken_by_id)
+        return Response({'sprint': sprint_data})
+
+
+class EmployeeTaskTakeView(generics.GenericAPIView):
+    permission_classes = [IsEmployeeRole]
+
+    @extend_schema(
+        tags=['Employee'],
+        summary='Взять задачу',
+        responses={200: dict, 400: DetailMessageSerializer, 403: DetailMessageSerializer},
+    )
+    def post(self, request, task_id):
+        task = get_object_or_404(DepartmentTask, id=task_id)
+        require_employee_task_access(request.user, task)
+        if task.taken_by_id:
+            raise ValidationError({'detail': 'Задача уже взята другим сотрудником.'})
+        task.taken_by = request.user
+        task.status = DepartmentTask.TaskStatus.CONFIRMED
+        task.save(update_fields=['taken_by', 'status', 'updated_at'])
+        return Response({'ok': True, 'status': task.status})
+
+
+class EmployeeTaskDropView(generics.GenericAPIView):
+    permission_classes = [IsEmployeeRole]
+
+    @extend_schema(
+        tags=['Employee'],
+        summary='Отказаться от задачи',
+        responses={200: dict, 400: DetailMessageSerializer, 403: DetailMessageSerializer},
+    )
+    def post(self, request, task_id):
+        task = get_object_or_404(DepartmentTask, id=task_id)
+        require_employee_task_access(request.user, task)
+        if task.taken_by_id != request.user.id:
+            raise ValidationError({'detail': 'Нельзя отказаться от чужой задачи.'})
+        task.taken_by = None
+        task.status = DepartmentTask.TaskStatus.AWAITING_CONFIRMATION
+        task.save(update_fields=['taken_by', 'status', 'updated_at'])
+        return Response({'ok': True, 'status': task.status})
+
+
+# ---------------------------------------------------------------------------
+# Employee – Leave Request views
+# ---------------------------------------------------------------------------
+
+class EmployeeLeaveRequestListCreateView(BoundedListMixin, generics.GenericAPIView):
+    permission_classes = [IsEmployeeRole]
+
+    @extend_schema(
+        tags=['Employee'],
+        summary='Список заявок на отпуск/больничный',
+        responses={200: LeaveRequestSerializer(many=True)},
+    )
+    def get(self, request):
+        qs = LeaveRequest.objects.filter(user=request.user).select_related('user').order_by('-created_at')
+        page = self.get_bounded_page(qs)
+        return Response(LeaveRequestSerializer(page, many=True).data)
+
+    @extend_schema(
+        tags=['Employee'],
+        summary='Создать заявку на отпуск/больничный',
+        request=LeaveRequestCreateSerializer,
+        responses={201: LeaveRequestSerializer, 400: DetailMessageSerializer},
+    )
+    def post(self, request):
+        serializer = LeaveRequestCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        d = serializer.validated_data
+        lr = LeaveRequest.objects.create(
+            user=request.user,
+            request_type=d['request_type'],
+            start_date=d['start_date'],
+            end_date=d['end_date'],
+            comment=d.get('comment', ''),
+        )
+        return Response(LeaveRequestSerializer(lr).data, status=status.HTTP_201_CREATED)
+
+
+# ---------------------------------------------------------------------------
+# Manager – Sprint views
+# ---------------------------------------------------------------------------
+
+class ManagerSprintListCreateView(BoundedListMixin, generics.GenericAPIView):
+    permission_classes = [IsManagerRole]
+
+    @extend_schema(
+        tags=['Manager'],
+        summary='Список спринтов отдела',
+        responses={200: SprintSerializer(many=True)},
+    )
+    def get(self, request):
+        department = require_manager_department(request)
+        qs = Sprint.objects.filter(department=department).order_by('-start_date')
+        page = self.get_bounded_page(qs)
+        return Response(SprintSerializer(page, many=True).data)
+
+    @extend_schema(
+        tags=['Manager'],
+        summary='Создать спринт',
+        request=SprintCreateSerializer,
+        responses={201: SprintSerializer, 400: DetailMessageSerializer},
+    )
+    def post(self, request):
+        department = require_manager_department(request)
+        serializer = SprintCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        d = serializer.validated_data
+        sprint = Sprint.objects.create(
+            department=department,
+            title=d['title'],
+            goal=d.get('goal', ''),
+            start_date=d['start_date'],
+            end_date=d['end_date'],
+            created_by=request.user,
+        )
+        return Response(SprintSerializer(sprint).data, status=status.HTTP_201_CREATED)
+
+
+class ManagerSprintDetailView(generics.GenericAPIView):
+    permission_classes = [IsManagerRole]
+
+    def _get_sprint(self, request, sprint_id):
+        department = require_manager_department(request)
+        return get_object_or_404(Sprint, id=sprint_id, department=department)
+
+    @extend_schema(
+        tags=['Manager'],
+        summary='Детали спринта',
+        responses={200: dict},
+    )
+    def get(self, request, sprint_id):
+        sprint = self._get_sprint(request, sprint_id)
+        tasks = list(sprint.tasks.select_related('taken_by').order_by('priority', 'title'))
+        data = SprintSerializer(sprint).data
+        data['tasks'] = SprintTaskSerializer(tasks, many=True).data
+        return Response(data)
+
+    @extend_schema(
+        tags=['Manager'],
+        summary='Изменить статус спринта',
+        request=SprintStatusUpdateSerializer,
+        responses={200: SprintSerializer, 400: DetailMessageSerializer},
+    )
+    def patch(self, request, sprint_id):
+        sprint = self._get_sprint(request, sprint_id)
+        serializer = SprintStatusUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        sprint.status = serializer.validated_data['status']
+        sprint.save(update_fields=['status', 'updated_at'])
+        return Response(SprintSerializer(sprint).data)
+
+
+class ManagerSprintTaskAddView(generics.GenericAPIView):
+    permission_classes = [IsManagerRole]
+
+    @extend_schema(
+        tags=['Manager'],
+        summary='Добавить задачу в спринт',
+        responses={200: dict, 400: DetailMessageSerializer},
+    )
+    def post(self, request, sprint_id):
+        department = require_manager_department(request)
+        sprint = get_object_or_404(Sprint, id=sprint_id, department=department)
+        task_id = request.data.get('task_id')
+        if not task_id:
+            raise ValidationError({'task_id': 'Обязательное поле.'})
+        task = get_object_or_404(DepartmentTask, id=task_id, department=department)
+        if task.sprint_id and task.sprint_id != sprint.id:
+            raise ValidationError({'task_id': 'Задача уже добавлена в другой спринт.'})
+        task.sprint = sprint
+        task.save(update_fields=['sprint'])
+        return Response({'ok': True})
+
+
+class ManagerSprintTaskRemoveView(generics.GenericAPIView):
+    permission_classes = [IsManagerRole]
+
+    @extend_schema(
+        tags=['Manager'],
+        summary='Убрать задачу из спринта',
+        responses={200: dict, 400: DetailMessageSerializer},
+    )
+    def delete(self, request, sprint_id, task_id):
+        department = require_manager_department(request)
+        sprint = get_object_or_404(Sprint, id=sprint_id, department=department)
+        task = get_object_or_404(DepartmentTask, id=task_id, sprint=sprint, department=department)
+        task.sprint = None
+        task.save(update_fields=['sprint'])
+        return Response({'ok': True})
+
+
+# ---------------------------------------------------------------------------
+# Manager – Leave Request views
+# ---------------------------------------------------------------------------
+
+class ManagerLeaveRequestListView(BoundedListMixin, generics.GenericAPIView):
+    permission_classes = [IsManagerRole]
+
+    @extend_schema(
+        tags=['Manager'],
+        summary='Заявки сотрудников отдела',
+        responses={200: LeaveRequestSerializer(many=True)},
+    )
+    def get(self, request):
+        department = require_manager_department(request)
+        status_filter = request.query_params.get('status', 'pending')
+        User = get_user_model()
+        dept_user_ids = EmployeeProfile.objects.filter(department=department).values_list('user_id', flat=True)
+        qs = LeaveRequest.objects.filter(user_id__in=dept_user_ids).select_related('user')
+        if status_filter != 'all':
+            qs = qs.filter(status=status_filter)
+        page = self.get_bounded_page(qs.order_by('-created_at'))
+        return Response(LeaveRequestSerializer(page, many=True).data)
+
+
+class ManagerLeaveRequestReviewView(generics.GenericAPIView):
+    permission_classes = [IsManagerRole]
+
+    @extend_schema(
+        tags=['Manager'],
+        summary='Одобрить или отклонить заявку',
+        request=LeaveRequestReviewSerializer,
+        responses={200: LeaveRequestSerializer, 400: DetailMessageSerializer},
+    )
+    def post(self, request, lr_id):
+        department = require_manager_department(request)
+        dept_user_ids = EmployeeProfile.objects.filter(department=department).values_list('user_id', flat=True)
+        lr = get_object_or_404(LeaveRequest, id=lr_id, user_id__in=dept_user_ids)
+        if lr.status != 'pending':
+            raise ValidationError({'detail': 'Заявка уже рассмотрена.'})
+        serializer = LeaveRequestReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        d = serializer.validated_data
+        lr.status = 'approved' if d['action'] == 'approve' else 'rejected'
+        lr.reviewed_by = request.user
+        lr.reviewed_at = timezone.now()
+        if d['action'] == 'reject':
+            lr.rejection_reason = d.get('rejection_reason', '')
+        lr.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'rejection_reason'])
+        return Response(LeaveRequestSerializer(lr).data)
+
+
+# ---------------------------------------------------------------------------
+# Manager – Substitution views
+# ---------------------------------------------------------------------------
+
+class ManagerSubstitutionListCreateView(BoundedListMixin, generics.GenericAPIView):
+    permission_classes = [IsManagerRole]
+
+    @extend_schema(
+        tags=['Manager'],
+        summary='Замещения в отделе',
+        responses={200: SubstitutionSerializer(many=True)},
+    )
+    def get(self, request):
+        department = require_manager_department(request)
+        dept_user_ids = EmployeeProfile.objects.filter(department=department).values_list('user_id', flat=True)
+        qs = Substitution.objects.filter(
+            absent_user_id__in=dept_user_ids,
+        ).select_related('absent_user', 'substitute_user').order_by('-start_date')
+        page = self.get_bounded_page(qs)
+        return Response(SubstitutionSerializer(page, many=True).data)
+
+    @extend_schema(
+        tags=['Manager'],
+        summary='Создать замещение',
+        request=SubstitutionCreateSerializer,
+        responses={201: SubstitutionSerializer, 400: DetailMessageSerializer},
+    )
+    def post(self, request):
+        department = require_manager_department(request)
+        serializer = SubstitutionCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        d = serializer.validated_data
+        dept_user_ids = set(
+            EmployeeProfile.objects.filter(department=department).values_list('user_id', flat=True)
+        )
+        if d['absent_user_id'] not in dept_user_ids or d['substitute_user_id'] not in dept_user_ids:
+            raise ValidationError({'detail': 'Оба сотрудника должны принадлежать вашему отделу.'})
+        User = get_user_model()
+        sub = Substitution.objects.create(
+            absent_user_id=d['absent_user_id'],
+            substitute_user_id=d['substitute_user_id'],
+            start_date=d['start_date'],
+            end_date=d['end_date'],
+            note=d.get('note', ''),
+            created_by=request.user,
+        )
+        sub = Substitution.objects.select_related('absent_user', 'substitute_user').get(id=sub.id)
+        return Response(SubstitutionSerializer(sub).data, status=status.HTTP_201_CREATED)
+
+
+class ManagerSubstitutionDeleteView(generics.GenericAPIView):
+    permission_classes = [IsManagerRole]
+
+    @extend_schema(
+        tags=['Manager'],
+        summary='Удалить замещение',
+        responses={200: dict, 403: DetailMessageSerializer},
+    )
+    def delete(self, request, sub_id):
+        department = require_manager_department(request)
+        dept_user_ids = EmployeeProfile.objects.filter(department=department).values_list('user_id', flat=True)
+        sub = get_object_or_404(Substitution, id=sub_id, absent_user_id__in=dept_user_ids)
+        sub.delete()
+        return Response({'ok': True})
+
+
+# ---------------------------------------------------------------------------
+# Manager – Team view
+# ---------------------------------------------------------------------------
+
+class ManagerTeamView(BoundedListMixin, generics.GenericAPIView):
+    permission_classes = [IsManagerRole]
+
+    @extend_schema(
+        tags=['Manager'],
+        summary='Список сотрудников отдела',
+        responses={200: TeamMemberSerializer(many=True)},
+    )
+    def get(self, request):
+        department = require_manager_department(request)
+        User = get_user_model()
+        today = date.today()
+        profiles = EmployeeProfile.objects.filter(department=department).select_related('user')
+        users = [p.user for p in profiles if p.user.is_active]
+
+        active_task_counts = {}
+        if users:
+            active_statuses = [
+                DepartmentTask.TaskStatus.AWAITING_CONFIRMATION,
+                DepartmentTask.TaskStatus.CONFIRMED,
+                DepartmentTask.TaskStatus.IN_PROGRESS,
+            ]
+            from django.db.models import Count
+            counts = (
+                DepartmentTask.objects.filter(
+                    taken_by__in=users,
+                    status__in=active_statuses,
+                )
+                .values('taken_by_id')
+                .annotate(cnt=Count('id'))
+            )
+            active_task_counts = {row['taken_by_id']: row['cnt'] for row in counts}
+
+        result = []
+        for user in users:
+            absence = EmployeeAbsence.objects.filter(
+                user=user,
+                start_date__lte=today,
+                end_date__gte=today,
+            ).first()
+            result.append({
+                'id': user.id,
+                'name': _format_user_name(user),
+                'email': user.email,
+                'is_active': user.is_active,
+                'active_tasks': active_task_counts.get(user.id, 0),
+                'absence_status': absence.reason if absence else None,
+            })
+
+        return Response(result)

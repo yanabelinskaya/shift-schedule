@@ -1,0 +1,215 @@
+{% extends 'dashboard/employee.html' %}
+
+{% block content %}
+  <div class="card dashboard-hero fade-up">
+    <div class="hero-header">
+      <div>
+        <h1>{{ page_title }}</h1>
+        <p class="subtle">{{ page_subtitle }}</p>
+      </div>
+    </div>
+    <div class="hero-meta">
+      <div class="meta-chip">Отдел: {{ department_name }}</div>
+      <div class="meta-chip">Активных задач: {{ total_active }}</div>
+    </div>
+  </div>
+
+  <div class="dashboard-grid fade-up">
+
+    {# ── Мои текущие задачи ──────────────────────────────────────── #}
+    <section class="card section-block">
+      <div class="section-header">
+        <div>
+          <h2>Мои текущие задачи</h2>
+          <p class="subtle">Задачи, которые сейчас в работе.</p>
+        </div>
+        <span class="info-chip">{{ in_progress_tasks|length }}</span>
+      </div>
+
+      {% if in_progress_tasks %}
+        <div class="task-list">
+          {% for task in in_progress_tasks %}
+            <article class="task-list-item{% if task.is_overdue %} is-overdue{% endif %}">
+              <div class="task-list-main">
+                <div class="task-card-title">
+                  <span class="priority-dot is-{{ task.priority }}" aria-hidden="true"></span>
+                  <h3>{{ task.title }}</h3>
+                </div>
+                <div class="task-list-meta">
+                  {% if task.sprint_label %}
+                    <span class="subtle">{{ task.sprint_label }}</span>
+                  {% endif %}
+                  <span class="subtle"{% if task.is_overdue %} style="color: #d94b4b;"{% endif %}>{{ task.deadline_label }}</span>
+                  <span class="subtle">{{ task.priority_label }}</span>
+                </div>
+              </div>
+              <div class="task-list-side">
+                <span class="status-pill {{ task.status_tone }}">{{ task.status_label }}</span>
+                <a class="btn btn-ghost btn-inline btn-xs" href="{% url 'employee-task-detail' task.id %}">Открыть</a>
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="task-empty" style="padding: 2rem; text-align: center;">
+          <p class="subtle">Нет задач в работе прямо сейчас.</p>
+          <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'employee-tasks' %}" style="margin-top: 0.75rem;">Все задачи</a>
+        </div>
+      {% endif %}
+    </section>
+
+    {# ── Ближайшие дедлайны ──────────────────────────────────────── #}
+    <section class="card section-block">
+      <div class="section-header">
+        <div>
+          <h2>Ближайшие дедлайны</h2>
+          <p class="subtle">Подтверждённые задачи, срок скоро наступит.</p>
+        </div>
+        <span class="info-chip">{{ upcoming_tasks|length }}</span>
+      </div>
+
+      {% if upcoming_tasks %}
+        <div class="task-list">
+          {% for task in upcoming_tasks %}
+            <article class="task-list-item{% if task.is_overdue %} is-overdue{% endif %}">
+              <div class="task-list-main">
+                <div class="task-card-title">
+                  <span class="priority-dot is-{{ task.priority }}" aria-hidden="true"></span>
+                  <h3>{{ task.title }}</h3>
+                </div>
+                <div class="task-list-meta">
+                  {% if task.sprint_label %}
+                    <span class="subtle">{{ task.sprint_label }}</span>
+                  {% endif %}
+                  <span class="subtle"{% if task.is_overdue %} style="color: #d94b4b;"{% endif %}>
+                    {% if task.is_overdue %}Просрочена — {% endif %}{{ task.deadline_label }}
+                  </span>
+                </div>
+              </div>
+              <div class="task-list-side">
+                <span class="status-pill {{ task.status_tone }}">{{ task.status_label }}</span>
+                <a class="btn btn-ghost btn-inline btn-xs" href="{% url 'employee-task-detail' task.id %}">Открыть</a>
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="task-empty" style="padding: 2rem; text-align: center;">
+          <p class="subtle">Ближайших дедлайнов нет.</p>
+        </div>
+      {% endif %}
+    </section>
+
+  </div>
+
+  <div class="dashboard-grid-bottom fade-up">
+
+    {# ── Уведомления ─────────────────────────────────────────────── #}
+    <section class="card section-block">
+      <div class="section-header">
+        <div>
+          <h2>Уведомления</h2>
+          <p class="subtle">Последние события за 2 недели.</p>
+        </div>
+        <span class="info-chip">{{ notifications|length }}</span>
+      </div>
+
+      {% if notifications %}
+        <div class="task-list">
+          {% for n in notifications %}
+            <article class="task-list-item">
+              <div class="task-list-main">
+                <div class="task-card-title">
+                  {% if n.kind == 'task' %}
+                    <span class="priority-dot is-mid" aria-hidden="true"></span>
+                  {% elif n.kind == 'leave' %}
+                    <span class="priority-dot is-low" aria-hidden="true"></span>
+                  {% else %}
+                    <span class="priority-dot is-high" aria-hidden="true"></span>
+                  {% endif %}
+                  <h3>{{ n.text }}</h3>
+                </div>
+                <div class="task-list-meta">
+                  <span class="subtle">{{ n.date_label }}</span>
+                </div>
+              </div>
+              {% if n.url and n.url != '#' %}
+                <div class="task-list-side">
+                  <a class="btn btn-ghost btn-inline btn-xs" href="{{ n.url }}">Открыть</a>
+                </div>
+              {% endif %}
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="task-empty" style="padding: 2rem; text-align: center;">
+          <p class="subtle">Новых событий нет.</p>
+        </div>
+      {% endif %}
+    </section>
+
+    {# ── Моя загрузка ────────────────────────────────────────────── #}
+    <section class="card section-block">
+      <div class="section-header">
+        <div>
+          <h2>Моя загрузка</h2>
+          <p class="subtle">Текущий уровень занятости.</p>
+        </div>
+      </div>
+
+      <div style="padding: 0.5rem 0 1rem;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+          <span class="status-pill {{ workload_tone }}">{{ workload_label }}</span>
+          <span class="subtle" style="font-size: 0.85rem;">{{ workload_pct }}%</span>
+        </div>
+        <div class="workload-bar-track" style="
+          height: 8px;
+          background: var(--color-border, #e5e7eb);
+          border-radius: 4px;
+          overflow: hidden;
+        ">
+          <div class="workload-bar-fill" style="
+            height: 100%;
+            width: {{ workload_pct }}%;
+            border-radius: 4px;
+            transition: width 0.4s ease;
+            background: {% if workload_tone == 'success' %}var(--color-success, #22c55e){% elif workload_tone == 'warning' %}var(--color-warning, #f59e0b){% else %}var(--color-danger, #ef4444){% endif %};
+          "></div>
+        </div>
+      </div>
+
+      <div class="task-list" style="margin-top: 0.5rem;">
+        <div class="task-list-item" style="padding: 14px 16px;">
+          <div class="task-list-main">
+            <span class="subtle">Задач в работе</span>
+          </div>
+          <div class="task-list-side">
+            <span class="info-chip">{{ in_progress_tasks|length }}</span>
+          </div>
+        </div>
+        <div class="task-list-item" style="padding: 14px 16px;">
+          <div class="task-list-main">
+            <span class="subtle">Подтверждено / Ожидает</span>
+          </div>
+          <div class="task-list-side">
+            <span class="info-chip">{{ upcoming_tasks|length }}</span>
+          </div>
+        </div>
+        <div class="task-list-item" style="padding: 14px 16px;">
+          <div class="task-list-main">
+            <span class="subtle">Всего активных</span>
+          </div>
+          <div class="task-list-side">
+            <span class="info-chip">{{ total_active }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 1rem;">
+        <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'employee-tasks' %}">Все задачи</a>
+        <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'employee-sprint' %}" style="margin-left: 0.5rem;">Спринт</a>
+      </div>
+    </section>
+
+  </div>
+{% endblock %}

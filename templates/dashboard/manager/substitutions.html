@@ -1,0 +1,132 @@
+{% extends 'dashboard/manager.html' %}
+
+{% block content %}
+  <div class="card dashboard-hero fade-up">
+    <div class="hero-header">
+      <div>
+        <h1>{{ page_title }}</h1>
+        <p class="subtle">{{ page_subtitle }}</p>
+      </div>
+    </div>
+  </div>
+
+  {% if not department %}
+    <section class="card section-block fade-up" style="margin-top: 1rem;">
+      <div class="task-empty-hero">
+        <h2>Отдел не назначен</h2>
+        <p class="subtle">Обратитесь к администратору.</p>
+      </div>
+    </section>
+  {% else %}
+    {% if error %}
+      <div class="form-message is-error fade-up" style="margin-top: 1rem;">{{ error }}</div>
+    {% endif %}
+    {% if success %}
+      <div class="form-message is-success fade-up" style="margin-top: 1rem;">{{ success }}</div>
+    {% endif %}
+
+    <div style="display: grid; grid-template-columns: 1fr 380px; gap: 1rem; margin-top: 1rem; align-items: start;">
+
+      <section class="card section-block fade-up">
+        <div class="section-header">
+          <div>
+            <h2>Активные и плановые замещения</h2>
+            <p class="subtle">Список всех назначенных замен в отделе.</p>
+          </div>
+          <span class="info-chip">{{ substitutions|length }}</span>
+        </div>
+
+        {% if substitutions %}
+          <div class="task-list">
+            {% for sub in substitutions %}
+              <article class="task-list-item{% if sub.is_active %} is-mine{% endif %}">
+                <div class="task-list-main">
+                  <div class="task-card-title">
+                    <h3>{{ sub.absent_name }} → {{ sub.substitute_name }}</h3>
+                  </div>
+                  <div class="task-list-meta">
+                    <span class="subtle">{{ sub.start_display }} — {{ sub.end_display }}</span>
+                    {% if sub.note %}<span class="subtle">{{ sub.note }}</span>{% endif %}
+                  </div>
+                </div>
+                <div class="task-list-side">
+                  {% if sub.is_active %}
+                    <span class="status-pill success">Активно</span>
+                  {% else %}
+                    <span class="status-pill neutral">Плановое</span>
+                  {% endif %}
+                  {% if sub.can_delete %}
+                    <form method="post" style="display:inline;" onsubmit="return confirm('Удалить замещение?')">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="delete">
+                      <input type="hidden" name="sub_id" value="{{ sub.id }}">
+                      <button class="btn btn-ghost btn-inline btn-xs" type="submit">Удалить</button>
+                    </form>
+                  {% endif %}
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="task-empty" style="padding: 2rem; text-align: center;">
+            <p class="subtle">Замещений пока нет.</p>
+          </div>
+        {% endif %}
+      </section>
+
+      <section class="card section-block fade-up">
+        <div class="section-header">
+          <div>
+            <h2>Назначить замену</h2>
+            <p class="subtle">Укажите кто отсутствует и кто заменяет.</p>
+          </div>
+        </div>
+
+        <form method="post" class="form-stack">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="create">
+
+          <div class="form-group">
+            <label class="form-label" for="absent_user_id">Отсутствующий сотрудник</label>
+            <select class="control-select" id="absent_user_id" name="absent_user_id" required>
+              <option value="">— выберите —</option>
+              {% for emp in employees %}
+                <option value="{{ emp.id }}">{{ emp.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="substitute_user_id">Замена</label>
+            <select class="control-select" id="substitute_user_id" name="substitute_user_id" required>
+              <option value="">— выберите —</option>
+              {% for emp in employees %}
+                <option value="{{ emp.id }}">{{ emp.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="sub_start_date">Дата начала</label>
+            <input class="control-input" type="date" id="sub_start_date" name="start_date" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="sub_end_date">Дата окончания</label>
+            <input class="control-input" type="date" id="sub_end_date" name="end_date" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="sub_note">Примечание <span class="subtle">(необязательно)</span></label>
+            <input class="control-input" type="text" id="sub_note" name="note" placeholder="Причина, задачи...">
+          </div>
+
+          <div class="form-actions">
+            <button class="btn btn-primary btn-inline" type="submit">Создать замещение</button>
+          </div>
+        </form>
+      </section>
+
+    </div>
+  {% endif %}
+{% endblock %}

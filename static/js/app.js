@@ -4341,44 +4341,23 @@
     }
 
     const updateUrl = root.dataset.availabilityUpdateUrl || "";
-    const defaultStart = root.dataset.defaultStart || "09:00";
-    const defaultEnd = root.dataset.defaultEnd || "18:00";
-    const isLocked = root.dataset.availabilityLocked === "true";
-    const requestUrl = root.dataset.shiftRequestUrl || "";
     const saveButton = root.querySelector("[data-availability-save]");
     const messageEl = root.querySelector("[data-availability-message]");
-    const lastSavedEl = root.querySelector("[data-availability-last-saved]");
     const summaryShifts = root.querySelector("[data-availability-shifts]");
     const summaryHours = root.querySelector("[data-availability-hours]");
-    const requestForms = Array.from(root.querySelectorAll("[data-request-form]"));
-    const rows = Array.from(root.querySelectorAll("[data-availability-row]"));
-
-    const ensureTimeOptions = (select, selectedValue) => {
-      if (!select || select.tagName !== "SELECT" || select.options.length) {
-        return;
-      }
-      for (let hour = 0; hour < 24; hour += 1) {
-        for (const minute of [0, 30]) {
-          const value = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-          const option = document.createElement("option");
-          option.value = value;
-          option.textContent = value;
-          if (selectedValue && selectedValue === value) {
-            option.selected = true;
-          }
-          select.append(option);
-        }
-      }
-    };
-
-    const ensureTimeValue = (input, fallbackValue) => {
-      if (!input || input.tagName !== "INPUT") {
-        return;
-      }
-      if (!input.value) {
-        input.value = fallbackValue;
-      }
-    };
+    const baseRows = Array.from(root.querySelectorAll("[data-base-row]"));
+    const overridesTable = root.querySelector("[data-overrides-table]");
+    const addDateInput = root.querySelector("[data-override-date]");
+    const addTypeSelect = root.querySelector("[data-override-type]");
+    const addStartSelect = root.querySelector("[data-override-start]");
+    const addEndSelect = root.querySelector("[data-override-end]");
+    const addNoteInput = root.querySelector("[data-override-note]");
+    const addOverrideButton = root.querySelector("[data-override-add]");
+    const loadModeSelect = root.querySelector("[data-load-mode]");
+    const loadValueInput = root.querySelector("[data-load-value]");
+    const loadNoteInput = root.querySelector("[data-load-note]");
+    const presetButtons = Array.from(root.querySelectorAll("[data-availability-preset]"));
+    const removedOverrideDates = new Set();
 
     const showMessage = (text, type) => {
       if (!messageEl) {
@@ -4412,19 +4391,50 @@
       return rounded.toFixed(1).replace(".", ",");
     };
 
+    const typeLabels = {};
+    if (addTypeSelect) {
+      Array.from(addTypeSelect.options).forEach((option) => {
+        typeLabels[option.value] = option.textContent;
+      });
+    }
+
+    const refreshSelectControl = (select) => {
+      if (!select || typeof refreshCustomSelect !== "function") {
+        return;
+      }
+      refreshCustomSelect(select.closest("[data-custom-select]"));
+    };
+
+    const updateRowState = (row) => {
+      const modeSelect = row.querySelector("[data-base-mode]");
+      const startSelect = row.querySelector("[data-base-start]");
+      const endSelect = row.querySelector("[data-base-end]");
+      if (!modeSelect || !startSelect || !endSelect) {
+        return;
+      }
+      const isFixed = modeSelect.value === "fixed";
+      startSelect.disabled = !isFixed;
+      endSelect.disabled = !isFixed;
+      refreshSelectControl(startSelect);
+      refreshSelectControl(endSelect);
+    };
+
     const updateSummary = () => {
       let shifts = 0;
       let minutes = 0;
-      rows.forEach((row) => {
-        const toggle = row.querySelector("[data-availability-toggle]");
-        if (!toggle || !toggle.checked) {
+      baseRows.forEach((row) => {
+        const modeSelect = row.querySelector("[data-base-mode]");
+        const startSelect = row.querySelector("[data-base-start]");
+        const endSelect = row.querySelector("[data-base-end]");
+        if (!modeSelect || modeSelect.value === "off") {
           return;
         }
         shifts += 1;
-        const startInput = row.querySelector("[data-availability-start]");
-        const endInput = row.querySelector("[data-availability-end]");
-        const startMinutes = parseMinutes(startInput?.value);
-        const endMinutes = parseMinutes(endInput?.value);
+        if (modeSelect.value !== "fixed") {
+          return;
+        }
+        const startMinutes = parseMinutes(startSelect?.value);
+        const endMinutes = parseMinutes(endSelect?.value);
         if (startMinutes === null || endMinutes === null) {
           return;
         }
@@ -4436,83 +4446,275 @@
         summaryShifts.textContent = String(shifts);
       }
       if (summaryHours) {
-        summaryHours.textContent = `${formatHours(hours)} ч`;
+        summaryHours.textContent = formatHours(hours);
       }
     };
 
-    const updatePriorityState = (row) => {
-      const checked = row.querySelector("[data-availability-priority]:checked");
-      row.querySelectorAll("[data-priority-pill]").forEach((pill) => {
-        pill.classList.toggle("is-active", checked ? pill.contains(checked) : false);
-      });
+    const setBaseRow = (row, mode, start, end) => {
+      const modeSelect = row.querySelector("[data-base-mode]");
+      const startSelect = row.querySelector("[data-base-start]");
+      const endSelect = row.querySelector("[data-base-end]");
+      if (modeSelect) {
+        modeSelect.value = mode;
+        refreshSelectControl(modeSelect);
+      }
+      if (startSelect && start) {
+        startSelect.value = start;
+        refreshSelectControl(startSelect);
+      }
+      if (endSelect && end) {
+        endSelect.value = end;
+        refreshSelectControl(endSelect);
+      }
+      updateRowState(row);
     };
 
-    const syncRowState = (row) => {
-      const toggle = row.querySelector("[data-availability-toggle]");
-      const isAvailable = toggle ? toggle.checked : false;
-      row.classList.toggle("is-off", !isAvailable);
-      row.querySelectorAll("[data-availability-start], [data-availability-end]").forEach((select) => {
-        select.disabled = isLocked || !isAvailable;
-        if (typeof refreshCustomSelect === "function") {
-          refreshCustomSelect(select.closest("[data-custom-select]"));
-        }
-      });
-      row.querySelectorAll("input[type='radio']").forEach((input) => {
-        input.disabled = isLocked || !isAvailable;
-      });
-      if (toggle) {
-        toggle.disabled = isLocked;
-      }
-      updatePriorityState(row);
-    };
-
-    rows.forEach((row) => {
-      const toggle = row.querySelector("[data-availability-toggle]");
-      const dayCell = row.querySelector(".availability-day");
-      if (toggle) {
-        toggle.addEventListener("change", () => {
-          syncRowState(row);
-          updateSummary();
-        });
-      }
-      if (dayCell) {
-        dayCell.addEventListener("click", () => {
-          if (isLocked || !toggle) {
-            return;
+    const applyPreset = (preset) => {
+      baseRows.forEach((row) => {
+        const weekday = Number(row.dataset.weekday);
+        if (preset === "weekdays_fixed") {
+          if (weekday >= 0 && weekday <= 4) {
+            setBaseRow(row, "fixed", "10:00", "19:00");
+          } else {
+            setBaseRow(row, "off");
           }
-          toggle.checked = !toggle.checked;
-          syncRowState(row);
+          return;
+        }
+        if (preset === "triad_flex") {
+          if (weekday === 0 || weekday === 2 || weekday === 4) {
+            setBaseRow(row, "flex");
+          } else {
+            setBaseRow(row, "off");
+          }
+          return;
+        }
+        if (preset === "full_flex") {
+          setBaseRow(row, "flex");
+          return;
+        }
+        setBaseRow(row, "off");
+      });
+      updateSummary();
+      showMessage("Пресет применен. Проверь и сохрани изменения.", "success");
+    };
+
+    const updateOverrideState = () => {
+      if (!addTypeSelect || !addStartSelect || !addEndSelect) {
+        return;
+      }
+      const isPartial = addTypeSelect.value === "partial";
+      addStartSelect.disabled = !isPartial;
+      addEndSelect.disabled = !isPartial;
+      refreshSelectControl(addStartSelect);
+      refreshSelectControl(addEndSelect);
+    };
+
+    const updateLoadModeState = () => {
+      if (!loadModeSelect || !loadValueInput) {
+        return;
+      }
+      const isNone = loadModeSelect.value === "none";
+      loadValueInput.disabled = isNone;
+      if (isNone) {
+        loadValueInput.value = "";
+      }
+    };
+
+    baseRows.forEach((row) => {
+      const modeSelect = row.querySelector("[data-base-mode]");
+      const startSelect = row.querySelector("[data-base-start]");
+      const endSelect = row.querySelector("[data-base-end]");
+      if (modeSelect) {
+        modeSelect.addEventListener("change", () => {
+          updateRowState(row);
           updateSummary();
         });
       }
-      row.querySelectorAll("[data-availability-start], [data-availability-end]").forEach((input) => {
-        input.addEventListener("change", () => updateSummary());
-      });
-      row.querySelectorAll("[data-availability-priority]").forEach((radio) => {
-        radio.addEventListener("change", () => updatePriorityState(row));
-      });
-      syncRowState(row);
+      if (startSelect) {
+        startSelect.addEventListener("change", updateSummary);
+      }
+      if (endSelect) {
+        endSelect.addEventListener("change", updateSummary);
+      }
+      updateRowState(row);
     });
     updateSummary();
+
+    if (addTypeSelect) {
+      addTypeSelect.addEventListener("change", updateOverrideState);
+      updateOverrideState();
+    }
+
+    if (loadModeSelect) {
+      loadModeSelect.addEventListener("change", updateLoadModeState);
+      updateLoadModeState();
+    }
+
+    if (presetButtons.length) {
+      presetButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          const preset = button.dataset.availabilityPreset || "";
+          if (!preset) {
+            return;
+          }
+          applyPreset(preset);
+        });
+      });
+    }
+
+    const buildOverrideRow = (data) => {
+      const row = document.createElement("tr");
+      row.dataset.overrideRow = "";
+      row.dataset.date = data.date;
+      row.dataset.type = data.override_type;
+      row.dataset.start = data.start_time || "";
+      row.dataset.end = data.end_time || "";
+      row.dataset.note = data.note || "";
+      const dateObj = new Date(`${data.date}T00:00:00`);
+      const dateLabel = Number.isNaN(dateObj.getTime())
+        ? data.date
+        : dateObj.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+      const timeLabel = data.start_time && data.end_time ? `${data.start_time}-${data.end_time}` : "—";
+      row.innerHTML = `
+        <td>${dateLabel}</td>
+        <td>${typeLabels[data.override_type] || data.override_type}</td>
+        <td>${timeLabel}</td>
+        <td>${data.note || "—"}</td>
+        <td><button class="btn btn-ghost btn-inline btn-xs" type="button" data-override-remove>Удалить</button></td>
+      `;
+      return row;
+    };
+
+    const removeEmptyRow = () => {
+      if (!overridesTable) {
+        return;
+      }
+      const empty = overridesTable.querySelector("[data-overrides-empty]");
+      if (empty) {
+        empty.remove();
+      }
+    };
+
+    const ensureEmptyRow = () => {
+      if (!overridesTable) {
+        return;
+      }
+      const rows = overridesTable.querySelectorAll("[data-override-row]");
+      if (rows.length) {
+        return;
+      }
+      const empty = document.createElement("tr");
+      empty.dataset.overridesEmpty = "";
+      empty.innerHTML = '<td colspan="5" class="subtle">Исключений пока нет.</td>';
+      overridesTable.appendChild(empty);
+    };
+
+    if (overridesTable) {
+      overridesTable.addEventListener("click", (event) => {
+        const removeBtn = event.target.closest("[data-override-remove]");
+        if (!removeBtn) {
+          return;
+        }
+        const row = removeBtn.closest("[data-override-row]");
+        if (!row) {
+          return;
+        }
+        if (row.dataset.date) {
+          removedOverrideDates.add(row.dataset.date);
+        }
+        row.remove();
+        ensureEmptyRow();
+      });
+    }
+
+    if (addOverrideButton && overridesTable) {
+      addOverrideButton.addEventListener("click", () => {
+        const dateValue = addDateInput ? addDateInput.value : "";
+        const typeValue = addTypeSelect ? addTypeSelect.value : "";
+        const startValue = addStartSelect ? addStartSelect.value : "";
+        const endValue = addEndSelect ? addEndSelect.value : "";
+        const noteValue = addNoteInput ? addNoteInput.value.trim() : "";
+        if (!dateValue || !typeValue) {
+          showMessage("Укажите дату и тип исключения.", "error");
+          return;
+        }
+        if (typeValue === "partial" && (!startValue || !endValue || startValue >= endValue)) {
+          showMessage("Для частичной доступности укажите корректный диапазон времени.", "error");
+          return;
+        }
+
+        const existing = overridesTable.querySelector(`[data-override-row][data-date='${dateValue}']`);
+        if (existing) {
+          existing.remove();
+        }
+        const row = buildOverrideRow({
+          date: dateValue,
+          override_type: typeValue,
+          start_time: typeValue === "partial" ? startValue : "",
+          end_time: typeValue === "partial" ? endValue : "",
+          note: noteValue,
+        });
+        removeEmptyRow();
+        overridesTable.appendChild(row);
+        removedOverrideDates.delete(dateValue);
+        if (addNoteInput) {
+          addNoteInput.value = "";
+        }
+        showMessage("Исключение добавлено в черновик. Сохрани изменения.", "success");
+      });
+    }
 
     if (saveButton && updateUrl) {
       saveButton.addEventListener("click", async () => {
         showMessage("", null);
         saveButton.disabled = true;
-        const payload = {
-          days: rows.map((row) => {
-            const toggle = row.querySelector("[data-availability-toggle]");
-            const startInput = row.querySelector("[data-availability-start]");
-            const endInput = row.querySelector("[data-availability-end]");
-            const priorityInput = row.querySelector("[data-availability-priority]:checked");
-            return {
+
+        const base = baseRows.map((row) => {
+          const modeSelect = row.querySelector("[data-base-mode]");
+          const startSelect = row.querySelector("[data-base-start]");
+          const endSelect = row.querySelector("[data-base-end]");
+          const mode = modeSelect ? modeSelect.value : "off";
+          return {
+            weekday: Number(row.dataset.weekday),
+            mode,
+            start_time: mode === "fixed" ? (startSelect ? startSelect.value : "") : null,
+            end_time: mode === "fixed" ? (endSelect ? endSelect.value : "") : null,
+          };
+        });
+
+        const overrides = overridesTable
+          ? Array.from(overridesTable.querySelectorAll("[data-override-row]")).map((row) => ({
               date: row.dataset.date,
-              is_available: toggle ? !!toggle.checked : false,
-              start_time: startInput?.value || defaultStart,
-              end_time: endInput?.value || defaultEnd,
-              priority: priorityInput?.value || "mid",
-            };
-          }),
+              override_type: row.dataset.type,
+              start_time: row.dataset.type === "partial" ? row.dataset.start || null : null,
+              end_time: row.dataset.type === "partial" ? row.dataset.end || null : null,
+              note: row.dataset.note || "",
+            }))
+          : [];
+
+        const now = new Date();
+        const day = now.getDay();
+        const diffToMonday = day === 0 ? -6 : 1 - day;
+        const monday = new Date(now);
+        monday.setDate(now.getDate() + diffToMonday);
+        const weekStart = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, "0")}-${String(
+          monday.getDate(),
+        ).padStart(2, "0")}`;
+
+        const loadMode = loadModeSelect ? loadModeSelect.value : "none";
+        const loadValueRaw = loadValueInput ? loadValueInput.value : "";
+        const loadPlan = {
+          week_start: weekStart,
+          target_mode: loadMode,
+          target_value: loadMode === "none" ? null : Number(loadValueRaw || 0),
+          note: loadNoteInput ? loadNoteInput.value.trim() : "",
+        };
+
+        const payload = {
+          base,
+          overrides,
+          clear_override_dates: Array.from(removedOverrideDates),
+          load_plan: loadPlan,
         };
         try {
           const response = await fetch(updateUrl, {
@@ -4529,124 +4731,16 @@
             showMessage(data.detail || "Не удалось сохранить доступность.", "error");
             return;
           }
-          if (lastSavedEl) {
-            let label = data.updated_label || "";
-            if (!label && data.updated_at) {
-              const parsedDate = new Date(data.updated_at);
-              if (!Number.isNaN(parsedDate.getTime())) {
-                label = parsedDate.toLocaleString("ru-RU");
-              }
-            }
-            if (!label) {
-              label = "Сохранено";
-            }
-            lastSavedEl.textContent = `Последнее сохранение: ${label}`;
-            lastSavedEl.classList.add("success");
-            lastSavedEl.classList.remove("warning");
-          }
-          rows.forEach((row) => {
-            const toggle = row.querySelector("[data-availability-toggle]");
-            const startInput = row.querySelector("[data-availability-start]");
-            const endInput = row.querySelector("[data-availability-end]");
-            const priorityInput = row.querySelector("[data-availability-priority]:checked");
-            row.dataset.initialAvailable = toggle?.checked ? "true" : "false";
-            row.dataset.initialStart = startInput?.value || defaultStart;
-            row.dataset.initialEnd = endInput?.value || defaultEnd;
-            row.dataset.initialPriority = priorityInput?.value || "mid";
-          });
-          showMessage("Доступность сохранена.", "success");
+          removedOverrideDates.clear();
+          updateSummary();
+          const conflicts = Number(data.conflicted_tasks || 0);
+          const suffix = conflicts > 0 ? ` Обнаружено конфликтов по задачам: ${conflicts}.` : "";
+          showMessage(`Доступность сохранена.${suffix}`, "success");
         } catch (error) {
           showMessage("Ошибка сети. Попробуйте позже.", "error");
         } finally {
           saveButton.disabled = false;
         }
-      });
-    }
-
-    if (requestUrl && requestForms.length) {
-      requestForms.forEach((form) => {
-        const startField = form.querySelector("[data-request-start]");
-        const endField = form.querySelector("[data-request-end]");
-        ensureTimeOptions(startField, defaultStart);
-        ensureTimeOptions(endField, defaultEnd);
-        ensureTimeValue(startField, defaultStart);
-        ensureTimeValue(endField, defaultEnd);
-        if (startField && startField.tagName === "SELECT") {
-          refreshCustomSelect(startField.closest("[data-custom-select]"));
-        }
-        if (endField && endField.tagName === "SELECT") {
-          refreshCustomSelect(endField.closest("[data-custom-select]"));
-        }
-      });
-
-      requestForms.forEach((form) => {
-        form.addEventListener("submit", async (event) => {
-          event.preventDefault();
-          const requestType = form.dataset.requestType || "";
-          const dateSelect = form.querySelector("[data-request-date]");
-          const startSelect = form.querySelector("[data-request-start]");
-          const endSelect = form.querySelector("[data-request-end]");
-          const reasonInput = form.querySelector("[data-request-reason]");
-          const message = form.querySelector("[data-request-message]");
-          const submitButton = form.querySelector("button[type='submit']");
-
-          const showFormMessage = (text, type) => {
-            if (!message) {
-              return;
-            }
-            message.textContent = text || "";
-            message.classList.remove("is-error", "is-success");
-            if (!text) {
-              message.hidden = true;
-              return;
-            }
-            message.hidden = false;
-            message.classList.add(type === "error" ? "is-error" : "is-success");
-          };
-
-          showFormMessage("", null);
-          const reason = reasonInput ? reasonInput.value.trim() : "";
-          if (!reason) {
-            showFormMessage("Укажите причину.", "error");
-            return;
-          }
-
-          if (submitButton) {
-            submitButton.disabled = true;
-          }
-          try {
-            const response = await fetch(requestUrl, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "X-CSRFToken": getCookie("csrftoken"),
-              },
-              credentials: "same-origin",
-              body: JSON.stringify({
-                request_type: requestType,
-                date: dateSelect ? dateSelect.value : "",
-                start_time: startSelect ? startSelect.value : "",
-                end_time: endSelect ? endSelect.value : "",
-                reason,
-              }),
-            });
-            const data = await response.json().catch(() => ({}));
-            if (!response.ok) {
-              showFormMessage(data.detail || "Не удалось отправить запрос.", "error");
-              return;
-            }
-            if (reasonInput) {
-              reasonInput.value = "";
-            }
-            showFormMessage("Запрос отправлен менеджеру.", "success");
-          } catch (error) {
-            showFormMessage("Ошибка сети. Попробуйте позже.", "error");
-          } finally {
-            if (submitButton) {
-              submitButton.disabled = false;
-            }
-          }
-        });
       });
     }
   };
@@ -4666,19 +4760,31 @@
     let draggingCard = null;
 
     const statusLabels = {
-      todo: "Назначена",
+      awaiting_confirmation: "Новая",
+      confirmed: "Взята",
       in_progress: "В работе",
-      done: "Выполнено",
+      on_review: "На проверке",
+      completed: "Выполнена",
+      returned: "Возвращена на доработку",
+      conflict: "Конфликт",
     };
     const statusTones = {
-      todo: "muted",
+      awaiting_confirmation: "muted",
+      confirmed: "info",
       in_progress: "warning",
-      done: "success",
+      on_review: "info",
+      completed: "success",
+      returned: "danger",
+      conflict: "danger",
     };
-    const statusOrder = {
-      todo: 0,
-      in_progress: 1,
-      done: 2,
+    const allowedTransitions = {
+      awaiting_confirmation: new Set([]),
+      confirmed: new Set(["in_progress"]),
+      in_progress: new Set(["on_review"]),
+      on_review: new Set([]),
+      returned: new Set(["in_progress"]),
+      completed: new Set(),
+      conflict: new Set(["confirmed", "in_progress"]),
     };
 
     const buildUrl = (base, taskId) => {
@@ -4773,9 +4879,11 @@
     const updateSummary = () => {
       const counts = {
         total: 0,
-        todo: 0,
+        awaiting_confirmation: 0,
+        confirmed: 0,
+        conflict: 0,
         in_progress: 0,
-        done: 0,
+        completed: 0,
         overdue: 0,
       };
       columns.forEach((column) => {
@@ -4811,16 +4919,14 @@
         pill.classList.add(tone);
       }
       card.dataset.taskStatus = status;
-      card.classList.toggle("is-done", status === "done");
-      if (status === "done") {
+      card.classList.toggle("is-done", status === "completed");
+      if (status === "completed") {
         card.classList.remove("is-overdue");
       }
       const actionButtons = card.querySelectorAll("[data-task-action]");
       actionButtons.forEach((button) => {
         const target = button.dataset.targetStatus;
-        const targetRank = statusOrder[target] ?? -1;
-        const currentRank = statusOrder[status] ?? 0;
-        const isAllowed = targetRank > currentRank;
+        const isAllowed = !!(allowedTransitions[status] && allowedTransitions[status].has(target));
         button.disabled = !isAllowed;
         button.hidden = !isAllowed;
       });
@@ -4856,10 +4962,10 @@
         return;
       }
       if (current) {
-        const currentRank = statusOrder[current.dataset.taskStatus] ?? 0;
-        const targetRank = statusOrder[status] ?? 0;
-        if (targetRank < currentRank) {
-          showMessage("Нельзя вернуть задачу назад.", "error");
+        const currentStatus = current.dataset.taskStatus || "";
+        const allowed = allowedTransitions[currentStatus];
+        if (!allowed || !allowed.has(status)) {
+          showMessage("Недопустимый переход статуса.", "error");
           return;
         }
       }
@@ -4909,10 +5015,10 @@
           return;
         }
         const status = column.dataset.status || "";
-        const currentRank = statusOrder[draggingCard.dataset.taskStatus] ?? 0;
-        const targetRank = statusOrder[status] ?? 0;
-        if (targetRank < currentRank) {
-          showMessage("Нельзя вернуть задачу назад.", "error");
+        const currentStatus = draggingCard.dataset.taskStatus || "";
+        const allowed = allowedTransitions[currentStatus];
+        if (!allowed || !allowed.has(status)) {
+          showMessage("Недопустимый переход статуса.", "error");
           return;
         }
         updateStatus(draggingCard.dataset.taskId, status);
@@ -4921,7 +5027,7 @@
 
     const cards = Array.from(root.querySelectorAll("[data-task-card]"));
     cards.forEach((card) => {
-      setCardStatus(card, card.dataset.taskStatus || "todo", {});
+      setCardStatus(card, card.dataset.taskStatus || "awaiting_confirmation", {});
       card.addEventListener("dragstart", (event) => {
         draggingCard = card;
         card.classList.add("is-dragging");
@@ -4956,6 +5062,23 @@
     });
   };
 
+  const initEmployeeTasksV2 = () => {
+    const root = document.querySelector("[data-employee-tasks-v2]");
+    if (!root) return;
+
+    const searchForm = root.querySelector(".tasks-search-form");
+    if (searchForm) {
+      let searchTimer = null;
+      const searchInput = searchForm.querySelector(".tasks-search-input");
+      if (searchInput) {
+        searchInput.addEventListener("input", () => {
+          clearTimeout(searchTimer);
+          searchTimer = setTimeout(() => searchForm.submit(), 400);
+        });
+      }
+    }
+  };
+
   const initEmployeeTaskDetail = () => {
     const root = document.querySelector("[data-employee-task-detail]");
     if (!root) {
@@ -4967,21 +5090,42 @@
     }
 
     const submitUrl = root.dataset.taskSubmitUrl || "";
+    const updateUrl = root.dataset.taskUpdateUrl || "";
+    const takeUrl = root.dataset.taskTakeUrl || "";
+    const dropUrl = root.dataset.taskDropUrl || "";
     const statusPill = root.querySelector("[data-task-detail-status-pill]");
     const submitForm = root.querySelector("[data-task-detail-submit]");
     const submitMessage = root.querySelector("[data-task-detail-message]");
     const filesInput = root.querySelector("[data-task-detail-files]");
     const filesLabel = root.querySelector("[data-task-detail-files-label]");
     const submissionsList = root.querySelector("[data-task-detail-submissions]");
+    const actionsEl = root.querySelector("[data-task-detail-actions]");
     const statusLabels = {
-      todo: "Назначена",
+      awaiting_confirmation: "Новая",
+      confirmed: "Взята",
       in_progress: "В работе",
-      done: "Выполнено",
+      on_review: "На проверке",
+      completed: "Выполнена",
+      returned: "Возвращена на доработку",
+      conflict: "Конфликт",
     };
     const statusTones = {
-      todo: "muted",
+      awaiting_confirmation: "muted",
+      confirmed: "info",
       in_progress: "warning",
-      done: "success",
+      on_review: "info",
+      completed: "success",
+      returned: "danger",
+      conflict: "danger",
+    };
+
+    const showActionMessage = (text, type) => {
+      if (!submitMessage) return;
+      submitMessage.textContent = text || "";
+      submitMessage.classList.remove("is-error", "is-success");
+      if (!text) { submitMessage.hidden = true; return; }
+      submitMessage.hidden = false;
+      submitMessage.classList.add(type === "error" ? "is-error" : "is-success");
     };
 
     const updateStatusUI = (status, data = {}) => {
@@ -4989,9 +5133,58 @@
         return;
       }
       statusPill.textContent = data.status_label || statusLabels[status] || status;
-      statusPill.classList.remove("muted", "warning", "success", "danger");
+      statusPill.classList.remove("muted", "warning", "success", "danger", "info");
       statusPill.classList.add(data.status_tone || statusTones[status] || "muted");
+      root.dataset.taskStatus = status;
     };
+
+    if (actionsEl) {
+      actionsEl.addEventListener("click", async (event) => {
+        const btn = event.target.closest("[data-task-detail-action]");
+        if (!btn || btn.disabled) return;
+        const action = btn.dataset.taskDetailAction;
+        const targetStatus = btn.dataset.targetStatus || "";
+        btn.disabled = true;
+        showActionMessage("", null);
+        try {
+          let url = "";
+          let body = null;
+          if (action === "take") {
+            url = takeUrl;
+          } else if (action === "drop") {
+            url = dropUrl;
+          } else if (action === "status" && targetStatus) {
+            url = updateUrl;
+            body = JSON.stringify({ status: targetStatus });
+          }
+          if (!url) { btn.disabled = false; return; }
+          const response = await fetch(url, {
+            method: "POST",
+            headers: {
+              "X-CSRFToken": getCookie("csrftoken"),
+              ...(body ? { "Content-Type": "application/json" } : {}),
+            },
+            credentials: "same-origin",
+            body: body || null,
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            showActionMessage(data.detail || "Не удалось выполнить действие.", "error");
+            btn.disabled = false;
+            return;
+          }
+          const newStatus = data.status || targetStatus;
+          updateStatusUI(newStatus, data);
+          btn.closest("section")?.querySelectorAll("[data-task-detail-action]").forEach((b) => {
+            b.closest("section")?.remove();
+          });
+          showActionMessage("Статус обновлён.", "success");
+        } catch {
+          showActionMessage("Ошибка сети. Попробуйте позже.", "error");
+          btn.disabled = false;
+        }
+      });
+    }
 
     if (filesInput && filesLabel) {
       filesInput.addEventListener("change", () => {
@@ -5120,6 +5313,7 @@
   initAdminReports();
   initEmployeeAvailability();
   initEmployeeTasks();
+  initEmployeeTasksV2();
   initEmployeeTaskDetail();
   const initDepartmentDetail = () => {
     const detailRoot = document.querySelector("[data-department-detail]");

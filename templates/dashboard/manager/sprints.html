@@ -1,0 +1,60 @@
+{% extends 'dashboard/manager.html' %}
+
+{% block content %}
+  <div class="card dashboard-hero fade-up">
+    <div class="hero-header">
+      <div>
+        <h1>{{ page_title }}</h1>
+        <p class="subtle">{{ page_subtitle }}</p>
+      </div>
+      <div class="hero-actions">
+        <a class="btn btn-primary btn-inline" href="{% url 'manager-sprint-create' %}">Новый спринт</a>
+      </div>
+    </div>
+  </div>
+
+  {% if not department %}
+    <section class="card section-block fade-up" style="margin-top: 1rem;">
+      <div class="task-empty-hero">
+        <h2>Отдел не назначен</h2>
+        <p class="subtle">Обратитесь к администратору.</p>
+      </div>
+    </section>
+  {% elif not sprints %}
+    <section class="card section-block fade-up" style="margin-top: 1rem;">
+      <div class="task-empty-hero">
+        <div class="task-empty-badge">Спринтов нет</div>
+        <h2>Создайте первый спринт</h2>
+        <p class="subtle">Добавьте спринт, задайте даты и распределите задачи по нему.</p>
+        <div class="task-empty-points">
+          <div class="task-empty-point">Создайте спринт с датами.</div>
+          <div class="task-empty-point">Добавьте задачи в спринт.</div>
+          <div class="task-empty-point">Запустите спринт — сотрудники увидят задачи и смогут их взять.</div>
+        </div>
+      </div>
+    </section>
+  {% else %}
+    <section class="card section-block fade-up" style="margin-top: 1rem;">
+      <div class="task-list">
+        {% for sprint in sprints %}
+          <article class="task-list-item">
+            <div class="task-list-main">
+              <div class="task-card-title">
+                <h3>{{ sprint.title }}</h3>
+              </div>
+              <div class="task-list-meta">
+                <span class="subtle">{{ sprint.period }}</span>
+                <span class="info-chip">Задач: {{ sprint.task_count }}</span>
+                {% if sprint.task_count %}<span class="info-chip">Выполнено: {{ sprint.done_count }}</span>{% endif %}
+              </div>
+            </div>
+            <div class="task-list-side">
+              <span class="status-pill {{ sprint.status_tone }}">{{ sprint.status_label }}</span>
+              <a class="btn btn-ghost btn-inline btn-xs" href="{% url 'manager-sprint-detail' sprint.id %}">Открыть</a>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+{% endblock %}

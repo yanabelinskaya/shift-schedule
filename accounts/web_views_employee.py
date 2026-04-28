@@ -1,25 +1,24 @@
-import calendar
 from datetime import date, timedelta
 from pathlib import Path
 
-from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db.models import Prefetch, Q
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.http import require_http_methods
 
 from .models import (
     DepartmentTask,
-    EmployeeAbsence,
-    EmployeeAvailability,
     EmployeeProfile,
-    GlobalSettings,
+    LeaveRequest,
+    Sprint,
+    Substitution,
     TaskSubmission,
     UserRole,
 )
+from .object_access import employee_can_access_task
 from .web_views_shared import (
     _ensure_role,
     _get_employee_next_slot_context,
@@ -28,496 +27,201 @@ from .web_views_shared import (
 )
 
 @login_required
+@require_http_methods(["GET"])
 def employee_dashboard(request):
-    return employee_schedule(request)
-
-
-@login_required
-def employee_schedule(request):
     _ensure_role(request, 'employee')
+    user = request.user
+    profile = EmployeeProfile.objects.select_related('department').filter(user=user).first()
+    department = profile.department if profile else None
+
     today = timezone.localdate()
-    next_slot_context = _get_employee_next_slot_context(request.user)
-    view = (request.GET.get("view") or "week").strip().lower()
-    if view not in {"week", "month"}:
-        view = "week"
-    only_work = (request.GET.get("only_work") or "").strip() in {"1", "true", "yes"}
-
-    week_param = (request.GET.get("week") or "").strip().lower()
-    offset_param = (request.GET.get("offset") or "").strip()
-    week_offset = 0
-    if offset_param:
-        try:
-            week_offset = int(offset_param)
-        except (TypeError, ValueError):
-            week_offset = 0
-    elif week_param == "next":
-        week_offset = 1
-    elif week_param == "current":
-        week_offset = 0
-
-    month_offset_param = (request.GET.get("month_offset") or "").strip()
-    month_offset = 0
-    if month_offset_param:
-        try:
-            month_offset = int(month_offset_param)
-        except (TypeError, ValueError):
-            month_offset = 0
+    now = timezone.localtime()
 
     month_names = [
-        "января",
-        "февраля",
-        "марта",
-        "апреля",
-        "мая",
-        "июня",
-        "июля",
-        "августа",
-        "сентября",
-        "октября",
-        "ноября",
-        "декабря",
+        "января", "февраля", "марта", "апреля", "мая", "июня",
+        "июля", "августа", "сентября", "октября", "ноября", "декабря",
     ]
-    month_titles = [
-        "Январь",
-        "Февраль",
-        "Март",
-        "Апрель",
-        "Май",
-        "Июнь",
-        "Июль",
-        "Август",
-        "Сентябрь",
-        "Октябрь",
-        "Ноябрь",
-        "Декабрь",
-    ]
-    weekday_names = [
-        "Понедельник",
-        "Вторник",
-        "Среда",
-        "Четверг",
-        "Пятница",
-        "Суббота",
-        "Воскресенье",
-    ]
-    weekday_short = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+    priority_labels = {"high": "Высокий", "mid": "Средний", "low": "Низкий"}
+    status_labels = {
+        "awaiting_confirmation": "Ожидает",
+        "confirmed": "Подтверждено",
+        "conflict": "Конфликт",
+        "in_progress": "В процессе",
+        "completed": "Выполнено",
+    }
+    status_tones = {
+        "awaiting_confirmation": "muted",
+        "confirmed": "success",
+        "conflict": "danger",
+        "in_progress": "warning",
+        "completed": "success",
+    }
 
-    week_start = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
-    week_end = week_start + timedelta(days=6)
-    if week_start.month == week_end.month:
-        week_period_label = f"{week_start.day}–{week_end.day} {month_names[week_end.month - 1]}"
-    else:
-        week_period_label = (
-            f"{week_start.day} {month_names[week_start.month - 1]} — "
-            f"{week_end.day} {month_names[week_end.month - 1]}"
-        )
+    def fmt_date(d):
+        return f"{d.day} {month_names[d.month - 1]}"
 
-    week_dates = [week_start + timedelta(days=offset) for offset in range(7)]
-    week_entries = (
-        EmployeeAvailability.objects.select_related("approved_by")
-        .filter(user=request.user, date__range=(week_start, week_end))
-    )
-    week_entries_map = {entry.date: entry for entry in week_entries}
-
-    def format_full_name(user):
-        if not user:
-            return "—"
-        full_name = " ".join(part for part in [user.last_name, user.first_name] if part).strip()
-        return full_name or user.username
-
-    department_manager = None
-    profile = getattr(request.user, "profile", None)
-    if profile and profile.department and profile.department.manager:
-        department_manager = profile.department.manager
-    if profile and profile.department_id:
-        week_has_approved = EmployeeAvailability.objects.filter(
-            user__profile__department_id=profile.department_id,
-            date__range=(week_start, week_end),
-            is_approved=True,
-        ).exists()
-    else:
-        week_has_approved = week_entries.filter(is_approved=True).exists()
-
-    week_absences = EmployeeAbsence.objects.filter(
-        user=request.user,
-        start_date__lte=week_end,
-        end_date__gte=week_start,
-    )
-    absence_by_date = {}
-    for absence in week_absences:
-        start_date = max(absence.start_date, week_start)
-        end_date = min(absence.end_date, week_end)
-        current = start_date
-        while current <= end_date:
-            if absence.absence_type == "sick" or current not in absence_by_date:
-                absence_by_date[current] = absence.absence_type
-            current += timedelta(days=1)
-
-    week_rows = []
-    for day_date in week_dates:
-        absence_type = absence_by_date.get(day_date)
-        entry = week_entries_map.get(day_date)
-        if absence_type:
-            absence_label = "Больничный" if absence_type == "sick" else "Отпуск"
-            status_label = absence_label
-            status_tone = "danger" if absence_type == "sick" else "warning"
-            manager_label = format_full_name(department_manager)
-            has_slot = False
-            time_label = absence_label
-        elif entry and entry.is_available:
-            time_label = f"{entry.start_time:%H:%M}-{entry.end_time:%H:%M}"
-            if entry.is_approved or week_has_approved:
-                status_label = "Подтверждена"
-                status_tone = "success"
-            else:
-                status_label = "На согласовании"
-                status_tone = "warning"
-            manager_label = format_full_name(entry.approved_by or department_manager)
-            has_slot = True
+    def deadline_label(task):
+        if task.date == today:
+            base = "Сегодня"
+        elif task.date == today + timedelta(days=1):
+            base = "Завтра"
         else:
-            time_label = "Выходной"
-            status_label = "Нет слота"
-            status_tone = ""
-            manager_label = format_full_name(department_manager)
-            has_slot = False
+            base = fmt_date(task.date)
+        if task.due_time:
+            base += f", {task.due_time:%H:%M}"
+        return base
 
-        week_rows.append(
-            {
-                "date": day_date.isoformat(),
-                "day_label": f"{weekday_names[day_date.weekday()]}, {day_date.day} {month_names[day_date.month - 1]}",
-                "time_label": time_label,
-                "status_label": status_label,
-                "status_tone": status_tone,
-                "tasks_label": "—",
-                "manager_label": manager_label,
-                "has_slot": has_slot,
-            }
-        )
-
-    week_rows_display = week_rows
-    if only_work:
-        week_rows_display = [row for row in week_rows if row["has_slot"]]
-
-    base_month_index = today.year * 12 + (today.month - 1) + month_offset
-    month_year = base_month_index // 12
-    month_month = base_month_index % 12 + 1
-    month_start = date(month_year, month_month, 1)
-    next_month_index = base_month_index + 1
-    next_month_year = next_month_index // 12
-    next_month_month = next_month_index % 12 + 1
-    month_end = date(next_month_year, next_month_month, 1) - timedelta(days=1)
-    month_label = f"{month_titles[month_month - 1]} {month_year}"
-
-    month_entries = EmployeeAvailability.objects.filter(
-        user=request.user,
-        date__range=(month_start, month_end),
-        is_available=True,
-    )
-    month_entries_map = {entry.date: entry for entry in month_entries}
-
-    month_absences = EmployeeAbsence.objects.filter(
-        user=request.user,
-        start_date__lte=month_end,
-        end_date__gte=month_start,
-    )
-    absence_by_date = {}
-    for absence in month_absences:
-        start_date = max(absence.start_date, month_start)
-        end_date = min(absence.end_date, month_end)
-        current = start_date
-        while current <= end_date:
-            if absence.absence_type == "sick" or current not in absence_by_date:
-                absence_by_date[current] = absence.absence_type
-            current += timedelta(days=1)
-
-    month_weeks = []
-    calendar_weeks = calendar.Calendar(firstweekday=calendar.MONDAY).monthdatescalendar(
-        month_year,
-        month_month,
-    )
-    for week in calendar_weeks:
-        week_cells = []
-        for day_date in week:
-            is_current = day_date.month == month_month
-            css_class = "is-empty" if not is_current else ""
-            date_label = "-" if not is_current else str(day_date.day)
-            shift_label = ""
-            if is_current:
-                absence_type = absence_by_date.get(day_date)
-                if absence_type == "sick":
-                    css_class = "is-sick"
-                    shift_label = "Больничный"
-                elif absence_type == "vacation":
-                    css_class = "is-off"
-                    shift_label = "Отпуск"
-                elif day_date in month_entries_map:
-                    entry = month_entries_map[day_date]
-                    css_class = "is-work"
-                    shift_label = f"{entry.start_time:%H:%M}-{entry.end_time:%H:%M}"
-            week_cells.append(
-                {
-                    "date": day_date.isoformat(),
-                    "date_label": date_label,
-                    "css_class": css_class,
-                    "shift_label": shift_label,
-                }
-            )
-        month_weeks.append(week_cells)
-
-    if view == "month":
-        period_label = month_label
-        prev_url = f"?view=month&month_offset={month_offset - 1}"
-        next_url = f"?view=month&month_offset={month_offset + 1}"
-    else:
-        period_label = week_period_label
-        work_param = "&only_work=1" if only_work else ""
-        prev_url = f"?view=week&offset={week_offset - 1}{work_param}"
-        next_url = f"?view=week&offset={week_offset + 1}{work_param}"
-
-    return render(
-        request,
-        'dashboard/employee/schedule.html',
-        {
-            'active_tab': 'schedule',
-            'page_title': 'Мой график',
-            'page_subtitle': 'Неделя, месяц и детали слотов',
-            'view': view,
-            'period_label': period_label,
-            'week_period_label': week_period_label,
-            'month_label': month_label,
-            'week_offset': week_offset,
-            'month_offset': month_offset,
-            'only_work': only_work,
-            'prev_url': prev_url,
-            'next_url': next_url,
-            'week_rows': week_rows_display,
-            'month_weeks': month_weeks,
-            'weekday_short': weekday_short,
-            **next_slot_context,
-        },
-    )
-
-
-@login_required
-@ensure_csrf_cookie
-def employee_availability(request):
-    _ensure_role(request, 'employee')
-    today = timezone.localdate()
-    next_slot_context = _get_employee_next_slot_context(request.user)
-    week_param = (request.GET.get("week") or "").strip().lower()
-    offset_param = (request.GET.get("offset") or "").strip()
-    week_offset = 0
-    if offset_param:
-        try:
-            week_offset = int(offset_param)
-        except (TypeError, ValueError):
-            week_offset = 0
-    elif week_param == "next":
-        week_offset = 1
-    elif week_param == "current":
-        week_offset = 0
-
-    week_start = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
-    week_end = week_start + timedelta(days=6)
-    is_current_week = week_offset == 0
-    is_next_week = week_offset == 1
-    current_week_start = today - timedelta(days=today.weekday())
-    current_week_friday = current_week_start + timedelta(days=4)
-    next_week_edit_closed = is_next_week and today > current_week_friday
-
-    settings_obj = GlobalSettings.objects.first()
-    if not settings_obj:
-        settings_obj = GlobalSettings.objects.create()
-
-    default_start = settings_obj.work_start
-    default_end = settings_obj.work_end
-
-    def is_default_available():
-        return False
-
-    month_names = [
-        "января",
-        "февраля",
-        "марта",
-        "апреля",
-        "мая",
-        "июня",
-        "июля",
-        "августа",
-        "сентября",
-        "октября",
-        "ноября",
-        "декабря",
-    ]
-    weekday_names = [
-        "Понедельник",
-        "Вторник",
-        "Среда",
-        "Четверг",
-        "Пятница",
-        "Суббота",
-        "Воскресенье",
-    ]
-
-    def format_day_label(day_date):
-        return f"{weekday_names[day_date.weekday()]}, {day_date.day} {month_names[day_date.month - 1]}"
-
-    def format_date_short(day_date):
-        return f"{day_date.day} {month_names[day_date.month - 1]}"
-
-    if week_start.month == week_end.month:
-        period_label = f"{week_start.day}–{week_end.day} {month_names[week_end.month - 1]}"
-    else:
-        period_label = (
-            f"{week_start.day} {month_names[week_start.month - 1]} — "
-            f"{week_end.day} {month_names[week_end.month - 1]}"
-        )
-
-    base_entries = list(
-        EmployeeAvailability.objects.filter(
-            user=request.user,
-            date__range=(week_start, week_end),
-        )
-    )
-    approved_entries = [entry for entry in base_entries if entry.is_approved]
-    if is_current_week:
-        entries = approved_entries
-    else:
-        entries = base_entries
-    entries_map = {entry.date: entry for entry in entries}
-
-    def to_minutes(value):
-        return value.hour * 60 + value.minute if value else 0
-
-    days = []
-    for offset in range(7):
-        day_date = week_start + timedelta(days=offset)
-        entry = entries_map.get(day_date)
-        if entry:
-            is_available = entry.is_available
-            start_time = entry.start_time
-            end_time = entry.end_time
-            priority = entry.priority
-        else:
-            is_available = is_default_available()
-            start_time = default_start
-            end_time = default_end
-            priority = "mid"
-
-        start_value = start_time.strftime("%H:%M") if start_time else ""
-        end_value = end_time.strftime("%H:%M") if end_time else ""
-
-        start_minutes = to_minutes(start_time)
-        end_minutes = to_minutes(end_time)
-        duration_minutes = max(0, end_minutes - start_minutes)
-
-        days.append(
-            {
-                "date": day_date.isoformat(),
-                "weekday": day_date.weekday(),
-                "label": format_day_label(day_date),
-                "date_label": format_date_short(day_date),
-                "weekday_label": weekday_names[day_date.weekday()],
-                "is_today": day_date == today,
-                "is_available": is_available,
-                "start_time": start_value,
-                "end_time": end_value,
-                "start_minutes": start_minutes,
-                "end_minutes": end_minutes,
-                "duration_minutes": duration_minutes,
-                "priority": priority,
-            }
-        )
-
-    last_saved = None
-    if base_entries:
-        last_saved_entry = max(base_entries, key=lambda item: item.updated_at)
-        last_saved = timezone.localtime(last_saved_entry.updated_at)
-
-    def format_datetime(dt):
-        if not dt:
-            return "Еще не сохранено"
-        return f"{dt.day} {month_names[dt.month - 1]} {dt.year}, {dt:%H:%M}"
-
-    time_options = []
-    for hour in range(24):
-        for minute in (0, 30):
-            time_options.append(f"{hour:02d}:{minute:02d}")
-
-    priority_options = [
-        {"value": "high", "label": "Очень хочу", "tone": "high"},
-        {"value": "mid", "label": "Ок", "tone": "mid"},
-        {"value": "low", "label": "Не хочу", "tone": "low"},
-    ]
-
-    week_is_approved = EmployeeAvailability.objects.filter(
-        user=request.user,
-        date__range=(week_start, week_end),
-        is_approved=True,
-    ).exists()
-    is_locked = is_current_week or week_is_approved or next_week_edit_closed
-    show_requests = is_current_week or week_is_approved or next_week_edit_closed
-    edit_hint = ""
-    if is_next_week:
-        edit_hint = (
-            "Редактирование следующей недели доступно только до пятницы."
-            if next_week_edit_closed
-            else "Редактирование доступно до пятницы."
-        )
-
-    weekly_hours_norm = settings_obj.weekly_hours_norm
-
-    total_shifts = sum(1 for day in days if day["is_available"])
-    total_minutes = sum(day["duration_minutes"] for day in days if day["is_available"])
-    total_hours = total_minutes / 60 if total_minutes else 0
-    total_hours_display = f"{total_hours:.1f}".replace(".", ",")
-    return render(
-        request,
-        'dashboard/employee/availability.html',
-        {
-            'active_tab': 'availability',
-            'page_title': 'Доступность',
-            'page_subtitle': 'Укажите, когда и как хотите работать',
-            'days': days,
-            'period_label': period_label,
-            'week_offset': week_offset,
-            'is_locked': is_locked,
-            'show_requests': show_requests,
-            'edit_hint': edit_hint,
-            'default_start': default_start.strftime("%H:%M"),
-            'default_end': default_end.strftime("%H:%M"),
-            'time_options': time_options,
-            'priority_options': priority_options,
-            'last_saved_label': format_datetime(last_saved),
-            'has_saved': bool(last_saved),
-            'week_is_approved': week_is_approved,
-            'summary_shifts': total_shifts,
-            'summary_hours': total_hours_display,
-            'weekly_hours_norm': weekly_hours_norm,
-            **next_slot_context,
-        },
-    )
-
-
-def _employee_can_access_task(user, task):
-    profile = EmployeeProfile.objects.filter(user=user).only("department_id").first()
-    if not profile or profile.department_id != task.department_id:
-        return False
-    if task.task_type == "employee":
-        return task.assigned_to_id == user.id
-    if task.task_type == "department":
-        return True
-    if task.task_type == "slot":
-        if not task.start_time or not task.end_time:
+    def is_task_overdue(task):
+        if task.status == DepartmentTask.TaskStatus.COMPLETED:
             return False
-        return EmployeeAvailability.objects.filter(
+        if task.date < today:
+            return True
+        if task.date == today and task.due_time and task.due_time < now.time():
+            return True
+        return False
+
+    active_statuses = [
+        DepartmentTask.TaskStatus.AWAITING_CONFIRMATION,
+        DepartmentTask.TaskStatus.CONFIRMED,
+        DepartmentTask.TaskStatus.IN_PROGRESS,
+        DepartmentTask.TaskStatus.CONFLICT,
+    ]
+
+    in_progress_tasks = []
+    upcoming_tasks = []
+
+    if department:
+        my_tasks = (
+            DepartmentTask.objects.filter(
+                department=department,
+                status__in=active_statuses,
+            )
+            .filter(
+                Q(task_type='employee', assigned_to=user) |
+                Q(task_type='department', taken_by=user)
+            )
+            .distinct()
+            .select_related('sprint')
+            .order_by('date', 'due_time')
+        )
+
+        for task in my_tasks:
+            overdue = is_task_overdue(task)
+            tone = 'danger' if overdue else status_tones.get(task.status, 'muted')
+            sprint_label = None
+            if task.sprint:
+                sprint_label = f"Спринт: {fmt_date(task.sprint.start_date)} — {fmt_date(task.sprint.end_date)}"
+            item = {
+                'id': task.id,
+                'title': task.title,
+                'priority': task.priority,
+                'priority_label': priority_labels.get(task.priority, task.priority),
+                'status': task.status,
+                'status_label': status_labels.get(task.status, task.status),
+                'status_tone': tone,
+                'deadline_label': deadline_label(task),
+                'sprint_label': sprint_label,
+                'is_overdue': overdue,
+            }
+            if task.status == DepartmentTask.TaskStatus.IN_PROGRESS:
+                in_progress_tasks.append(item)
+            else:
+                upcoming_tasks.append(item)
+
+    # Workload
+    total_active = len(in_progress_tasks) + len(upcoming_tasks)
+    if total_active == 0:
+        workload_label, workload_tone, workload_pct = "Свободен", "success", 0
+    elif total_active <= 2:
+        workload_label, workload_tone, workload_pct = "Нормальная загрузка", "success", 40
+    elif total_active <= 5:
+        workload_label, workload_tone, workload_pct = "Высокая загрузка", "warning", 70
+    else:
+        workload_label, workload_tone, workload_pct = "Перегружен", "danger", 100
+
+    # Notifications derived from recent events
+    notifications = []
+    since = timezone.now() - timedelta(days=14)
+
+    if department:
+        # New tasks assigned in the last 14 days
+        new_tasks = (
+            DepartmentTask.objects.filter(
+                department=department,
+                created_at__gte=since,
+            )
+            .filter(
+                Q(task_type='employee', assigned_to=user) |
+                Q(task_type='department')
+            )
+            .order_by('-created_at')[:6]
+        )
+        for task in new_tasks:
+            notifications.append({
+                'kind': 'task',
+                'text': f'Новая задача: {task.title}',
+                'url': reverse('employee-task-detail', args=[task.id]),
+                'date_label': fmt_date(task.date),
+                'ts': task.created_at,
+            })
+
+        # Leave requests reviewed
+        reviewed = LeaveRequest.objects.filter(
             user=user,
-            date=task.date,
-            start_time=task.start_time,
-            end_time=task.end_time,
-            is_available=True,
-        ).exists()
-    return False
+            reviewed_at__gte=since,
+            status__in=['approved', 'rejected'],
+        ).order_by('-reviewed_at')[:4]
+        for lr in reviewed:
+            verb = 'одобрена' if lr.status == 'approved' else 'отклонена'
+            type_label = 'Отпуск' if lr.request_type == 'vacation' else 'Больничный'
+            notifications.append({
+                'kind': 'leave',
+                'text': f'Заявка «{type_label}» {verb}',
+                'url': reverse('employee-requests'),
+                'date_label': fmt_date(lr.start_date),
+                'ts': lr.reviewed_at,
+            })
+
+        # Substitutions where user is the substitute
+        subs = (
+            Substitution.objects.filter(
+                substitute_user=user,
+                end_date__gte=today,
+            )
+            .select_related('absent_user')
+            .order_by('start_date')[:3]
+        )
+        for sub in subs:
+            absent_name = sub.absent_user.get_full_name().strip() or sub.absent_user.username
+            notifications.append({
+                'kind': 'sub',
+                'text': f'Вы назначены заменой для {absent_name}',
+                'url': '#',
+                'date_label': f'{fmt_date(sub.start_date)} — {fmt_date(sub.end_date)}',
+                'ts': sub.created_at,
+            })
+
+    notifications.sort(key=lambda n: n['ts'], reverse=True)
+
+    return render(request, 'dashboard/employee/dashboard.html', {
+        'active_tab': 'dashboard',
+        'page_title': 'Дашборд',
+        'page_subtitle': f'Добро пожаловать, {user.get_full_name().strip() or user.username}',
+        'department_name': department.name if department else '—',
+        'in_progress_tasks': in_progress_tasks,
+        'upcoming_tasks': upcoming_tasks[:8],
+        'notifications': notifications[:10],
+        'total_active': total_active,
+        'workload_label': workload_label,
+        'workload_tone': workload_tone,
+        'workload_pct': workload_pct,
+    })
+
+
+def employee_schedule(request):  # kept for legacy URL compatibility
+    return redirect('employee-tasks')
+def employee_availability(request):  # kept for legacy URL compatibility
+    return redirect('employee-tasks')
 
 
 @login_required
@@ -535,244 +239,160 @@ def employee_tasks(request):
     if department and department.manager:
         manager_label = department.manager.get_full_name().strip() or department.manager.username
 
-    view_mode = (request.GET.get("view") or "active").strip().lower()
-    if view_mode not in {"active", "archive"}:
-        view_mode = "active"
+    task_filter = (request.GET.get("filter") or "all").strip().lower()
+    valid_filters = {"all", "new", "in_progress", "on_review", "done", "overdue"}
+    if task_filter not in valid_filters:
+        task_filter = "all"
+    search_query = (request.GET.get("q") or "").strip()
 
     tasks_queryset = DepartmentTask.objects.none()
-    availability_entries = []
     if department:
         base_tasks = DepartmentTask.objects.filter(department=department)
         assigned_tasks = base_tasks.filter(task_type="employee", assigned_to=user)
         department_tasks = base_tasks.filter(task_type="department")
-        availability_entries = list(
-            EmployeeAvailability.objects.filter(user=user, is_available=True)
-        )
-        slot_tasks = DepartmentTask.objects.none()
-        if availability_entries:
-            slot_filters = Q()
-            for entry in availability_entries:
-                slot_filters |= Q(
-                    date=entry.date,
-                    start_time=entry.start_time,
-                    end_time=entry.end_time,
-                )
-            if slot_filters:
-                slot_tasks = base_tasks.filter(task_type="slot").filter(slot_filters)
-        tasks_queryset = (assigned_tasks | slot_tasks | department_tasks).distinct()
+        tasks_queryset = (assigned_tasks | department_tasks).distinct()
 
     submissions_qs = TaskSubmission.objects.select_related("author").order_by("-created_at")
-    tasks_queryset = tasks_queryset.select_related("created_by").prefetch_related(
+    tasks_queryset = tasks_queryset.select_related("created_by", "sprint").prefetch_related(
         Prefetch("submissions", queryset=submissions_qs)
     )
+    if search_query:
+        tasks_queryset = tasks_queryset.filter(title__icontains=search_query)
 
     now = timezone.localtime()
     month_names = [
-        "января",
-        "февраля",
-        "марта",
-        "апреля",
-        "мая",
-        "июня",
-        "июля",
-        "августа",
-        "сентября",
-        "октября",
-        "ноября",
-        "декабря",
+        "января", "февраля", "марта", "апреля", "мая", "июня",
+        "июля", "августа", "сентября", "октября", "ноября", "декабря",
     ]
     priority_rank = {"high": 3, "mid": 2, "low": 1}
     priority_labels = {"high": "Высокий", "mid": "Средний", "low": "Низкий"}
     status_labels = {
-        "todo": "Назначена",
+        "awaiting_confirmation": "Новая",
+        "confirmed": "Взята",
         "in_progress": "В работе",
-        "done": "Выполнено",
+        "on_review": "На проверке",
+        "completed": "Выполнена",
+        "returned": "Возвращена на доработку",
+        "conflict": "Конфликт",
     }
     status_tones = {
-        "todo": "muted",
+        "awaiting_confirmation": "muted",
+        "confirmed": "info",
         "in_progress": "warning",
-        "done": "success",
+        "on_review": "info",
+        "completed": "success",
+        "returned": "danger",
+        "conflict": "danger",
     }
 
-    def format_submission_date(value):
-        if not value:
-            return ""
-        local = timezone.localtime(value)
-        return f"{local.day} {month_names[local.month - 1]}, {local:%H:%M}"
-
     tasks_all = list(tasks_queryset)
-    if view_mode == "archive":
-        tasks_filtered = [task for task in tasks_all if task.status == "done"]
-    else:
-        tasks_filtered = [task for task in tasks_all if task.status != "done"]
 
-    tasks_total = len(tasks_filtered)
-    tasks_done = 0
-    tasks_progress = 0
-    tasks_todo = 0
-    tasks_overdue = 0
+    tasks_total_all = len(tasks_all)
+    tasks_new = sum(1 for t in tasks_all if t.status == "awaiting_confirmation")
+    tasks_progress = sum(1 for t in tasks_all if t.status in ("confirmed", "in_progress", "returned"))
+    tasks_on_review = sum(1 for t in tasks_all if t.status == "on_review")
+    tasks_done = sum(1 for t in tasks_all if t.status == "completed")
+
+    def _is_overdue(task):
+        if task.status in ("completed",):
+            return False
+        due_time = getattr(task, 'due_time', None) or getattr(task, 'end_time', None)
+        if task.date < now.date():
+            return True
+        if due_time and task.date == now.date() and due_time < now.time():
+            return True
+        return False
+
+    tasks_overdue = sum(1 for t in tasks_all if _is_overdue(t))
+
+    def _apply_filter(tasks):
+        if task_filter == "new":
+            return [t for t in tasks if t.status == "awaiting_confirmation"]
+        if task_filter == "in_progress":
+            return [t for t in tasks if t.status in ("confirmed", "in_progress", "returned")]
+        if task_filter == "on_review":
+            return [t for t in tasks if t.status == "on_review"]
+        if task_filter == "done":
+            return [t for t in tasks if t.status == "completed"]
+        if task_filter == "overdue":
+            return [t for t in tasks if _is_overdue(t)]
+        return tasks
+
+    tasks_filtered = _apply_filter(tasks_all)
+
+    task_cards = []
     for task in tasks_filtered:
-        if task.status == "done":
-            tasks_done += 1
-        elif task.status == "in_progress":
-            tasks_progress += 1
-        else:
-            tasks_todo += 1
-        if task.status != "done":
-            due_time = task.due_time or task.end_time
-            if task.date < now.date():
-                tasks_overdue += 1
-            elif due_time and task.date == now.date() and due_time < now.time():
-                tasks_overdue += 1
-
-    tasks_by_status = {"todo": [], "in_progress": [], "done": []}
-    for task in tasks_filtered:
-        slot_label = "—"
-        if task.start_time and task.end_time:
-            slot_label = f"{task.start_time:%H:%M}-{task.end_time:%H:%M}"
-
-        due_label = "Срок не задан"
         if task.due_time:
-            due_label = f"Срок: {task.date.day} {month_names[task.date.month - 1]}, {task.due_time:%H:%M}"
-        elif task.end_time:
-            due_label = f"Срок: {task.date.day} {month_names[task.date.month - 1]}, {task.end_time:%H:%M}"
+            due_label = f"{task.date.day} {month_names[task.date.month - 1]}, {task.due_time:%H:%M}"
         else:
-            due_label = f"Дата: {task.date.day} {month_names[task.date.month - 1]}"
+            due_label = f"{task.date.day} {month_names[task.date.month - 1]}"
 
-        is_overdue = False
-        if task.status != "done":
-            due_time = task.due_time or task.end_time
-            if task.date < now.date():
-                is_overdue = True
-            elif due_time and task.date == now.date() and due_time < now.time():
-                is_overdue = True
-
+        is_overdue = _is_overdue(task)
         status_tone = status_tones.get(task.status, "muted")
-        if is_overdue:
+        if is_overdue and task.status != "completed":
             status_tone = "danger"
-
-        created_by_label = manager_label
-        if task.created_by:
-            created_by_label = task.created_by.get_full_name().strip() or task.created_by.username
 
         submissions = list(task.submissions.all())
-        needs_attention = False
-        if task.status == "in_progress" and submissions:
-            latest_author = submissions[0].author
-            has_employee_submission = any(
-                submission.author and submission.author.role == UserRole.EMPLOYEE
-                for submission in submissions
-            )
-            if (
-                latest_author
-                and latest_author.role == UserRole.MANAGER
-                and has_employee_submission
-            ):
-                needs_attention = True
-        submissions_payload = []
-        for submission in submissions[:3]:
-            file_url = submission.attachment.url if submission.attachment else ""
-            file_name = Path(submission.attachment.name).name if submission.attachment else ""
-            submissions_payload.append(
-                {
-                    "id": submission.id,
-                    "comment": submission.comment,
-                    "file_url": file_url,
-                    "file_name": file_name,
-                    "created_label": format_submission_date(submission.created_at),
-                }
-            )
-        extra_submissions = max(0, len(submissions) - len(submissions_payload))
+        files_count = sum(1 for s in submissions if s.attachment)
+        comments_count = len(submissions)
 
-        task_type_label = "Персональная"
-        if task.task_type == "slot":
-            task_type_label = "Слот"
-        elif task.task_type == "department":
-            task_type_label = "Общая"
+        sprint_label = ""
+        if task.sprint_id:
+            sprint_label = task.sprint.title if task.sprint else ""
 
-        status_label = status_labels.get(task.status, "Назначена")
-        if needs_attention:
-            status_label = "Нужна доработка"
-            status_tone = "danger"
+        description_short = task.description[:120].rstrip() if task.description else ""
+        if task.description and len(task.description) > 120:
+            description_short += "…"
 
-        payload = {
+        task_cards.append({
             "id": task.id,
             "title": task.title,
-            "description": task.description,
+            "description_short": description_short,
             "priority": task.priority,
             "priority_label": priority_labels.get(task.priority, "Средний"),
             "status": task.status,
-            "status_label": status_label,
+            "status_label": status_labels.get(task.status, task.status),
             "status_tone": status_tone,
-            "task_type": task.task_type,
-            "task_type_label": task_type_label,
-            "slot_label": slot_label,
             "due_label": due_label,
             "is_overdue": is_overdue,
-            "needs_attention": needs_attention,
-            "created_by_label": created_by_label,
-            "department_label": department_name,
-            "submissions": submissions_payload,
-            "extra_submissions": extra_submissions,
-            "can_submit": task.status != "done",
-        }
-        tasks_by_status[task.status].append(payload)
+            "sprint_label": sprint_label,
+            "files_count": files_count,
+            "comments_count": comments_count,
+        })
 
-    def sort_key(item):
-        rank = priority_rank.get(item["priority"], 0)
-        return (-rank, item["title"])
+    priority_rank_key = {"high": 0, "mid": 1, "low": 2}
+    status_order = {
+        "returned": 0, "on_review": 1, "in_progress": 2,
+        "confirmed": 3, "awaiting_confirmation": 4, "completed": 5, "conflict": 6,
+    }
+    task_cards.sort(key=lambda c: (
+        status_order.get(c["status"], 99),
+        priority_rank_key.get(c["priority"], 1),
+        c["title"],
+    ))
 
-    for status in tasks_by_status:
-        tasks_by_status[status].sort(key=sort_key)
-
-    if view_mode == "archive":
-        columns = [
-            {
-                "id": "done",
-                "label": "Выполнено",
-                "hint": "Сданные задачи и отчеты.",
-                "tasks": tasks_by_status["done"],
-            }
-        ]
-    else:
-        columns = [
-            {
-                "id": "todo",
-                "label": "Назначены",
-                "hint": "Новые задачи и ожидание старта.",
-                "tasks": tasks_by_status["todo"],
-            },
-            {
-                "id": "in_progress",
-                "label": "В работе",
-                "hint": "Задачи в выполнении.",
-                "tasks": tasks_by_status["in_progress"],
-            },
-        ]
-
-    task_list = [
-        *tasks_by_status["todo"],
-        *tasks_by_status["in_progress"],
-        *tasks_by_status["done"],
-    ]
+    filter_counts = {
+        "all": tasks_total_all,
+        "new": tasks_new,
+        "in_progress": tasks_progress,
+        "on_review": tasks_on_review,
+        "done": tasks_done,
+        "overdue": tasks_overdue,
+    }
 
     return render(
         request,
         'dashboard/employee/tasks.html',
         {
             'active_tab': 'tasks',
-            'page_title': 'Задачи',
-            'page_subtitle': 'Контроль поручений и история выполнения',
-            'task_view': view_mode,
+            'page_title': 'Мои задачи',
+            'page_subtitle': 'Задачи, назначенные вам или взятые самостоятельно',
+            'task_filter': task_filter,
+            'search_query': search_query,
             'department_name': department_name,
             'manager_label': manager_label,
-            'tasks_total': tasks_total,
-            'tasks_done': tasks_done,
-            'tasks_progress': tasks_progress,
-            'tasks_todo': tasks_todo,
-            'tasks_overdue': tasks_overdue,
-            'task_columns': columns,
-            'task_list': task_list,
+            'task_cards': task_cards,
+            'filter_counts': filter_counts,
             **_get_employee_next_slot_context(request.user),
         },
     )
@@ -783,7 +403,7 @@ def employee_task_detail(request, task_id):
     _ensure_role(request, 'employee')
     user = request.user
     task = get_object_or_404(DepartmentTask, id=task_id)
-    if not _employee_can_access_task(user, task):
+    if not employee_can_access_task(user, task):
         raise PermissionDenied
 
     profile = (
@@ -815,35 +435,36 @@ def employee_task_detail(request, task_id):
     ]
     priority_labels = {"high": "Высокий", "mid": "Средний", "low": "Низкий"}
     status_labels = {
-        "todo": "Назначена",
+        "awaiting_confirmation": "Новая",
+        "confirmed": "Взята",
         "in_progress": "В работе",
-        "done": "Выполнено",
+        "on_review": "На проверке",
+        "completed": "Выполнена",
+        "returned": "Возвращена на доработку",
+        "conflict": "Конфликт",
     }
     status_tones = {
-        "todo": "muted",
+        "awaiting_confirmation": "muted",
+        "confirmed": "info",
         "in_progress": "warning",
-        "done": "success",
+        "on_review": "info",
+        "completed": "success",
+        "returned": "danger",
+        "conflict": "danger",
     }
-
-    slot_label = "—"
-    if task.start_time and task.end_time:
-        slot_label = f"{task.start_time:%H:%M}-{task.end_time:%H:%M}"
 
     due_label = "Срок не задан"
     if task.due_time:
         due_label = f"{task.date.day} {month_names[task.date.month - 1]}, {task.due_time:%H:%M}"
-    elif task.end_time:
-        due_label = f"{task.date.day} {month_names[task.date.month - 1]}, {task.end_time:%H:%M}"
     else:
         due_label = f"{task.date.day} {month_names[task.date.month - 1]}"
 
     is_overdue = False
     now = timezone.localtime()
-    if task.status != "done":
-        due_time = task.due_time or task.end_time
+    if task.status != "completed":
         if task.date < now.date():
             is_overdue = True
-        elif due_time and task.date == now.date() and due_time < now.time():
+        elif task.due_time and task.date == now.date() and task.due_time < now.time():
             is_overdue = True
 
     status_tone = status_tones.get(task.status, "muted")
@@ -851,9 +472,7 @@ def employee_task_detail(request, task_id):
         status_tone = "danger"
 
     task_type_label = "Персональная"
-    if task.task_type == "slot":
-        task_type_label = "Слот"
-    elif task.task_type == "department":
+    if task.task_type == "department":
         task_type_label = "Общая"
 
     submissions = (
@@ -878,38 +497,33 @@ def employee_task_detail(request, task_id):
             }
         )
 
-    needs_attention = False
-    if task.status == "in_progress" and submissions:
-        latest_author = submissions[0].author
-        has_employee_submission = any(
-            submission.author and submission.author.role == UserRole.EMPLOYEE
-            for submission in submissions
-        )
-        if (
-            latest_author
-            and latest_author.role == UserRole.MANAGER
-            and has_employee_submission
-        ):
-            needs_attention = True
+    task_status_label = status_labels.get(task.status, task.status)
 
-    task_status_label = status_labels.get(task.status, "Назначена")
-    if needs_attention:
-        task_status_label = "Нужна доработка"
-        status_tone = "danger"
+    can_add_comment = task.status not in ("completed",)
+    can_take = task.status == "awaiting_confirmation" and not task.taken_by_id
+    can_drop = task.status in ("awaiting_confirmation", "confirmed") and task.taken_by_id == user.id
+    can_start = task.status == "confirmed"
+    can_send_review = task.status == "in_progress"
+    can_resume = task.status == "returned"
 
-    can_submit = task.status != "done" or task.task_type == "department"
+    sprint_label = ""
+    sprint_dates = ""
+    if task.sprint_id:
+        sprint = task.sprint if hasattr(task, '_sprint_cache') else None
+        if not sprint:
+            try:
+                from .models import Sprint as SprintModel
+                sprint = SprintModel.objects.get(id=task.sprint_id)
+            except Exception:
+                sprint = None
+        if sprint:
+            sprint_label = sprint.title
+            sprint_dates = (
+                f"{sprint.start_date.day} {month_names[sprint.start_date.month - 1]} — "
+                f"{sprint.end_date.day} {month_names[sprint.end_date.month - 1]}"
+            )
 
-    back_view = (request.GET.get("view") or "").strip()
-    layout = (request.GET.get("layout") or "").strip()
-    back_url = reverse("employee-tasks")
-    query_parts = []
-    if back_view in {"active", "archive"}:
-        query_parts.append(f"view={back_view}")
-    if layout in {"board", "list"}:
-        query_parts.append(f"layout={layout}")
-    if query_parts:
-        back_url = f"{back_url}?{'&'.join(query_parts)}"
-    back_url = _resolve_back_url(request, back_url)
+    back_url = _resolve_back_url(request, reverse("employee-tasks"))
 
     return render(
         request,
@@ -924,11 +538,17 @@ def employee_task_detail(request, task_id):
             "task_status_tone": status_tone,
             "task_priority_label": priority_labels.get(task.priority, "Средний"),
             "task_type_label": task_type_label,
-            "task_slot_label": slot_label,
             "manager_label": manager_label,
             "department_label": department_label,
+            "sprint_label": sprint_label,
+            "sprint_dates": sprint_dates,
             "submissions": submissions_payload,
-            "can_submit": can_submit,
+            "can_add_comment": can_add_comment,
+            "can_take": can_take,
+            "can_drop": can_drop,
+            "can_start": can_start,
+            "can_send_review": can_send_review,
+            "can_resume": can_resume,
             "back_url": back_url,
             **_get_employee_next_slot_context(request.user),
         },
@@ -936,22 +556,525 @@ def employee_task_detail(request, task_id):
 
 
 @login_required
-def employee_payroll(request):
-    return _render_employee_page(
+@require_http_methods(["GET", "POST"])
+def employee_sprint(request):
+    _ensure_role(request, 'employee')
+    user = request.user
+    profile = EmployeeProfile.objects.select_related('department').filter(user=user).first()
+    department = profile.department if profile else None
+
+    current_sprint = None
+    tasks = []
+    available_tasks = []
+    my_tasks = []
+    in_progress_tasks = []
+    completed_tasks = []
+    tasks_done = 0
+    progress_pct = 0
+    sprint_goal = ''
+    month_names = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря']
+    chat_error = request.session.pop('employee_sprint_chat_error', '')
+
+    if department:
+        current_sprint = (
+            Sprint.objects.filter(department=department, status='active')
+            .order_by('start_date')
+            .first()
+        )
+
+        if current_sprint:
+            if request.method == 'POST':
+                task_id = request.POST.get('task_id')
+                action = request.POST.get('action')
+                if task_id and action in ('take', 'drop', 'comment'):
+                    try:
+                        task = DepartmentTask.objects.get(id=task_id, sprint=current_sprint)
+                        if action == 'take' and task.taken_by is None and task.status != DepartmentTask.TaskStatus.COMPLETED:
+                            task.taken_by = user
+                            if task.status == DepartmentTask.TaskStatus.AWAITING_CONFIRMATION:
+                                task.status = DepartmentTask.TaskStatus.CONFIRMED
+                            task.save(update_fields=['taken_by', 'status'])
+                        elif action == 'drop' and task.taken_by_id == user.id and task.status not in (
+                            DepartmentTask.TaskStatus.COMPLETED,
+                            DepartmentTask.TaskStatus.IN_PROGRESS,
+                        ):
+                            task.taken_by = None
+                            task.status = DepartmentTask.TaskStatus.AWAITING_CONFIRMATION
+                            task.save(update_fields=['taken_by', 'status'])
+                        elif action == 'comment':
+                            comment = request.POST.get('comment', '').strip()
+                            attachments = request.FILES.getlist('attachments')
+                            if not comment and not attachments:
+                                request.session['employee_sprint_chat_error'] = 'Добавьте сообщение или файл.'
+                            elif len(attachments) > 5:
+                                request.session['employee_sprint_chat_error'] = 'Можно прикрепить не больше 5 файлов за раз.'
+                            else:
+                                max_attachment_size = 10 * 1024 * 1024
+                                allowed_suffixes = {
+                                    '.pdf', '.jpg', '.jpeg', '.png', '.txt', '.doc', '.docx', '.xls', '.xlsx',
+                                }
+                                invalid_attachment = next(
+                                    (
+                                        attachment for attachment in attachments
+                                        if Path(attachment.name).suffix.lower() not in allowed_suffixes
+                                        or attachment.size > max_attachment_size
+                                    ),
+                                    None,
+                                )
+                                if invalid_attachment:
+                                    request.session['employee_sprint_chat_error'] = 'Файлы должны быть PDF, JPG, PNG, TXT, DOC, DOCX, XLS или XLSX до 10 МБ.'
+                                elif attachments:
+                                    for index, attachment in enumerate(attachments):
+                                        TaskSubmission.objects.create(
+                                            task=task,
+                                            author=user,
+                                            comment=comment if index == 0 else '',
+                                            attachment=attachment,
+                                        )
+                                else:
+                                    TaskSubmission.objects.create(
+                                        task=task,
+                                        author=user,
+                                        comment=comment,
+                                    )
+                    except DepartmentTask.DoesNotExist:
+                        pass
+                return redirect('employee-sprint')
+
+            status_labels = {
+                'awaiting_confirmation': 'Ожидает',
+                'confirmed': 'Подтверждена',
+                'conflict': 'Конфликт',
+                'in_progress': 'В работе',
+                'completed': 'Завершена',
+            }
+            status_tones = {
+                'awaiting_confirmation': 'muted',
+                'confirmed': 'success',
+                'conflict': 'danger',
+                'in_progress': 'warning',
+                'completed': 'success',
+            }
+            priority_labels = {'high': 'Высокий', 'mid': 'Средний', 'low': 'Низкий'}
+            priority_order = {'high': 0, 'mid': 1, 'low': 2}
+            status_progress = {
+                DepartmentTask.TaskStatus.AWAITING_CONFIRMATION: 0,
+                DepartmentTask.TaskStatus.CONFIRMED: 35,
+                DepartmentTask.TaskStatus.CONFLICT: 25,
+                DepartmentTask.TaskStatus.IN_PROGRESS: 70,
+                DepartmentTask.TaskStatus.COMPLETED: 100,
+            }
+
+            tasks_qs = (
+                DepartmentTask.objects.filter(sprint=current_sprint)
+                .select_related('taken_by', 'assigned_to')
+                .prefetch_related(
+                    Prefetch(
+                        'submissions',
+                        queryset=TaskSubmission.objects.select_related('author').order_by('-created_at'),
+                    )
+                )
+            )
+            for task in sorted(tasks_qs, key=lambda t: (priority_order.get(t.priority, 9), t.title)):
+                taken_by_name = ''
+                if task.taken_by:
+                    taken_by_name = task.taken_by.get_full_name().strip() or task.taken_by.username
+                due_label = ''
+                if task.date:
+                    due_label = task.date.strftime('%d.%m.%Y')
+                    if task.due_time:
+                        due_label += f' {task.due_time.strftime("%H:%M")}'
+                is_mine = task.taken_by_id == user.id or task.assigned_to_id == user.id
+                now = timezone.localtime()
+                is_overdue = False
+                if task.status != DepartmentTask.TaskStatus.COMPLETED:
+                    if task.date < now.date():
+                        is_overdue = True
+                    elif task.date == now.date() and task.due_time and task.due_time < now.time():
+                        is_overdue = True
+                latest_submission = None
+                task_submissions = list(task.submissions.all())
+                submissions_payload = []
+                for submission in task_submissions[:4]:
+                    submission_author = '—'
+                    if submission.author:
+                        submission_author = submission.author.get_full_name().strip() or submission.author.username
+                    submission_created = timezone.localtime(submission.created_at)
+                    submissions_payload.append({
+                        'author': submission_author,
+                        'comment': submission.comment,
+                        'created_label': f'{submission_created.day} {month_names[submission_created.month - 1]}, {submission_created:%H:%M}',
+                        'file_url': submission.attachment.url if submission.attachment else '',
+                        'file_name': Path(submission.attachment.name).name if submission.attachment else '',
+                    })
+                if task_submissions:
+                    latest = task_submissions[0]
+                    latest_author = latest.author.get_full_name().strip() or latest.author.username if latest.author else '—'
+                    latest_created = timezone.localtime(latest.created_at)
+                    latest_submission = {
+                        'author': latest_author,
+                        'comment': latest.comment or 'Прикреплен файл',
+                        'created_label': f'{latest_created.day} {month_names[latest_created.month - 1]}, {latest_created:%H:%M}',
+                        'has_file': bool(latest.attachment),
+                    }
+                tasks.append({
+                    'id': task.id,
+                    'title': task.title,
+                    'description': task.description or '',
+                    'priority': task.priority,
+                    'priority_label': priority_labels.get(task.priority, task.priority),
+                    'status': task.status,
+                    'status_label': status_labels.get(task.status, task.status),
+                    'status_tone': status_tones.get(task.status, ''),
+                    'taken_by_id': task.taken_by_id,
+                    'taken_by_name': taken_by_name,
+                    'is_mine': is_mine,
+                    'can_take': task.taken_by is None and task.status != DepartmentTask.TaskStatus.COMPLETED,
+                    'can_drop': (
+                        task.taken_by_id == user.id
+                        and task.status not in (
+                            DepartmentTask.TaskStatus.COMPLETED,
+                            DepartmentTask.TaskStatus.IN_PROGRESS,
+                        )
+                    ),
+                    'due_label': due_label,
+                    'is_overdue': is_overdue,
+                    'progress': status_progress.get(task.status, 0),
+                    'latest_submission': latest_submission,
+                    'submissions': submissions_payload,
+                    'submissions_count': len(task_submissions),
+                })
+
+            tasks_done = sum(1 for t in tasks if t['status'] == DepartmentTask.TaskStatus.COMPLETED)
+            progress_pct = round((tasks_done / len(tasks)) * 100) if tasks else 0
+            available_tasks = [
+                t for t in tasks
+                if t['can_take']
+            ]
+            my_tasks = [
+                t for t in tasks
+                if t['is_mine'] and t['status'] not in (
+                    DepartmentTask.TaskStatus.IN_PROGRESS,
+                    DepartmentTask.TaskStatus.COMPLETED,
+                )
+            ]
+            in_progress_tasks = [
+                t for t in tasks
+                if t['status'] == DepartmentTask.TaskStatus.IN_PROGRESS
+            ]
+            completed_tasks = [
+                t for t in tasks
+                if t['status'] == DepartmentTask.TaskStatus.COMPLETED
+            ]
+            sprint_goal = current_sprint.goal or 'Выполнить задачи, запланированные менеджером на текущий рабочий период.'
+
+    sprint_period = ''
+    if current_sprint:
+        s, e = current_sprint.start_date, current_sprint.end_date
+        if s.month == e.month:
+            sprint_period = f'{s.day}–{e.day} {month_names[e.month - 1]} {e.year}'
+        else:
+            sprint_period = f'{s.day} {month_names[s.month - 1]} — {e.day} {month_names[e.month - 1]} {e.year}'
+
+    subtitle = sprint_period if current_sprint else 'Нет активного спринта'
+
+    return render(
         request,
-        'dashboard/employee/payroll.html',
-        'payroll',
-        'Отчеты',
-        'Часы и загрузка',
+        'dashboard/employee/sprint.html',
+        {
+            'active_tab': 'sprint',
+            'page_title': current_sprint.title if current_sprint else 'Спринт',
+            'page_subtitle': subtitle,
+            'current_sprint': current_sprint,
+            'sprint_period': sprint_period,
+            'sprint_goal': sprint_goal,
+            'tasks': tasks,
+            'available_tasks': available_tasks,
+            'my_tasks': my_tasks,
+            'in_progress_tasks': in_progress_tasks,
+            'completed_tasks': completed_tasks,
+            'tasks_total': len(tasks),
+            'tasks_done': tasks_done,
+            'tasks_free': len(available_tasks),
+            'tasks_mine': sum(1 for t in tasks if t['is_mine']),
+            'tasks_in_progress': len(in_progress_tasks),
+            'progress_pct': progress_pct,
+            'chat_error': chat_error,
+            **_get_employee_next_slot_context(user),
+        },
     )
 
 
 @login_required
-def employee_notifications(request):
+@require_http_methods(["GET", "POST"])
+def employee_requests(request):
+    _ensure_role(request, 'employee')
+    user = request.user
+    errors = []
+    success = request.session.pop('employee_request_success', '')
+    show_form = False
+    form_data = {
+        'request_type': '',
+        'start_date': '',
+        'start_display': '',
+        'end_date': '',
+        'end_display': '',
+        'comment': '',
+    }
+    invalid_fields = []
+
+    if request.method == 'POST':
+        show_form = True
+        request_type = request.POST.get('request_type', '').strip()
+        start_date_str = request.POST.get('start_date', '').strip()
+        end_date_str = request.POST.get('end_date', '').strip()
+        comment = request.POST.get('comment', '').strip()
+        attachment = request.FILES.get('attachment')
+        form_data.update({
+            'request_type': request_type,
+            'start_date': start_date_str,
+            'end_date': end_date_str,
+            'comment': comment,
+        })
+
+        if request_type not in ('vacation', 'sick'):
+            errors.append('Выберите тип заявки.')
+            invalid_fields.append('request_type')
+
+        start = None
+        end = None
+        today = timezone.localdate()
+        vacation_min_date = today + timedelta(days=7)
+
+        if not start_date_str:
+            errors.append('Укажите дату начала.')
+            invalid_fields.append('start_date')
+        else:
+            try:
+                start = date.fromisoformat(start_date_str)
+                form_data['start_display'] = start.strftime('%d.%m.%Y')
+            except (ValueError, TypeError):
+                errors.append('Неверный формат даты начала.')
+                invalid_fields.append('start_date')
+
+        if not end_date_str:
+            errors.append('Укажите дату окончания.')
+            invalid_fields.append('end_date')
+        else:
+            try:
+                end = date.fromisoformat(end_date_str)
+                form_data['end_display'] = end.strftime('%d.%m.%Y')
+            except (ValueError, TypeError):
+                errors.append('Неверный формат даты окончания.')
+                invalid_fields.append('end_date')
+
+        if start and request_type == 'vacation' and start < vacation_min_date:
+            errors.append('Отпуск можно подать минимум за 7 дней до начала.')
+            invalid_fields.append('start_date')
+        elif start and request_type == 'sick' and start < today:
+            errors.append('Дата начала больничного не может быть в прошлом.')
+            invalid_fields.append('start_date')
+
+        if start and end and end < start:
+            errors.append('Дата окончания не может быть раньше даты начала.')
+            invalid_fields.append('end_date')
+
+        if attachment:
+            max_attachment_size = 10 * 1024 * 1024
+            allowed_suffixes = {'.pdf', '.jpg', '.jpeg', '.png'}
+            suffix = Path(attachment.name).suffix.lower()
+            if suffix not in allowed_suffixes:
+                errors.append('Документ должен быть в формате PDF, JPG или PNG.')
+                invalid_fields.append('attachment')
+            if attachment.size > max_attachment_size:
+                errors.append('Размер документа не должен превышать 10 МБ.')
+                invalid_fields.append('attachment')
+
+        if not errors:
+            LeaveRequest.objects.create(
+                user=user,
+                request_type=request_type,
+                start_date=start,
+                end_date=end,
+                comment=comment,
+                attachment=attachment,
+            )
+            request.session['employee_request_success'] = 'Заявка отправлена на рассмотрение.'
+            return redirect(reverse('employee-requests'))
+
+    status_labels = {'pending': 'На рассмотрении', 'approved': 'Одобрено', 'rejected': 'Отклонено'}
+    status_tones = {'pending': 'warning', 'approved': 'success', 'rejected': 'danger'}
+    type_labels = {'vacation': 'Отпуск', 'sick': 'Больничный'}
+
+    month_names = [
+        "янв", "фев", "мар", "апр", "май", "июн",
+        "июл", "авг", "сен", "окт", "ноя", "дек",
+    ]
+
+    def fmt(d):
+        return f"{d.day} {month_names[d.month - 1]} {d.year}"
+
+    qs = LeaveRequest.objects.filter(user=user).order_by('-created_at')
+
+    leave_requests = []
+    for lr in qs:
+        attachment_url = lr.attachment.url if lr.attachment else ''
+        attachment_name = lr.attachment.name.split('/')[-1] if lr.attachment else ''
+        created_local = timezone.localtime(lr.created_at)
+        leave_requests.append({
+            'id': lr.id,
+            'request_type': lr.request_type,
+            'type_label': type_labels.get(lr.request_type, lr.request_type),
+            'start_display': fmt(lr.start_date),
+            'end_display': fmt(lr.end_date),
+            'comment': lr.comment or '',
+            'status': lr.status,
+            'status_label': status_labels.get(lr.status, lr.status),
+            'status_tone': status_tones.get(lr.status, ''),
+            'rejection_reason': lr.rejection_reason or '',
+            'attachment_url': attachment_url,
+            'attachment_name': attachment_name,
+            'created_display': fmt(created_local.date()),
+        })
+
+    counts = {
+        'all': LeaveRequest.objects.filter(user=user).count(),
+        'pending': LeaveRequest.objects.filter(user=user, status='pending').count(),
+        'approved': LeaveRequest.objects.filter(user=user, status='approved').count(),
+        'rejected': LeaveRequest.objects.filter(user=user, status='rejected').count(),
+    }
+
+    return render(
+        request,
+        'dashboard/employee/requests.html',
+        {
+            'active_tab': 'requests',
+            'page_title': 'Заявки',
+            'page_subtitle': 'Отпуска и больничные',
+            'leave_requests': leave_requests,
+            'errors': errors,
+            'success': success,
+            'show_form': show_form,
+            'form_data': form_data,
+            'invalid_fields': invalid_fields,
+            'counts': counts,
+        },
+    )
+
+
+@login_required
+def employee_chat(request):
     return _render_employee_page(
         request,
-        'dashboard/employee/notifications.html',
-        'notifications',
-        'Уведомления',
-        'Все важные события по слотам и задачам',
+        'dashboard/employee/chat.html',
+        'chat',
+        'Чаты',
+        'Обсуждения задач с командой',
     )
+
+
+@login_required
+@require_http_methods(["GET"])
+def employee_profile(request):
+    _ensure_role(request, 'employee')
+    user = request.user
+    profile = EmployeeProfile.objects.select_related('department').filter(user=user).first()
+    department = profile.department if profile else None
+
+    today = timezone.localdate()
+    month_names = [
+        "января", "февраля", "марта", "апреля", "мая", "июня",
+        "июля", "августа", "сентября", "октября", "ноября", "декабря",
+    ]
+
+    def fmt_date(d):
+        return f"{d.day} {month_names[d.month - 1]} {d.year}"
+
+    # ── Task statistics ────────────────────────────────────────────────────
+    tasks_completed = 0
+    tasks_active = 0
+    tasks_overdue = 0
+    sprints_count = 0
+
+    if department:
+        all_tasks = DepartmentTask.objects.filter(
+            Q(task_type='employee', assigned_to=user) |
+            Q(task_type='department', taken_by=user),
+            department=department,
+        ).distinct()
+
+        tasks_completed = all_tasks.filter(status=DepartmentTask.TaskStatus.COMPLETED).count()
+        active_statuses = [
+            DepartmentTask.TaskStatus.AWAITING_CONFIRMATION,
+            DepartmentTask.TaskStatus.CONFIRMED,
+            DepartmentTask.TaskStatus.IN_PROGRESS,
+        ]
+        tasks_active = all_tasks.filter(status__in=active_statuses).count()
+        tasks_overdue = all_tasks.filter(
+            status__in=active_statuses,
+            date__lt=today,
+        ).count()
+        sprints_count = (
+            Sprint.objects.filter(
+                department=department,
+                tasks__taken_by=user,
+            )
+            .distinct()
+            .count()
+        )
+
+    # ── Leave request history ─────────────────────────────────────────────
+    leave_status_labels = {
+        'pending': 'На рассмотрении',
+        'approved': 'Одобрено',
+        'rejected': 'Отклонено',
+    }
+    leave_status_tones = {
+        'pending': 'warning',
+        'approved': 'success',
+        'rejected': 'danger',
+    }
+    leave_type_labels = {
+        'vacation': 'Отпуск',
+        'sick': 'Больничный',
+    }
+    leave_type_icons = {
+        'vacation': 'vacation',
+        'sick': 'sick',
+    }
+
+    leave_requests_raw = LeaveRequest.objects.filter(user=user).order_by('-created_at')[:20]
+    leave_requests = []
+    for lr in leave_requests_raw:
+        leave_requests.append({
+            'id': lr.id,
+            'type_label': leave_type_labels.get(lr.request_type, lr.request_type),
+            'type_icon': leave_type_icons.get(lr.request_type, 'vacation'),
+            'start_display': fmt_date(lr.start_date),
+            'end_display': fmt_date(lr.end_date),
+            'status': lr.status,
+            'status_label': leave_status_labels.get(lr.status, lr.status),
+            'status_tone': leave_status_tones.get(lr.status, 'neutral'),
+            'comment': lr.comment,
+            'rejection_reason': lr.rejection_reason,
+        })
+
+    avatar_url = ''
+    if profile and profile.avatar:
+        avatar_url = request.build_absolute_uri(profile.avatar.url)
+
+    return render(request, 'dashboard/employee/profile.html', {
+        'active_tab': 'profile',
+        'page_title': 'Мой профиль',
+        'page_subtitle': 'Личная информация и статистика',
+        'user': user,
+        'profile': profile,
+        'avatar_url': avatar_url,
+        'department_name': department.name if department else '—',
+        'position': (profile.position if profile else '') or '—',
+        'tasks_completed': tasks_completed,
+        'tasks_active': tasks_active,
+        'tasks_overdue': tasks_overdue,
+        'sprints_count': sprints_count,
+        'leave_requests': leave_requests,
+    })

@@ -1,7 +1,7 @@
 from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
-from .models import Department, DepartmentTask, EmployeeAvailability, EmployeeProfile
+from .models import Department, DepartmentTask, EmployeeProfile
 
 
 def get_manager_department(manager):
@@ -44,23 +44,11 @@ def employee_can_access_task(user, task):
     profile = EmployeeProfile.objects.filter(user=user).only("department_id").first()
     if not profile or profile.department_id != task.department_id:
         return False
-
     if task.task_type == "employee":
-        return task.assigned_to_id == user.id
+        return task.assigned_to_id == user.id or task.taken_by_id == user.id
     if task.task_type == "department":
         return True
-    if task.task_type != "slot":
-        return False
-    if not task.start_time or not task.end_time:
-        return False
-
-    return EmployeeAvailability.objects.filter(
-        user=user,
-        date=task.date,
-        start_time=task.start_time,
-        end_time=task.end_time,
-        is_available=True,
-    ).exists()
+    return False
 
 
 def require_employee_task_access(user, task):

@@ -180,6 +180,130 @@ class EmployeeAvailability(models.Model):
         return f"{self.user_id} availability {self.date}"
 
 
+class EmployeeBaseAvailability(models.Model):
+    MODE_CHOICES = [
+        ("off", "Недоступен"),
+        ("fixed", "Фиксированные часы"),
+        ("flex", "Свободный график"),
+    ]
+
+    WEEKDAY_CHOICES = [
+        (0, "Понедельник"),
+        (1, "Вторник"),
+        (2, "Среда"),
+        (3, "Четверг"),
+        (4, "Пятница"),
+        (5, "Суббота"),
+        (6, "Воскресенье"),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="base_availability_rules",
+    )
+    weekday = models.PositiveSmallIntegerField(choices=WEEKDAY_CHOICES)
+    mode = models.CharField(max_length=20, choices=MODE_CHOICES, default="off")
+    start_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["weekday"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "weekday"],
+                name="unique_employee_base_availability_weekday",
+            ),
+            models.CheckConstraint(
+                check=(
+                    models.Q(start_time__isnull=True)
+                    | models.Q(end_time__isnull=True)
+                    | models.Q(end_time__gt=models.F("start_time"))
+                ),
+                name="chk_base_availability_time_order",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id} base availability weekday {self.weekday}"
+
+
+class EmployeeAvailabilityOverride(models.Model):
+    OVERRIDE_TYPE_CHOICES = [
+        ("unavailable", "Недоступен"),
+        ("partial", "Частичная доступность"),
+        ("available", "Я доступен весь день"),
+        ("vacation", "Отпуск"),
+        ("sick", "Больничный"),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="availability_overrides",
+    )
+    date = models.DateField()
+    override_type = models.CharField(max_length=20, choices=OVERRIDE_TYPE_CHOICES, default="unavailable")
+    start_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
+    note = models.CharField(max_length=255, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_availability_overrides",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["date", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "date"], name="unique_employee_availability_override_date"),
+            models.CheckConstraint(
+                check=(
+                    models.Q(start_time__isnull=True)
+                    | models.Q(end_time__isnull=True)
+                    | models.Q(end_time__gt=models.F("start_time"))
+                ),
+                name="chk_availability_override_time_order",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id} override {self.date} ({self.override_type})"
+
+
+class EmployeePlannedLoad(models.Model):
+    TARGET_MODE_CHOICES = [
+        ("none", "Без плановой загрузки"),
+        ("hours", "Часы в неделю"),
+        ("days", "Дни в неделю"),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="planned_loads",
+    )
+    week_start = models.DateField()
+    target_mode = models.CharField(max_length=20, choices=TARGET_MODE_CHOICES, default="none")
+    target_value = models.PositiveIntegerField(null=True, blank=True)
+    note = models.CharField(max_length=255, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-week_start"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "week_start"], name="unique_employee_planned_load_week"),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id} load {self.week_start} ({self.target_mode})"
+
+
 class EmployeeShiftRequest(models.Model):
     REQUEST_TYPES = [
         ("extra_hours", "Дополнительные часы"),
@@ -228,7 +352,6 @@ class EmployeeShiftRequest(models.Model):
 class DepartmentTask(models.Model):
     TASK_TYPES = [
         ("employee", "Сотруднику"),
-        ("slot", "Для слота"),
         ("department", "Для отдела"),
     ]
     PRIORITY_CHOICES = [
@@ -236,11 +359,16 @@ class DepartmentTask(models.Model):
         ("mid", "Средний"),
         ("low", "Низкий"),
     ]
-    STATUS_CHOICES = [
-        ("todo", "Назначена"),
-        ("in_progress", "В работе"),
-        ("done", "Выполнено"),
-    ]
+    class TaskStatus(models.TextChoices):
+        AWAITING_CONFIRMATION = "awaiting_confirmation", "Новая"
+        CONFIRMED = "confirmed", "Взята"
+        IN_PROGRESS = "in_progress", "В работе"
+        ON_REVIEW = "on_review", "На проверке"
+        COMPLETED = "completed", "Выполнена"
+        RETURNED = "returned", "Возвращена на доработку"
+        CONFLICT = "conflict", "Конфликт"
+
+    STATUS_CHOICES = TaskStatus.choices
 
     department = models.ForeignKey(
         Department,
@@ -261,15 +389,31 @@ class DepartmentTask(models.Model):
         blank=True,
         related_name="assigned_tasks",
     )
+    taken_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="taken_tasks",
+    )
+    sprint = models.ForeignKey(
+        "Sprint",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tasks",
+    )
     date = models.DateField()
-    start_time = models.TimeField(null=True, blank=True)
-    end_time = models.TimeField(null=True, blank=True)
     due_time = models.TimeField(null=True, blank=True)
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     task_type = models.CharField(max_length=20, choices=TASK_TYPES, default="employee")
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default="mid")
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="todo")
+    status = models.CharField(
+        max_length=30,
+        choices=TaskStatus.choices,
+        default=TaskStatus.AWAITING_CONFIRMATION,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -278,16 +422,7 @@ class DepartmentTask(models.Model):
         indexes = [
             models.Index(fields=["department", "date", "status"], name="idx_task_dept_date_status"),
         ]
-        constraints = [
-            models.CheckConstraint(
-                check=(
-                    models.Q(start_time__isnull=True)
-                    | models.Q(end_time__isnull=True)
-                    | models.Q(end_time__gt=models.F("start_time"))
-                ),
-                name="chk_task_time_order",
-            ),
-        ]
+        constraints = []
 
     def __str__(self):
         return f"{self.title} ({self.date})"
@@ -315,6 +450,129 @@ class TaskSubmission(models.Model):
 
     def __str__(self):
         return f"Task {self.task_id} submission"
+
+
+class Sprint(models.Model):
+    STATUS_CHOICES = [
+        ("planning", "Планирование"),
+        ("active", "Активен"),
+        ("completed", "Завершён"),
+    ]
+
+    department = models.ForeignKey(
+        Department,
+        on_delete=models.CASCADE,
+        related_name="sprints",
+    )
+    title = models.CharField(max_length=200)
+    goal = models.TextField(blank=True)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="planning")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_sprints",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-start_date"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(end_date__gte=models.F("start_date")),
+                name="chk_sprint_dates_order",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.title} ({self.department})"
+
+
+class LeaveRequest(models.Model):
+    REQUEST_TYPES = [
+        ("vacation", "Отпуск"),
+        ("sick", "Больничный"),
+    ]
+    STATUS_CHOICES = [
+        ("pending", "На рассмотрении"),
+        ("approved", "Одобрено"),
+        ("rejected", "Отклонено"),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="leave_requests",
+    )
+    request_type = models.CharField(max_length=20, choices=REQUEST_TYPES)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    comment = models.TextField(blank=True)
+    attachment = models.FileField(upload_to='leave_attachments/', blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_leave_requests",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(end_date__gte=models.F("start_date")),
+                name="chk_leave_request_dates_order",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id} {self.request_type} {self.start_date}..{self.end_date}"
+
+
+class Substitution(models.Model):
+    absent_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="substitutions_as_absent",
+    )
+    substitute_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="substitutions_as_substitute",
+    )
+    start_date = models.DateField()
+    end_date = models.DateField()
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_substitutions",
+    )
+    note = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-start_date"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(end_date__gte=models.F("start_date")),
+                name="chk_substitution_dates_order",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.absent_user_id} → {self.substitute_user_id} {self.start_date}..{self.end_date}"
 
 
 class PasswordResetRequest(models.Model):

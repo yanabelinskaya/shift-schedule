@@ -1,0 +1,101 @@
+{% extends 'dashboard/manager.html' %}
+
+{% block content %}
+  <div class="card dashboard-hero fade-up">
+    <div class="hero-header">
+      <div>
+        <h1>{{ page_title }}</h1>
+        <p class="subtle">{{ page_subtitle }}</p>
+      </div>
+    </div>
+  </div>
+
+  {% if not department %}
+    <section class="card section-block fade-up" style="margin-top: 1rem;">
+      <div class="task-empty-hero">
+        <h2>Отдел не назначен</h2>
+        <p class="subtle">Обратитесь к администратору.</p>
+      </div>
+    </section>
+  {% else %}
+    {% if error %}
+      <div class="form-message is-error fade-up" style="margin-top: 1rem;">{{ error }}</div>
+    {% endif %}
+    {% if success %}
+      <div class="form-message is-success fade-up" style="margin-top: 1rem;">{{ success }}</div>
+    {% endif %}
+
+    <section class="card section-block fade-up" style="margin-top: 1rem;">
+      <div class="section-header">
+        <div>
+          <h2>Заявки</h2>
+          <p class="subtle">Выберите статус для фильтрации.</p>
+        </div>
+        <div class="period-switch">
+          <a class="btn btn-inline btn-sm{% if status_filter == 'pending' %} btn-primary{% else %} btn-ghost{% endif %}" href="?status=pending">На рассмотрении</a>
+          <a class="btn btn-inline btn-sm{% if status_filter == 'approved' %} btn-primary{% else %} btn-ghost{% endif %}" href="?status=approved">Одобренные</a>
+          <a class="btn btn-inline btn-sm{% if status_filter == 'rejected' %} btn-primary{% else %} btn-ghost{% endif %}" href="?status=rejected">Отклонённые</a>
+          <a class="btn btn-inline btn-sm{% if status_filter == 'all' %} btn-primary{% else %} btn-ghost{% endif %}" href="?status=all">Все</a>
+        </div>
+      </div>
+
+      {% if leave_requests %}
+        <div class="task-list">
+          {% for lr in leave_requests %}
+            <article class="task-list-item">
+              <div class="task-list-main">
+                <div class="task-card-title">
+                  <h3>{{ lr.employee_name }} — {{ lr.type_label }}</h3>
+                </div>
+                <div class="task-list-meta">
+                  <span class="subtle">{{ lr.start_display }} — {{ lr.end_display }}</span>
+                  {% if lr.comment %}<span class="subtle">{{ lr.comment }}</span>{% endif %}
+                  {% if lr.status == 'rejected' and lr.rejection_reason %}
+                    <span class="subtle" style="color: var(--color-danger);">Причина: {{ lr.rejection_reason }}</span>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="task-list-side">
+                <span class="status-pill {{ lr.status_tone }}">{{ lr.status_label }}</span>
+                {% if lr.status == 'pending' %}
+                  <form method="post" style="display:inline;">
+                    {% csrf_token %}
+                    <input type="hidden" name="lr_id" value="{{ lr.id }}">
+                    <input type="hidden" name="action" value="approve">
+                    <button class="btn btn-primary btn-inline btn-xs" type="submit">Одобрить</button>
+                  </form>
+                  <button
+                    class="btn btn-ghost btn-inline btn-xs"
+                    type="button"
+                    onclick="document.getElementById('reject-form-{{ lr.id }}').style.display='block'; this.style.display='none';"
+                  >
+                    Отклонить
+                  </button>
+                  <div id="reject-form-{{ lr.id }}" style="display:none; margin-top: 0.5rem; width: 100%;">
+                    <form method="post">
+                      {% csrf_token %}
+                      <input type="hidden" name="lr_id" value="{{ lr.id }}">
+                      <input type="hidden" name="action" value="reject">
+                      <input
+                        class="control-input"
+                        type="text"
+                        name="rejection_reason"
+                        placeholder="Причина отказа (необязательно)"
+                        style="margin-bottom: 0.5rem; width: 100%;"
+                      >
+                      <button class="btn btn-ghost btn-inline btn-xs" type="submit">Подтвердить отказ</button>
+                    </form>
+                  </div>
+                {% endif %}
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="task-empty" style="padding: 2rem; text-align: center;">
+          <p class="subtle">Заявок с выбранным статусом нет.</p>
+        </div>
+      {% endif %}
+    </section>
+  {% endif %}
+{% endblock %}

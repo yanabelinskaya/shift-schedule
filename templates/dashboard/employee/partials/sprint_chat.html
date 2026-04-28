@@ -1,0 +1,37 @@
+<details class="sprint-chat" open>
+  <summary>
+    <span>Обсуждение</span>
+    <small>{{ task.submissions_count }}</small>
+  </summary>
+  <div class="sprint-chat-messages">
+    {% for submission in task.submissions %}
+      <div class="sprint-chat-message">
+        <div class="sprint-chat-message-head">
+          <strong>{{ submission.author }}</strong>
+          <span>{{ submission.created_label }}</span>
+        </div>
+        {% if submission.comment %}
+          <p>{{ submission.comment }}</p>
+        {% endif %}
+        {% if submission.file_url %}
+          <a href="{{ submission.file_url }}" target="_blank" rel="noopener">{{ submission.file_name }}</a>
+        {% endif %}
+      </div>
+    {% empty %}
+      <div class="sprint-chat-empty">Пока нет сообщений. Можно задать вопрос, уточнить сроки или приложить файл.</div>
+    {% endfor %}
+  </div>
+  <form method="post" enctype="multipart/form-data" class="sprint-chat-form">
+    {% csrf_token %}
+    <input type="hidden" name="task_id" value="{{ task.id }}">
+    <input type="hidden" name="action" value="comment">
+    <textarea name="comment" rows="2" placeholder="Сообщение, вопрос, @коллега или решение"></textarea>
+    <div class="sprint-chat-form-row">
+      <label>
+        <span>Прикрепить</span>
+        <input type="file" name="attachments" multiple>
+      </label>
+      <button class="btn btn-primary btn-inline btn-xs" type="submit">Отправить</button>
+    </div>
+  </form>
+</details>

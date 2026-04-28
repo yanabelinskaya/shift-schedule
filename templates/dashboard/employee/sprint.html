@@ -1,0 +1,258 @@
+{% extends 'dashboard/employee.html' %}
+
+{% block content %}
+  <div class="sprint-page">
+    <div class="card dashboard-hero sprint-hero fade-up">
+      <div class="hero-header">
+        <div>
+          <div class="task-empty-badge">Текущий рабочий период</div>
+          <h1>{{ page_title }}</h1>
+          <p class="subtle">{{ page_subtitle }}</p>
+        </div>
+        {% if current_sprint %}
+          <div class="sprint-progress-ring" style="--progress: {{ progress_pct }}%;">
+            <span>{{ progress_pct }}%</span>
+            <small>готово</small>
+          </div>
+        {% endif %}
+      </div>
+
+      {% if current_sprint %}
+        <div class="sprint-hero-grid">
+          <div class="sprint-hero-card">
+            <span>Период</span>
+            <strong>{{ sprint_period }}</strong>
+          </div>
+          <div class="sprint-hero-card">
+            <span>Цель</span>
+            <strong>{{ sprint_goal }}</strong>
+          </div>
+          <div class="sprint-hero-card">
+            <span>Выполнено</span>
+            <strong>{{ tasks_done }} из {{ tasks_total }} задач</strong>
+          </div>
+        </div>
+        <div class="sprint-progress-track" aria-label="Прогресс выполнения спринта">
+          <span style="width: {{ progress_pct }}%;"></span>
+        </div>
+      {% endif %}
+    </div>
+
+    {% if chat_error %}
+      <div class="form-message is-error fade-up">{{ chat_error }}</div>
+    {% endif %}
+
+    {% if not current_sprint %}
+      <section class="card section-block fade-up">
+        <div class="task-empty-hero">
+          <div class="task-empty-badge">Нет активного спринта</div>
+          <h2>Спринт ещё не запущен</h2>
+          <p class="subtle">Менеджер создаст спринт и добавит задачи. После запуска они появятся здесь.</p>
+        </div>
+      </section>
+    {% elif tasks_total == 0 %}
+      <section class="card section-block fade-up">
+        <div class="task-empty-hero">
+          <div class="task-empty-badge">Задач нет</div>
+          <h2>Спринт пока пуст</h2>
+          <p class="subtle">Менеджер ещё не добавил задачи в текущий спринт.</p>
+        </div>
+      </section>
+    {% else %}
+      <section class="sprint-stats fade-up" aria-label="Сводка спринта">
+        <div class="sprint-stat-card">
+          <span>Всего задач</span>
+          <strong>{{ tasks_total }}</strong>
+        </div>
+        <div class="sprint-stat-card">
+          <span>Доступно</span>
+          <strong>{{ tasks_free }}</strong>
+        </div>
+        <div class="sprint-stat-card">
+          <span>Мои задачи</span>
+          <strong>{{ tasks_mine }}</strong>
+        </div>
+        <div class="sprint-stat-card">
+          <span>В работе</span>
+          <strong>{{ tasks_in_progress }}</strong>
+        </div>
+      </section>
+
+      <section class="sprint-board">
+        <div class="card section-block sprint-column fade-up">
+          <div class="section-header">
+            <div>
+              <h2>Доступные задачи</h2>
+              <p class="subtle">Задачи, которые ещё никто не взял.</p>
+            </div>
+            <span class="info-chip">{{ available_tasks|length }}</span>
+          </div>
+          <div class="sprint-task-stack">
+            {% for task in available_tasks %}
+              <article class="sprint-task-card{% if task.is_overdue %} is-overdue{% endif %}">
+                <div class="sprint-task-top">
+                  <div>
+                    <div class="sprint-task-title">
+                      <span class="priority-dot is-{{ task.priority }}" aria-hidden="true"></span>
+                      <h3>{{ task.title }}</h3>
+                    </div>
+                    <p>{{ task.description|default:"Описание не добавлено."|truncatechars:110 }}</p>
+                  </div>
+                  <span class="status-pill {{ task.status_tone }}">{{ task.status_label }}</span>
+                </div>
+                <div class="sprint-task-meta">
+                  <span>Дедлайн: {{ task.due_label|default:"не задан" }}</span>
+                  <span>Приоритет: {{ task.priority_label }}</span>
+                  {% if task.submissions_count %}<span>Обсуждение: {{ task.submissions_count }}</span>{% endif %}
+                </div>
+                <div class="sprint-task-progress">
+                  <span style="width: {{ task.progress }}%;"></span>
+                </div>
+                {% include 'dashboard/employee/partials/sprint_chat.html' with task=task %}
+                <div class="sprint-task-actions">
+                  <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="task_id" value="{{ task.id }}">
+                    <input type="hidden" name="action" value="take">
+                    <button class="btn btn-primary btn-inline btn-xs" type="submit">Взять задачу</button>
+                  </form>
+                  <a class="btn btn-ghost btn-inline btn-xs" href="{% url 'employee-task-detail' task.id %}?next={{ request.get_full_path|urlencode }}">Открыть</a>
+                </div>
+              </article>
+            {% empty %}
+              <div class="sprint-empty">Свободных задач нет.</div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="card section-block sprint-column fade-up">
+          <div class="section-header">
+            <div>
+              <h2>Мои задачи</h2>
+              <p class="subtle">Задачи, закреплённые за вами в этом спринте.</p>
+            </div>
+            <span class="info-chip">{{ my_tasks|length }}</span>
+          </div>
+          <div class="sprint-task-stack">
+            {% for task in my_tasks %}
+              <article class="sprint-task-card is-mine{% if task.is_overdue %} is-overdue{% endif %}">
+                <div class="sprint-task-top">
+                  <div>
+                    <div class="sprint-task-title">
+                      <span class="priority-dot is-{{ task.priority }}" aria-hidden="true"></span>
+                      <h3>{{ task.title }}</h3>
+                    </div>
+                    <p>{{ task.description|default:"Описание не добавлено."|truncatechars:110 }}</p>
+                  </div>
+                  <span class="status-pill {{ task.status_tone }}">{{ task.status_label }}</span>
+                </div>
+                <div class="sprint-task-meta">
+                  <span>Дедлайн: {{ task.due_label|default:"не задан" }}</span>
+                  <span>Приоритет: {{ task.priority_label }}</span>
+                  <span>Прогресс: {{ task.progress }}%</span>
+                </div>
+                <div class="sprint-task-progress">
+                  <span style="width: {{ task.progress }}%;"></span>
+                </div>
+                {% include 'dashboard/employee/partials/sprint_chat.html' with task=task %}
+                <div class="sprint-task-actions">
+                  {% if task.can_drop %}
+                    <form method="post">
+                      {% csrf_token %}
+                      <input type="hidden" name="task_id" value="{{ task.id }}">
+                      <input type="hidden" name="action" value="drop">
+                      <button class="btn btn-ghost btn-inline btn-xs" type="submit">Отказаться</button>
+                    </form>
+                  {% endif %}
+                  <a class="btn btn-primary btn-inline btn-xs" href="{% url 'employee-task-detail' task.id %}?next={{ request.get_full_path|urlencode }}">Открыть</a>
+                </div>
+              </article>
+            {% empty %}
+              <div class="sprint-empty">У вас пока нет закреплённых задач.</div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="card section-block sprint-column fade-up">
+          <div class="section-header">
+            <div>
+              <h2>Задачи в работе</h2>
+              <p class="subtle">Активное выполнение и текущие обсуждения.</p>
+            </div>
+            <span class="info-chip">{{ in_progress_tasks|length }}</span>
+          </div>
+          <div class="sprint-task-stack">
+            {% for task in in_progress_tasks %}
+              <article class="sprint-task-card is-active{% if task.is_mine %} is-mine{% endif %}{% if task.is_overdue %} is-overdue{% endif %}">
+                <div class="sprint-task-top">
+                  <div>
+                    <div class="sprint-task-title">
+                      <span class="priority-dot is-{{ task.priority }}" aria-hidden="true"></span>
+                      <h3>{{ task.title }}</h3>
+                    </div>
+                    <p>{{ task.description|default:"Описание не добавлено."|truncatechars:110 }}</p>
+                  </div>
+                  <span class="status-pill {{ task.status_tone }}">{{ task.status_label }}</span>
+                </div>
+                <div class="sprint-task-meta">
+                  <span>Исполнитель: {{ task.taken_by_name|default:"не назначен" }}</span>
+                  <span>Дедлайн: {{ task.due_label|default:"не задан" }}</span>
+                  <span>Прогресс: {{ task.progress }}%</span>
+                </div>
+                <div class="sprint-task-progress">
+                  <span style="width: {{ task.progress }}%;"></span>
+                </div>
+                {% include 'dashboard/employee/partials/sprint_chat.html' with task=task %}
+                <div class="sprint-task-actions">
+                  <a class="btn btn-primary btn-inline btn-xs" href="{% url 'employee-task-detail' task.id %}?next={{ request.get_full_path|urlencode }}">Открыть</a>
+                </div>
+              </article>
+            {% empty %}
+              <div class="sprint-empty">Пока нет задач в работе.</div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="card section-block sprint-column fade-up">
+          <div class="section-header">
+            <div>
+              <h2>Выполненные задачи</h2>
+              <p class="subtle">Закрытые задачи текущего спринта.</p>
+            </div>
+            <span class="info-chip">{{ completed_tasks|length }}</span>
+          </div>
+          <div class="sprint-task-stack">
+            {% for task in completed_tasks %}
+              <article class="sprint-task-card is-done{% if task.is_mine %} is-mine{% endif %}">
+                <div class="sprint-task-top">
+                  <div>
+                    <div class="sprint-task-title">
+                      <span class="priority-dot is-{{ task.priority }}" aria-hidden="true"></span>
+                      <h3>{{ task.title }}</h3>
+                    </div>
+                    <p>{{ task.description|default:"Описание не добавлено."|truncatechars:110 }}</p>
+                  </div>
+                  <span class="status-pill {{ task.status_tone }}">{{ task.status_label }}</span>
+                </div>
+                <div class="sprint-task-meta">
+                  <span>Исполнитель: {{ task.taken_by_name|default:"не назначен" }}</span>
+                  <span>Дедлайн: {{ task.due_label|default:"не задан" }}</span>
+                  <span>Прогресс: 100%</span>
+                </div>
+                <div class="sprint-task-progress">
+                  <span style="width: 100%;"></span>
+                </div>
+                {% include 'dashboard/employee/partials/sprint_chat.html' with task=task %}
+                <div class="sprint-task-actions">
+                  <a class="btn btn-ghost btn-inline btn-xs" href="{% url 'employee-task-detail' task.id %}?next={{ request.get_full_path|urlencode }}">Открыть</a>
+                </div>
+              </article>
+            {% empty %}
+              <div class="sprint-empty">Выполненных задач пока нет.</div>
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+    {% endif %}
+  </div>
+{% endblock %}

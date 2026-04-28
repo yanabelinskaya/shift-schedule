@@ -1,0 +1,174 @@
+{% extends 'dashboard/employee.html' %}
+
+{% block content %}
+
+  {# ── Hero ──────────────────────────────────────────────────────────── #}
+  <div class="card dashboard-hero fade-up">
+    <div class="hero-header">
+      <div class="profile-hero-identity">
+        <div class="profile-avatar-wrap">
+          {% if avatar_url %}
+            <img class="profile-avatar" src="{{ avatar_url }}" alt="Фото профиля">
+          {% else %}
+            <div class="profile-avatar-fallback">
+              {{ user.get_full_name|default:user.username|slice:":1"|upper }}
+            </div>
+          {% endif %}
+        </div>
+        <div>
+          <h1>{{ user.get_full_name|default:user.username }}</h1>
+          <p class="subtle">{{ position }} · {{ department_name }}</p>
+        </div>
+      </div>
+    </div>
+    <div class="hero-meta">
+      <div class="meta-chip">{{ user.email }}</div>
+      <div class="meta-chip">{{ user.get_role_display }}</div>
+      <span class="status-pill success" style="font-size: 0.72rem;">Активен</span>
+    </div>
+  </div>
+
+  <div class="profile-layout fade-up">
+
+    {# ── Left column ───────────────────────────────────────────────── #}
+    <div class="profile-col-main">
+
+      {# Основная информация #}
+      <section class="card section-block">
+        <div class="section-header">
+          <div>
+            <h2>Основная информация</h2>
+            <p class="subtle">Ваши данные в системе.</p>
+          </div>
+        </div>
+        <div class="profile-info-grid">
+          <div class="profile-info-row">
+            <span class="profile-info-label">ФИО</span>
+            <span class="profile-info-value">{{ user.last_name|default:"" }} {{ user.first_name|default:"" }}{% if profile.middle_name %} {{ profile.middle_name }}{% endif %}{% if not user.first_name and not user.last_name %}—{% endif %}</span>
+          </div>
+          <div class="profile-info-row">
+            <span class="profile-info-label">Email</span>
+            <span class="profile-info-value">{{ user.email|default:"—" }}</span>
+          </div>
+          <div class="profile-info-row">
+            <span class="profile-info-label">Должность</span>
+            <span class="profile-info-value">{{ position }}</span>
+          </div>
+          <div class="profile-info-row">
+            <span class="profile-info-label">Отдел</span>
+            <span class="profile-info-value">{{ department_name }}</span>
+          </div>
+          <div class="profile-info-row">
+            <span class="profile-info-label">Роль</span>
+            <span class="profile-info-value">{{ user.get_role_display }}</span>
+          </div>
+          {% if profile.corporate_phone %}
+          <div class="profile-info-row">
+            <span class="profile-info-label">Рабочий телефон</span>
+            <span class="profile-info-value">{{ profile.corporate_phone }}</span>
+          </div>
+          {% endif %}
+          {% if profile.personal_phone %}
+          <div class="profile-info-row">
+            <span class="profile-info-label">Личный телефон</span>
+            <span class="profile-info-value">{{ profile.personal_phone }}</span>
+          </div>
+          {% endif %}
+        </div>
+      </section>
+
+      {# История заявок #}
+      <section class="card section-block" style="margin-top: 1rem;">
+        <div class="section-header">
+          <div>
+            <h2>История заявок</h2>
+            <p class="subtle">Отпуска и больничные за всё время.</p>
+          </div>
+          <span class="info-chip">{{ leave_requests|length }}</span>
+        </div>
+
+        {% if leave_requests %}
+          <div class="task-list">
+            {% for lr in leave_requests %}
+              <article class="task-list-item">
+                <div class="task-list-main">
+                  <div class="task-card-title">
+                    <span class="profile-leave-icon profile-leave-icon--{{ lr.type_icon }}" aria-hidden="true">
+                      {% if lr.type_icon == 'vacation' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M3 17l4-8 4 4 4-6 4 10"/>
+                          <line x1="3" y1="21" x2="21" y2="21"/>
+                        </svg>
+                      {% else %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M12 2a7 7 0 0 0-7 7c0 3.87 3.13 7 7 7s7-3.13 7-7a7 7 0 0 0-7-7z"/>
+                          <path d="M12 16v6M8 21h8"/>
+                        </svg>
+                      {% endif %}
+                    </span>
+                    <h3>{{ lr.type_label }}</h3>
+                  </div>
+                  <div class="task-list-meta">
+                    <span class="subtle">{{ lr.start_display }} — {{ lr.end_display }}</span>
+                    {% if lr.comment %}<span class="subtle">{{ lr.comment }}</span>{% endif %}
+                    {% if lr.status == 'rejected' and lr.rejection_reason %}
+                      <span class="subtle" style="color: #d94b4b;">{{ lr.rejection_reason }}</span>
+                    {% endif %}
+                  </div>
+                </div>
+                <div class="task-list-side">
+                  <span class="status-pill {{ lr.status_tone }}">{{ lr.status_label }}</span>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="task-empty" style="padding: 2rem; text-align: center;">
+            <p class="subtle">Заявок пока не было.</p>
+            <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'employee-requests' %}" style="margin-top: 0.75rem;">Подать заявку</a>
+          </div>
+        {% endif %}
+      </section>
+
+    </div>
+
+    {# ── Right column: statistics ──────────────────────────────────── #}
+    <div class="profile-col-side">
+      <section class="card section-block">
+        <div class="section-header">
+          <div>
+            <h2>Моя статистика</h2>
+            <p class="subtle">Сводка по задачам.</p>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+          <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'employee-tasks' %}">Мои задачи</a>
+          <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'employee-sprint' %}">Текущий спринт</a>
+          <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'employee-requests' %}">Заявки</a>
+        </div>
+
+        <div class="profile-stats">
+          <div class="profile-stat-card profile-stat-card--done">
+            <div class="profile-stat-value">{{ tasks_completed }}</div>
+            <div class="profile-stat-label">Выполнено задач</div>
+          </div>
+          <div class="profile-stat-card profile-stat-card--active">
+            <div class="profile-stat-value">{{ tasks_active }}</div>
+            <div class="profile-stat-label">В работе</div>
+          </div>
+          <div class="profile-stat-card profile-stat-card--overdue">
+            <div class="profile-stat-value">{{ tasks_overdue }}</div>
+            <div class="profile-stat-label">Просрочено</div>
+          </div>
+          <div class="profile-stat-card profile-stat-card--sprints">
+            <div class="profile-stat-value">{{ sprints_count }}</div>
+            <div class="profile-stat-label">Спринтов</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+  </div>
+
+{% endblock %}

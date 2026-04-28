@@ -11,12 +11,12 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from .models import (
     Department,
     DepartmentPosition,
-    EmployeeAvailability,
     EmployeeAbsence,
     EmployeeProfile,
     SystemBackup,
     SystemLogEntry,
 )
+from .availability import resolve_range_availability
 from .system_utils import collect_runtime_metrics, format_bytes
 
 def _ensure_role(request, role):
@@ -158,47 +158,39 @@ def _get_employee_next_slot_context(user):
         .first()
     )
 
-    candidate_entries = (
-        EmployeeAvailability.objects.select_related("approved_by")
-        .filter(user=user, is_available=True, date__gte=today)
-        .order_by("date", "start_time")
-    )
-    next_entry = None
-    for entry in candidate_entries:
-        if entry.date == today and entry.end_time and entry.end_time <= now_time:
+    horizon_end = today + timedelta(days=45)
+    availability_map = resolve_range_availability(user, today, horizon_end)
+    next_available = None
+    current = today
+    while current <= horizon_end:
+        state = availability_map.get(current) or {}
+        if not state.get("is_available"):
+            current += timedelta(days=1)
             continue
-        if absence_for_date(entry.date):
-            continue
-        next_entry = entry
+        if current == today and state.get("mode") == "fixed":
+            end_time = state.get("end_time")
+            if end_time and end_time <= now_time:
+                current += timedelta(days=1)
+                continue
+        next_available = state
         break
 
-    if next_entry and (not next_absence or next_entry.date < next_absence.start_date):
-        event_date = next_entry.date
+    if next_available and (not next_absence or next_available["date"] < next_absence.start_date):
+        event_date = next_available["date"]
         day_label = format_day_label(event_date)
-        time_label = f"{next_entry.start_time:%H:%M}-{next_entry.end_time:%H:%M}"
-        week_start = event_date - timedelta(days=event_date.weekday())
-        week_end = week_start + timedelta(days=6)
-        if profile and profile.department_id:
-            week_has_approved = EmployeeAvailability.objects.filter(
-                user__profile__department_id=profile.department_id,
-                date__range=(week_start, week_end),
-                is_approved=True,
-            ).exists()
+        if next_available.get("mode") == "flex":
+            time_label = "Свободный график"
         else:
-            week_has_approved = EmployeeAvailability.objects.filter(
-                user=user,
-                date__range=(week_start, week_end),
-                is_approved=True,
-            ).exists()
-        status_label = (
-            "Подтверждена"
-            if (next_entry.is_approved or week_has_approved)
-            else "На согласовании"
-        )
-        manager_label = format_full_name(next_entry.approved_by or department_manager)
+            start_time = next_available.get("start_time")
+            end_time = next_available.get("end_time")
+            if start_time and end_time:
+                time_label = f"{start_time:%H:%M}-{end_time:%H:%M}"
+            else:
+                time_label = "Доступен"
+        manager_label = format_full_name(department_manager)
         return {
             "next_slot_title": f"{day_label}, {time_label}",
-            "next_slot_status": f"Статус: {status_label}",
+            "next_slot_status": "Статус: Доступен",
             "next_slot_manager": f"Менеджер: {manager_label}",
             "next_slot_is_empty": False,
             **base_context,

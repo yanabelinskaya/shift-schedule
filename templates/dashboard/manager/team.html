@@ -1,0 +1,60 @@
+{% extends 'dashboard/manager.html' %}
+
+{% block content %}
+  <div class="card dashboard-hero fade-up">
+    <div class="hero-header">
+      <div>
+        <h1>{{ page_title }}</h1>
+        <p class="subtle">{{ page_subtitle }}</p>
+      </div>
+    </div>
+    <div class="hero-meta">
+      <div class="meta-chip">Всего: {{ stats.total }}</div>
+      <div class="meta-chip">Работает: {{ stats.active }}</div>
+      <div class="meta-chip">В отпуске/больничный: {{ stats.on_leave }}</div>
+      {% if stats.inactive %}<div class="meta-chip">Неактивны: {{ stats.inactive }}</div>{% endif %}
+    </div>
+  </div>
+
+  {% if not department %}
+    <section class="card section-block fade-up" style="margin-top: 1rem;">
+      <div class="task-empty-hero">
+        <div class="task-empty-badge">Нет отдела</div>
+        <h2>Отдел не назначен</h2>
+        <p class="subtle">Обратитесь к администратору для назначения отдела.</p>
+      </div>
+    </section>
+  {% elif not employees %}
+    <section class="card section-block fade-up" style="margin-top: 1rem;">
+      <div class="task-empty-hero">
+        <div class="task-empty-badge">Команда пуста</div>
+        <h2>Сотрудников пока нет</h2>
+        <p class="subtle">Добавьте сотрудников через панель администратора.</p>
+      </div>
+    </section>
+  {% else %}
+    <section class="card section-block fade-up" style="margin-top: 1rem;">
+      <div class="task-list">
+        {% for emp in employees %}
+          <article class="task-list-item">
+            <div class="task-list-main">
+              <div class="task-card-title">
+                <h3>{{ emp.full_name }}</h3>
+              </div>
+              <div class="task-list-meta">
+                <span class="subtle">{{ emp.position }}</span>
+                {% if emp.active_tasks %}
+                  <span class="info-chip">Активных задач: {{ emp.active_tasks }}</span>
+                {% endif %}
+              </div>
+            </div>
+            <div class="task-list-side">
+              <span class="status-pill {{ emp.status_tone }}">{{ emp.status_label }}</span>
+              <a class="btn btn-ghost btn-inline btn-xs" href="{% url 'manager-employee-detail' emp.id %}">Профиль</a>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+{% endblock %}

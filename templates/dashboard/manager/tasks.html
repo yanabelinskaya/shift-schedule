@@ -54,9 +54,11 @@
           <div class="custom-select" data-custom-select>
             <select name="status">
               <option value="all" {% if filters.status == 'all' %}selected{% endif %}>Все статусы</option>
-              <option value="todo" {% if filters.status == 'todo' %}selected{% endif %}>Назначена</option>
-              <option value="in_progress" {% if filters.status == 'in_progress' %}selected{% endif %}>В работе</option>
-              <option value="done" {% if filters.status == 'done' %}selected{% endif %}>Выполнено</option>
+              <option value="awaiting_confirmation" {% if filters.status == 'awaiting_confirmation' %}selected{% endif %}>Ожидает подтверждения</option>
+              <option value="confirmed" {% if filters.status == 'confirmed' %}selected{% endif %}>Подтверждено</option>
+              <option value="conflict" {% if filters.status == 'conflict' %}selected{% endif %}>Конфликт</option>
+              <option value="in_progress" {% if filters.status == 'in_progress' %}selected{% endif %}>В процессе</option>
+              <option value="completed" {% if filters.status == 'completed' %}selected{% endif %}>Выполнено</option>
             </select>
             <button class="custom-select-trigger" type="button" data-select-trigger>
               <span data-select-label></span>
@@ -166,7 +168,7 @@
                             <div class="task-chip-list">
                               {% if cell.tasks_preview %}
                                 {% for task in cell.tasks_preview %}
-                                  <span class="task-chip is-{{ task.tone }}{% if task.is_slot %} is-slot{% endif %}{% if task.status == 'done' %} is-done{% endif %}">
+                                  <span class="task-chip is-{{ task.tone }}{% if task.is_slot %} is-slot{% endif %}{% if task.status == 'completed' %} is-done{% endif %}">
                                     <span class="priority-dot is-{{ task.priority }}"></span>
                                     {{ task.title }}
                                   </span>
@@ -234,7 +236,7 @@
                   data-task-title="{{ task.title|escape }}"
                   data-task-date="{{ task.date_value }}"
                   data-task-due-time="{{ task.due_time_value }}"
-                  {% if task.status == 'done' %} class="is-done"{% endif %}
+                  {% if task.status == 'completed' %} class="is-done"{% endif %}
                 >
                   <td>
                     <div class="task-title">
@@ -377,7 +379,7 @@
                   data-task-title="{{ task.title|escape }}"
                   data-task-date="{{ task.date_value }}"
                   data-task-due-time="{{ task.due_time_value }}"
-                  {% if task.status == 'done' %} class="is-done"{% endif %}
+                  {% if task.status == 'completed' %} class="is-done"{% endif %}
                 >
                   <td>
                     <div class="task-title">

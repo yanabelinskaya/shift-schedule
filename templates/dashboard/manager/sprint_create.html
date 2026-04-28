@@ -1,0 +1,55 @@
+{% extends 'dashboard/manager.html' %}
+
+{% block content %}
+  <div class="card dashboard-hero fade-up">
+    <div class="hero-header">
+      <div>
+        <h1>{{ page_title }}</h1>
+        <p class="subtle">{{ page_subtitle }}</p>
+      </div>
+      <div class="hero-actions">
+        <a class="btn btn-ghost btn-inline" href="{% url 'manager-sprints' %}">Назад к спринтам</a>
+      </div>
+    </div>
+  </div>
+
+  <div style="max-width: 520px; margin-top: 1rem;">
+    <section class="card section-block fade-up">
+      {% if error %}
+        <div class="form-message is-error" style="margin-bottom: 1rem;">{{ error }}</div>
+      {% endif %}
+      {% if not department %}
+        <div class="form-message is-error">Отдел не назначен. Обратитесь к администратору.</div>
+      {% else %}
+        <form method="post" class="form-stack">
+          {% csrf_token %}
+
+          <div class="form-group">
+            <label class="form-label" for="title">Название спринта</label>
+            <input class="control-input" type="text" id="title" name="title" placeholder="Спринт 1, Май 2026..." required autofocus>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="goal">Цель спринта</label>
+            <textarea class="control-input" id="goal" name="goal" rows="4" placeholder="Например: доработать модуль задач и закрыть критичные замечания"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="start_date">Дата начала</label>
+            <input class="control-input" type="date" id="start_date" name="start_date" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="end_date">Дата окончания</label>
+            <input class="control-input" type="date" id="end_date" name="end_date" required>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn btn-primary btn-inline" type="submit">Создать спринт</button>
+            <a class="btn btn-ghost btn-inline" href="{% url 'manager-sprints' %}">Отмена</a>
+          </div>
+        </form>
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}

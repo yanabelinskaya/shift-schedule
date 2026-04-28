@@ -2857,6 +2857,65 @@ body.modal-open {
   background: var(--surface-2);
   font-size: 13px;
   color: var(--ink);
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+
+.control-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.control-select {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  font-size: 13px;
+  color: var(--ink);
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='1.8' stroke-linecap='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 16px;
+  padding-right: 34px;
+}
+
+.control-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Form layout utilities */
+.form-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.form-group {
+  display: grid;
+  gap: 6px;
+}
+
+.form-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  font-family: inherit;
+}
+
+.form-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding-top: 4px;
 }
 
 .control-input-sm {
@@ -2864,11 +2923,6 @@ body.modal-open {
   padding: 8px 10px;
   font-size: 12px;
   text-align: right;
-}
-
-.btn-xs {
-  padding: 4px 8px;
-  font-size: 11px;
 }
 
 .manager-actions {

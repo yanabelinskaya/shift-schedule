@@ -141,7 +141,7 @@ class ApiFlowsTestCase(APITestCase):
             date=date.today(),
             title='Удаляемая задача',
             task_type='employee',
-            status='todo',
+            status='awaiting_confirmation',
         )
         delete_url = reverse('api-manager-task-detail', args=[task.id])
 
@@ -167,16 +167,16 @@ class ApiFlowsTestCase(APITestCase):
         status_url = reverse('api-employee-task-status', args=[task.id])
 
         self.client.force_authenticate(self.employee)
-        backward_response = self.client.post(status_url, {'status': 'todo'}, format='json')
+        backward_response = self.client.post(status_url, {'status': 'awaiting_confirmation'}, format='json')
         self.assertEqual(backward_response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(backward_response.data.get('code'), 'validation_error')
         self.assertTrue(backward_response.data.get('trace_id'))
         self.assertIn('message', backward_response.data)
 
-        forward_response = self.client.post(status_url, {'status': 'done'}, format='json')
+        forward_response = self.client.post(status_url, {'status': 'completed'}, format='json')
         self.assertEqual(forward_response.status_code, status.HTTP_200_OK)
         task.refresh_from_db()
-        self.assertEqual(task.status, 'done')
+        self.assertEqual(task.status, 'completed')
 
     def test_auth_login_logout_token_flow(self):
         login_url = reverse('api-login')
@@ -229,7 +229,7 @@ class ApiFlowsTestCase(APITestCase):
             date=date.today(),
             title='Конкурентная задача',
             task_type='employee',
-            status='todo',
+            status='awaiting_confirmation',
         )
         stale_version = task.updated_at
         DepartmentTask.objects.filter(id=task.id).update(
@@ -309,7 +309,7 @@ class ApiFlowsTestCase(APITestCase):
                 date=date.today() + timedelta(days=index),
                 title=f'Задача {index}',
                 task_type='employee',
-                status='todo',
+                status='awaiting_confirmation',
             )
 
         self.client.force_authenticate(self.employee)
@@ -338,7 +338,7 @@ class ApiFlowsTestCase(APITestCase):
             date=date.today(),
             title='Файловая сдача',
             task_type='employee',
-            status='todo',
+            status='awaiting_confirmation',
         )
         submit_url = reverse('api-employee-task-submission', args=[task.id])
 
@@ -355,7 +355,7 @@ class ApiFlowsTestCase(APITestCase):
         submission = TaskSubmission.objects.get(task=task)
         self.assertTrue(submission.attachment.name.endswith('.txt'))
         task.refresh_from_db()
-        self.assertEqual(task.status, 'done')
+        self.assertEqual(task.status, 'completed')
 
         self.assertEqual(len(response.data.get('submissions', [])), 1)
         self.assertTrue(response.data['submissions'][0]['attachment_name'].endswith('.txt'))
@@ -368,7 +368,7 @@ class ApiFlowsTestCase(APITestCase):
             date=date.today(),
             title='Запрещенный файл',
             task_type='employee',
-            status='todo',
+            status='awaiting_confirmation',
         )
         submit_url = reverse('api-employee-task-submission', args=[task.id])
 
@@ -392,7 +392,7 @@ class ApiFlowsTestCase(APITestCase):
             date=date.today(),
             title='Лимит файлов',
             task_type='employee',
-            status='todo',
+            status='awaiting_confirmation',
         )
         GlobalSettings.objects.create(
             task_submission_max_files=1,
