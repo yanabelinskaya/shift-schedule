@@ -5147,6 +5147,27 @@
       }
     };
 
+    // Recount filter badges from current card data-attributes
+    const updateFilterCounts = () => {
+      const counts = {
+        all: allCards.length,
+        new: 0, in_progress: 0, on_review: 0, done: 0, overdue: 0,
+      };
+      allCards.forEach((card) => {
+        const st = card.dataset.taskStatus || "";
+        const ov = card.dataset.taskOverdue === "1";
+        if (st === "awaiting_confirmation") counts.new++;
+        if (["confirmed", "in_progress", "returned"].includes(st)) counts.in_progress++;
+        if (st === "on_review") counts.on_review++;
+        if (st === "completed") counts.done++;
+        if (ov) counts.overdue++;
+      });
+      Object.entries(counts).forEach(([key, val]) => {
+        const el = root.querySelector(`[data-filter-count="${key}"]`);
+        if (el) el.textContent = String(val);
+      });
+    };
+
     // Filter buttons
     filterBtns.forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -5291,7 +5312,8 @@
         statusPill.classList.add(tone);
         inner.dataset.panelTaskStatus = status;
         // Update matching card in grid
-        const card = grid ? grid.querySelector(`[data-task-card-v2][data-task-id="${inner.dataset.panelTaskId}"]`) : null;
+        const taskId = inner.dataset.panelTaskId;
+        const card = grid ? grid.querySelector(`[data-task-card-v2][data-task-id="${taskId}"]`) : null;
         if (card) {
           card.dataset.taskStatus = status;
           const pill = card.querySelector(".status-pill");
@@ -5300,6 +5322,10 @@
             pill.className = `status-pill ${tone}`;
           }
         }
+        // Recalculate filter badge counts
+        updateFilterCounts();
+        // Re-apply filters so card may disappear from current filter
+        applyFilters();
       };
 
       if (actionsEl) {

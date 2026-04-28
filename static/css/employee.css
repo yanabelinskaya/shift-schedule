@@ -235,42 +235,54 @@
 }
 
 .task-empty-state {
-  position: relative;
-  overflow: hidden;
+  border: 1.5px dashed var(--line);
+  background: var(--surface-2);
+  box-shadow: none;
 }
 
 .task-empty-hero {
-  display: grid;
-  gap: 16px;
-  padding: 22px;
-  border-radius: 20px;
-  background: linear-gradient(135deg, rgba(42, 122, 110, 0.14), rgba(224, 134, 74, 0.12));
-  border: 1px solid rgba(42, 122, 110, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 48px 24px;
 }
 
-.task-empty-hero::after {
-  content: "";
-  position: absolute;
-  right: -40px;
-  top: -40px;
-  width: 160px;
-  height: 160px;
-  background: radial-gradient(circle, rgba(42, 122, 110, 0.22), transparent 70%);
-  opacity: 0.6;
+.task-empty-hero h2 {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+}
+
+.task-empty-hero p {
+  font-size: 13.5px;
+  color: var(--muted);
+  margin: 0;
+  max-width: 360px;
 }
 
 .task-empty-badge {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  padding: 8px 14px;
+  gap: 6px;
+  padding: 5px 12px;
   border-radius: 999px;
-  color: var(--accent);
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  color: var(--muted);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  width: fit-content;
+}
+
+.task-empty-icon {
+  width: 44px;
+  height: 44px;
+  color: var(--line);
+  margin-bottom: 4px;
 }
 
 .task-empty-points {
@@ -281,10 +293,10 @@
 .task-empty-point {
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(42, 122, 110, 0.18);
+  background: var(--surface);
+  border: 1.5px solid var(--line);
   font-size: 13px;
-  color: var(--ink);
+  color: var(--muted);
 }
 
 .task-column {
