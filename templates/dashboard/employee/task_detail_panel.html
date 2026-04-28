@@ -1,0 +1,147 @@
+{% load static %}
+<div
+  class="task-panel-inner"
+  data-panel-task-id="{{ task.id }}"
+  data-panel-task-status="{{ task.status }}"
+  data-panel-update-url="{{ update_url }}"
+  data-panel-take-url="{{ take_url }}"
+  data-panel-drop-url="{{ drop_url }}"
+  data-panel-submit-url="{{ submit_url }}"
+>
+
+  {# Header #}
+  <div class="task-panel-head">
+    <div class="task-panel-title-row">
+      <h2 class="task-panel-title">{{ task.title }}</h2>
+      <span class="status-pill {{ task_status_tone }} status-pill-lg" data-panel-status-pill>{{ task_status_label }}</span>
+    </div>
+    <div class="task-panel-meta-row">
+      <span class="task-meta-item">
+        <svg viewBox="0 0 16 16" aria-hidden="true" class="task-meta-icon">
+          <rect x="2" y="3" width="12" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <path d="M5 1v4M11 1v4M2 7h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+        {{ task_due_label }}
+      </span>
+      <span class="task-meta-item">{{ task_priority_label }}</span>
+      <span class="task-meta-item">{{ task_type_label }}</span>
+      <span class="task-meta-item">{{ manager_label }}</span>
+      {% if sprint_label %}
+        <span class="task-meta-item">
+          <svg viewBox="0 0 16 16" aria-hidden="true" class="task-meta-icon">
+            <path d="M8 2L3 9h5l-1 5 6-7H8l1-5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          {{ sprint_label }}{% if sprint_dates %} · {{ sprint_dates }}{% endif %}
+        </span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="task-panel-body">
+
+    {# Description #}
+    {% if task.description %}
+      <div class="task-panel-section">
+        <div class="task-panel-section-label">Описание</div>
+        <p class="task-detail-text">{{ task.description }}</p>
+      </div>
+    {% endif %}
+
+    {# Actions #}
+    <div class="task-panel-section" data-panel-actions-wrap>
+      <div class="task-panel-section-label">Действия</div>
+      <div class="task-detail-actions" data-panel-actions>
+        {% if can_take %}
+          <button class="btn btn-primary btn-inline btn-sm" type="button" data-panel-action="take">
+            Взять задачу
+          </button>
+        {% endif %}
+        {% if can_start %}
+          <button class="btn btn-primary btn-inline btn-sm" type="button" data-panel-action="status" data-target-status="in_progress">
+            Начать работу
+          </button>
+        {% endif %}
+        {% if can_send_review %}
+          <button class="btn btn-primary btn-inline btn-sm" type="button" data-panel-action="status" data-target-status="on_review">
+            Отправить на проверку
+          </button>
+        {% endif %}
+        {% if can_resume %}
+          <button class="btn btn-primary btn-inline btn-sm" type="button" data-panel-action="status" data-target-status="in_progress">
+            Возобновить работу
+          </button>
+        {% endif %}
+        {% if can_drop %}
+          <button class="btn btn-ghost btn-inline btn-sm" type="button" data-panel-action="drop">
+            Отказаться от задачи
+          </button>
+        {% endif %}
+        {% if task.status == 'on_review' %}
+          <p class="subtle task-detail-review-hint">Ожидайте решения менеджера.</p>
+        {% endif %}
+        {% if task.status == 'completed' %}
+          <p class="subtle task-detail-review-hint">Задача выполнена.</p>
+        {% endif %}
+        {% if task.status == 'awaiting_confirmation' and not can_take %}
+          <p class="subtle task-detail-review-hint">Задача уже взята другим сотрудником.</p>
+        {% endif %}
+      </div>
+      <div class="form-message" data-panel-action-message hidden></div>
+    </div>
+
+    {# Add comment #}
+    {% if can_add_comment %}
+      <div class="task-panel-section">
+        <div class="task-panel-section-label">Добавить комментарий</div>
+        <form class="task-form" data-panel-comment-form enctype="multipart/form-data">
+          <label>
+            <span>Комментарий</span>
+            <textarea name="comment" rows="3" data-panel-comment placeholder="Что сделано, вопросы, замечания…"></textarea>
+          </label>
+          <label class="task-file-field">
+            <span>Прикрепить файлы</span>
+            <input type="file" name="attachments" multiple data-panel-files />
+            <span class="task-file-hint" data-panel-files-label>Файл не выбран</span>
+          </label>
+          <div class="task-submit-actions">
+            <button class="btn btn-primary btn-inline btn-sm" type="submit">Отправить</button>
+            <span class="form-message" data-panel-submit-message hidden></span>
+          </div>
+        </form>
+      </div>
+    {% endif %}
+
+    {# History #}
+    <div class="task-panel-section">
+      <div class="task-panel-section-label">
+        История
+        <span class="info-chip" style="margin-left: 6px;" data-panel-comments-count>{{ submissions|length }}</span>
+      </div>
+      <ul class="task-submissions-list" data-panel-submissions>
+        {% for s in submissions %}
+          <li class="submission-item">
+            <div class="submission-meta">
+              <span class="submission-author">{{ s.author }}</span>
+              <span class="submission-date subtle">{{ s.created_label }}</span>
+            </div>
+            {% if s.comment %}
+              <div class="submission-comment">{{ s.comment }}</div>
+            {% endif %}
+            {% if s.file_url %}
+              <a class="submission-file" href="{{ s.file_url }}" target="_blank" rel="noopener">
+                <svg viewBox="0 0 16 16" aria-hidden="true" class="task-meta-icon">
+                  <path d="M4 2h6l4 4v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.4"/>
+                  <path d="M9 2v4h4" fill="none" stroke="currentColor" stroke-width="1.4"/>
+                </svg>
+                {{ s.file_name }}
+              </a>
+            {% endif %}
+          </li>
+        {% empty %}
+          <li class="subtle task-submissions-empty">Комментариев пока нет.</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+  </div>
+</div>

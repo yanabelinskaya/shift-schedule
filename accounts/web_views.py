@@ -23,6 +23,7 @@ from .web_views_employee import (
     employee_schedule,
     employee_sprint,
     employee_task_detail,
+    employee_task_detail_panel,
     employee_tasks,
 )
 from .web_views_manager import (
@@ -75,6 +76,7 @@ __all__ = [
     'employee_availability',
     'employee_tasks',
     'employee_task_detail',
+    'employee_task_detail_panel',
     'employee_sprint',
     'employee_requests',
     'employee_chat',

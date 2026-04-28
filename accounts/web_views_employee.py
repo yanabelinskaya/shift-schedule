@@ -239,12 +239,6 @@ def employee_tasks(request):
     if department and department.manager:
         manager_label = department.manager.get_full_name().strip() or department.manager.username
 
-    task_filter = (request.GET.get("filter") or "all").strip().lower()
-    valid_filters = {"all", "new", "in_progress", "on_review", "done", "overdue"}
-    if task_filter not in valid_filters:
-        task_filter = "all"
-    search_query = (request.GET.get("q") or "").strip()
-
     tasks_queryset = DepartmentTask.objects.none()
     if department:
         base_tasks = DepartmentTask.objects.filter(department=department)
@@ -256,15 +250,12 @@ def employee_tasks(request):
     tasks_queryset = tasks_queryset.select_related("created_by", "sprint").prefetch_related(
         Prefetch("submissions", queryset=submissions_qs)
     )
-    if search_query:
-        tasks_queryset = tasks_queryset.filter(title__icontains=search_query)
 
     now = timezone.localtime()
     month_names = [
         "января", "февраля", "марта", "апреля", "мая", "июня",
         "июля", "августа", "сентября", "октября", "ноября", "декабря",
     ]
-    priority_rank = {"high": 3, "mid": 2, "low": 1}
     priority_labels = {"high": "Высокий", "mid": "Средний", "low": "Низкий"}
     status_labels = {
         "awaiting_confirmation": "Новая",
@@ -287,14 +278,8 @@ def employee_tasks(request):
 
     tasks_all = list(tasks_queryset)
 
-    tasks_total_all = len(tasks_all)
-    tasks_new = sum(1 for t in tasks_all if t.status == "awaiting_confirmation")
-    tasks_progress = sum(1 for t in tasks_all if t.status in ("confirmed", "in_progress", "returned"))
-    tasks_on_review = sum(1 for t in tasks_all if t.status == "on_review")
-    tasks_done = sum(1 for t in tasks_all if t.status == "completed")
-
     def _is_overdue(task):
-        if task.status in ("completed",):
+        if task.status == "completed":
             return False
         due_time = getattr(task, 'due_time', None) or getattr(task, 'end_time', None)
         if task.date < now.date():
@@ -303,25 +288,17 @@ def employee_tasks(request):
             return True
         return False
 
-    tasks_overdue = sum(1 for t in tasks_all if _is_overdue(t))
-
-    def _apply_filter(tasks):
-        if task_filter == "new":
-            return [t for t in tasks if t.status == "awaiting_confirmation"]
-        if task_filter == "in_progress":
-            return [t for t in tasks if t.status in ("confirmed", "in_progress", "returned")]
-        if task_filter == "on_review":
-            return [t for t in tasks if t.status == "on_review"]
-        if task_filter == "done":
-            return [t for t in tasks if t.status == "completed"]
-        if task_filter == "overdue":
-            return [t for t in tasks if _is_overdue(t)]
-        return tasks
-
-    tasks_filtered = _apply_filter(tasks_all)
+    filter_counts = {
+        "all": len(tasks_all),
+        "new": sum(1 for t in tasks_all if t.status == "awaiting_confirmation"),
+        "in_progress": sum(1 for t in tasks_all if t.status in ("confirmed", "in_progress", "returned")),
+        "on_review": sum(1 for t in tasks_all if t.status == "on_review"),
+        "done": sum(1 for t in tasks_all if t.status == "completed"),
+        "overdue": sum(1 for t in tasks_all if _is_overdue(t)),
+    }
 
     task_cards = []
-    for task in tasks_filtered:
+    for task in tasks_all:
         if task.due_time:
             due_label = f"{task.date.day} {month_names[task.date.month - 1]}, {task.due_time:%H:%M}"
         else:
@@ -371,15 +348,6 @@ def employee_tasks(request):
         c["title"],
     ))
 
-    filter_counts = {
-        "all": tasks_total_all,
-        "new": tasks_new,
-        "in_progress": tasks_progress,
-        "on_review": tasks_on_review,
-        "done": tasks_done,
-        "overdue": tasks_overdue,
-    }
-
     return render(
         request,
         'dashboard/employee/tasks.html',
@@ -387,8 +355,6 @@ def employee_tasks(request):
             'active_tab': 'tasks',
             'page_title': 'Мои задачи',
             'page_subtitle': 'Задачи, назначенные вам или взятые самостоятельно',
-            'task_filter': task_filter,
-            'search_query': search_query,
             'department_name': department_name,
             'manager_label': manager_label,
             'task_cards': task_cards,
@@ -525,34 +491,147 @@ def employee_task_detail(request, task_id):
 
     back_url = _resolve_back_url(request, reverse("employee-tasks"))
 
-    return render(
-        request,
-        "dashboard/employee/task_detail.html",
-        {
-            "active_tab": "tasks",
-            "page_title": task.title,
-            "page_subtitle": "Подробности задачи",
-            "task": task,
-            "task_due_label": due_label,
-            "task_status_label": task_status_label,
-            "task_status_tone": status_tone,
-            "task_priority_label": priority_labels.get(task.priority, "Средний"),
-            "task_type_label": task_type_label,
-            "manager_label": manager_label,
-            "department_label": department_label,
-            "sprint_label": sprint_label,
-            "sprint_dates": sprint_dates,
-            "submissions": submissions_payload,
-            "can_add_comment": can_add_comment,
-            "can_take": can_take,
-            "can_drop": can_drop,
-            "can_start": can_start,
-            "can_send_review": can_send_review,
-            "can_resume": can_resume,
-            "back_url": back_url,
-            **_get_employee_next_slot_context(request.user),
-        },
+    ctx = {
+        "active_tab": "tasks",
+        "page_title": task.title,
+        "page_subtitle": "Подробности задачи",
+        "task": task,
+        "task_due_label": due_label,
+        "task_status_label": task_status_label,
+        "task_status_tone": status_tone,
+        "task_priority_label": priority_labels.get(task.priority, "Средний"),
+        "task_type_label": task_type_label,
+        "manager_label": manager_label,
+        "department_label": department_label,
+        "sprint_label": sprint_label,
+        "sprint_dates": sprint_dates,
+        "submissions": submissions_payload,
+        "can_add_comment": can_add_comment,
+        "can_take": can_take,
+        "can_drop": can_drop,
+        "can_start": can_start,
+        "can_send_review": can_send_review,
+        "can_resume": can_resume,
+        "back_url": back_url,
+        **_get_employee_next_slot_context(request.user),
+    }
+    return render(request, "dashboard/employee/task_detail.html", ctx)
+
+
+@login_required
+@require_http_methods(["GET"])
+def employee_task_detail_panel(request, task_id):
+    _ensure_role(request, 'employee')
+    user = request.user
+    task = get_object_or_404(DepartmentTask, id=task_id)
+    if not employee_can_access_task(user, task):
+        raise PermissionDenied
+
+    profile = (
+        EmployeeProfile.objects.select_related("department", "department__manager")
+        .filter(user=user)
+        .first()
     )
+    department = profile.department if profile else None
+    department_label = department.name if department else "—"
+    manager_label = "—"
+    if task.created_by:
+        manager_label = task.created_by.get_full_name().strip() or task.created_by.username
+    elif department and department.manager:
+        manager_label = department.manager.get_full_name().strip() or department.manager.username
+
+    month_names = [
+        "января", "февраля", "марта", "апреля", "мая", "июня",
+        "июля", "августа", "сентября", "октября", "ноября", "декабря",
+    ]
+    priority_labels = {"high": "Высокий", "mid": "Средний", "low": "Низкий"}
+    status_labels = {
+        "awaiting_confirmation": "Новая", "confirmed": "Взята",
+        "in_progress": "В работе", "on_review": "На проверке",
+        "completed": "Выполнена", "returned": "Возвращена на доработку",
+        "conflict": "Конфликт",
+    }
+    status_tones = {
+        "awaiting_confirmation": "muted", "confirmed": "info",
+        "in_progress": "warning", "on_review": "info",
+        "completed": "success", "returned": "danger", "conflict": "danger",
+    }
+
+    if task.due_time:
+        due_label = f"{task.date.day} {month_names[task.date.month - 1]}, {task.due_time:%H:%M}"
+    else:
+        due_label = f"{task.date.day} {month_names[task.date.month - 1]}"
+
+    now = timezone.localtime()
+    is_overdue = False
+    if task.status != "completed":
+        if task.date < now.date():
+            is_overdue = True
+        elif task.due_time and task.date == now.date() and task.due_time < now.time():
+            is_overdue = True
+
+    status_tone = status_tones.get(task.status, "muted")
+    if is_overdue:
+        status_tone = "danger"
+
+    task_type_label = "Персональная" if task.task_type == "employee" else "Общая"
+
+    submissions = (
+        TaskSubmission.objects.select_related("author")
+        .filter(task=task)
+        .order_by("-created_at")
+    )
+    submissions_payload = []
+    for s in submissions:
+        author_label = "—"
+        if s.author:
+            author_label = s.author.get_full_name().strip() or s.author.username
+        local_created = timezone.localtime(s.created_at)
+        submissions_payload.append({
+            "id": s.id,
+            "author": author_label,
+            "comment": s.comment,
+            "file_url": s.attachment.url if s.attachment else "",
+            "file_name": Path(s.attachment.name).name if s.attachment else "",
+            "created_label": f"{local_created.day} {month_names[local_created.month - 1]}, {local_created:%H:%M}",
+        })
+
+    sprint_label = ""
+    sprint_dates = ""
+    if task.sprint_id:
+        try:
+            sprint = Sprint.objects.get(id=task.sprint_id)
+            sprint_label = sprint.title
+            sprint_dates = (
+                f"{sprint.start_date.day} {month_names[sprint.start_date.month - 1]} — "
+                f"{sprint.end_date.day} {month_names[sprint.end_date.month - 1]}"
+            )
+        except Sprint.DoesNotExist:
+            pass
+
+    return render(request, "dashboard/employee/task_detail_panel.html", {
+        "task": task,
+        "task_due_label": due_label,
+        "task_status_label": status_labels.get(task.status, task.status),
+        "task_status_tone": status_tone,
+        "task_priority_label": priority_labels.get(task.priority, "Средний"),
+        "task_type_label": task_type_label,
+        "manager_label": manager_label,
+        "department_label": department_label,
+        "sprint_label": sprint_label,
+        "sprint_dates": sprint_dates,
+        "submissions": submissions_payload,
+        "can_add_comment": task.status not in ("completed",),
+        "can_take": task.status == "awaiting_confirmation" and not task.taken_by_id,
+        "can_drop": task.status in ("awaiting_confirmation", "confirmed") and task.taken_by_id == user.id,
+        "can_start": task.status == "confirmed",
+        "can_send_review": task.status == "in_progress",
+        "can_resume": task.status == "returned",
+        "submit_url": reverse("api-employee-task-submission", args=[task.id]),
+        "update_url": reverse("api-employee-task-status", args=[task.id]),
+        "take_url": reverse("api-employee-task-take", args=[task.id]),
+        "drop_url": reverse("api-employee-task-drop", args=[task.id]),
+    })
 
 
 @login_required

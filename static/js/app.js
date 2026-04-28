@@ -5066,17 +5066,372 @@
     const root = document.querySelector("[data-employee-tasks-v2]");
     if (!root) return;
 
-    const searchForm = root.querySelector(".tasks-search-form");
-    if (searchForm) {
+    const panelUrlBase = root.dataset.panelUrlBase || "";
+    const grid = root.querySelector("[data-tasks-grid]");
+    const emptyState = root.querySelector("[data-tasks-empty]");
+    const emptyBadge = root.querySelector("[data-tasks-empty-badge]");
+    const emptyTitle = root.querySelector("[data-tasks-empty-title]");
+    const emptyText = root.querySelector("[data-tasks-empty-text]");
+    const filterBtns = Array.from(root.querySelectorAll("[data-tasks-filter-btn]"));
+    const searchInput = root.querySelector("[data-tasks-search]");
+    const searchClear = root.querySelector("[data-tasks-search-clear]");
+    const allCards = Array.from(root.querySelectorAll("[data-task-card-v2]"));
+
+    const panel = document.querySelector("[data-task-slide-panel]");
+    const panelContent = panel ? panel.querySelector("[data-task-panel-content]") : null;
+    const panelLoader = panel ? panel.querySelector("[data-task-panel-loader]") : null;
+    const panelBackdrop = panel ? panel.querySelector("[data-task-panel-backdrop]") : null;
+    const panelClose = panel ? panel.querySelector("[data-task-panel-close]") : null;
+
+    let activeFilter = "all";
+    let searchQuery = "";
+
+    // ── Filter logic ──────────────────────────────────────────────────
+    const STATUS_FILTER_MAP = {
+      all: null,
+      new: ["awaiting_confirmation"],
+      in_progress: ["confirmed", "in_progress", "returned"],
+      on_review: ["on_review"],
+      done: ["completed"],
+      overdue: null,
+    };
+
+    const matchesFilter = (card) => {
+      if (activeFilter === "all") return true;
+      if (activeFilter === "overdue") return card.dataset.taskOverdue === "1";
+      const allowed = STATUS_FILTER_MAP[activeFilter];
+      return allowed ? allowed.includes(card.dataset.taskStatus) : true;
+    };
+
+    const matchesSearch = (card) => {
+      if (!searchQuery) return true;
+      const title = (card.dataset.taskTitle || "").toLowerCase();
+      const sprint = (card.dataset.taskSprint || "").toLowerCase();
+      return title.includes(searchQuery) || sprint.includes(searchQuery);
+    };
+
+    const applyFilters = () => {
+      let visible = 0;
+      allCards.forEach((card) => {
+        const show = matchesFilter(card) && matchesSearch(card);
+        card.hidden = !show;
+        if (show) visible++;
+      });
+
+      if (emptyState) {
+        const isEmpty = allCards.length === 0 || visible === 0;
+        emptyState.hidden = !isEmpty;
+        if (isEmpty && emptyBadge && emptyTitle && emptyText) {
+          if (allCards.length === 0) {
+            emptyBadge.textContent = "Задач пока нет";
+            emptyTitle.textContent = "Здесь пока пусто";
+            emptyText.textContent = "Менеджер назначит задачи, и они появятся здесь.";
+          } else if (searchQuery) {
+            emptyBadge.textContent = "Ничего не найдено";
+            emptyTitle.textContent = `По запросу «${searchQuery}» задач не найдено`;
+            emptyText.textContent = "Попробуйте другое название или сбросьте фильтр.";
+          } else if (activeFilter === "overdue") {
+            emptyBadge.textContent = "Всё в срок";
+            emptyTitle.textContent = "Просроченных задач нет";
+            emptyText.textContent = "";
+          } else if (activeFilter === "done") {
+            emptyBadge.textContent = "Архив пуст";
+            emptyTitle.textContent = "Вы ещё ничего не сдавали";
+            emptyText.textContent = "";
+          } else {
+            emptyBadge.textContent = "Задач нет";
+            emptyTitle.textContent = "В этом разделе пусто";
+            emptyText.textContent = "";
+          }
+        }
+      }
+    };
+
+    // Filter buttons
+    filterBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        activeFilter = btn.dataset.filterVal || "all";
+        filterBtns.forEach((b) => b.classList.toggle("is-active", b === btn));
+        applyFilters();
+      });
+    });
+
+    // Search input
+    if (searchInput) {
       let searchTimer = null;
-      const searchInput = searchForm.querySelector(".tasks-search-input");
-      if (searchInput) {
-        searchInput.addEventListener("input", () => {
-          clearTimeout(searchTimer);
-          searchTimer = setTimeout(() => searchForm.submit(), 400);
+      searchInput.addEventListener("input", () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+          searchQuery = searchInput.value.trim().toLowerCase();
+          if (searchClear) searchClear.hidden = !searchQuery;
+          applyFilters();
+        }, 180);
+      });
+    }
+
+    if (searchClear) {
+      searchClear.addEventListener("click", () => {
+        if (searchInput) searchInput.value = "";
+        searchQuery = "";
+        searchClear.hidden = true;
+        applyFilters();
+      });
+    }
+
+    // Initial state
+    applyFilters();
+
+    // ── Slide panel ───────────────────────────────────────────────────
+    if (!panel || !panelContent) return;
+
+    const buildPanelUrl = (taskId) => {
+      if (!panelUrlBase) return "";
+      return panelUrlBase.replace("/0/", `/${taskId}/`).replace(/\/0(\/)?$/, `/${taskId}/`);
+    };
+
+    const openPanel = () => {
+      panel.classList.add("is-open");
+      panel.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+    };
+
+    const closePanel = () => {
+      panel.classList.remove("is-open");
+      panel.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+    };
+
+    const showPanelLoader = () => {
+      if (panelLoader) panelLoader.hidden = false;
+      const existing = panelContent.querySelector(".task-panel-inner");
+      if (existing) existing.remove();
+    };
+
+    const loadTask = async (taskId) => {
+      const url = buildPanelUrl(taskId);
+      if (!url) return;
+      openPanel();
+      showPanelLoader();
+      try {
+        const resp = await fetch(url, {
+          headers: { "X-Requested-With": "XMLHttpRequest" },
+          credentials: "same-origin",
+        });
+        if (!resp.ok) throw new Error(resp.status);
+        const html = await resp.text();
+        if (panelLoader) panelLoader.hidden = true;
+        const wrapper = document.createElement("div");
+        wrapper.innerHTML = html;
+        const inner = wrapper.querySelector(".task-panel-inner") || wrapper.firstElementChild;
+        if (inner) {
+          panelContent.appendChild(inner);
+          initPanelActions(inner);
+        }
+      } catch {
+        if (panelLoader) panelLoader.hidden = true;
+        panelContent.innerHTML = '<p class="subtle" style="padding:2rem">Не удалось загрузить задачу.</p>';
+      }
+    };
+
+    if (panelClose) panelClose.addEventListener("click", closePanel);
+    if (panelBackdrop) panelBackdrop.addEventListener("click", closePanel);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && panel.classList.contains("is-open")) closePanel();
+    });
+
+    root.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-open-task]");
+      if (btn) {
+        const taskId = btn.dataset.openTask;
+        if (taskId) loadTask(taskId);
+      }
+    });
+
+    // ── Panel actions (take/drop/status/comment) ──────────────────────
+    const STATUS_LABELS = {
+      awaiting_confirmation: "Новая", confirmed: "Взята", in_progress: "В работе",
+      on_review: "На проверке", completed: "Выполнена",
+      returned: "Возвращена на доработку", conflict: "Конфликт",
+    };
+    const STATUS_TONES = {
+      awaiting_confirmation: "muted", confirmed: "info", in_progress: "warning",
+      on_review: "info", completed: "success", returned: "danger", conflict: "danger",
+    };
+
+    const initPanelActions = (inner) => {
+      const statusPill = inner.querySelector("[data-panel-status-pill]");
+      const actionsEl = inner.querySelector("[data-panel-actions]");
+      const actionMsg = inner.querySelector("[data-panel-action-message]");
+      const commentForm = inner.querySelector("[data-panel-comment-form]");
+      const filesInput = inner.querySelector("[data-panel-files]");
+      const filesLabel = inner.querySelector("[data-panel-files-label]");
+      const submitMsg = inner.querySelector("[data-panel-submit-message]");
+      const submissionsList = inner.querySelector("[data-panel-submissions]");
+      const commentsCount = inner.querySelector("[data-panel-comments-count]");
+
+      const updateUrl = inner.dataset.panelUpdateUrl || "";
+      const takeUrl = inner.dataset.panelTakeUrl || "";
+      const dropUrl = inner.dataset.panelDropUrl || "";
+      const submitUrl = inner.dataset.panelSubmitUrl || "";
+
+      const showMsg = (el, text, type) => {
+        if (!el) return;
+        el.textContent = text || "";
+        el.classList.remove("is-error", "is-success");
+        el.hidden = !text;
+        if (text) el.classList.add(type === "error" ? "is-error" : "is-success");
+      };
+
+      const updatePillUI = (status, data = {}) => {
+        if (!statusPill) return;
+        const label = data.status_label || STATUS_LABELS[status] || status;
+        const tone = data.status_tone || STATUS_TONES[status] || "muted";
+        statusPill.textContent = label;
+        statusPill.classList.remove("muted", "info", "warning", "success", "danger");
+        statusPill.classList.add(tone);
+        inner.dataset.panelTaskStatus = status;
+        // Update matching card in grid
+        const card = grid ? grid.querySelector(`[data-task-card-v2][data-task-id="${inner.dataset.panelTaskId}"]`) : null;
+        if (card) {
+          card.dataset.taskStatus = status;
+          const pill = card.querySelector(".status-pill");
+          if (pill) {
+            pill.textContent = label;
+            pill.className = `status-pill ${tone}`;
+          }
+        }
+      };
+
+      if (actionsEl) {
+        actionsEl.addEventListener("click", async (e) => {
+          const btn = e.target.closest("[data-panel-action]");
+          if (!btn || btn.disabled) return;
+          const action = btn.dataset.panelAction;
+          const targetStatus = btn.dataset.targetStatus || "";
+          btn.disabled = true;
+          showMsg(actionMsg, "", null);
+          try {
+            let url = "";
+            let body = null;
+            if (action === "take") url = takeUrl;
+            else if (action === "drop") url = dropUrl;
+            else if (action === "status" && targetStatus) {
+              url = updateUrl;
+              body = JSON.stringify({ status: targetStatus });
+            }
+            if (!url) { btn.disabled = false; return; }
+            const resp = await fetch(url, {
+              method: "POST",
+              headers: {
+                "X-CSRFToken": getCookie("csrftoken"),
+                ...(body ? { "Content-Type": "application/json" } : {}),
+              },
+              credentials: "same-origin",
+              body: body || null,
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok) {
+              showMsg(actionMsg, data.detail || "Не удалось выполнить действие.", "error");
+              btn.disabled = false;
+              return;
+            }
+            updatePillUI(data.status || targetStatus, data);
+            actionsEl.innerHTML = '<p class="subtle task-detail-review-hint">Статус обновлён.</p>';
+            showMsg(actionMsg, "", null);
+          } catch {
+            showMsg(actionMsg, "Ошибка сети.", "error");
+            btn.disabled = false;
+          }
         });
       }
-    }
+
+      if (filesInput && filesLabel) {
+        filesInput.addEventListener("change", () => {
+          const files = Array.from(filesInput.files || []);
+          if (!files.length) { filesLabel.textContent = "Файл не выбран"; return; }
+          const names = files.slice(0, 2).map((f) => f.name);
+          filesLabel.textContent = names.join(", ") + (files.length > 2 ? ` +${files.length - 2}` : "");
+        });
+      }
+
+      if (commentForm && submitUrl) {
+        commentForm.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const commentInput = commentForm.querySelector("[data-panel-comment]");
+          const files = filesInput ? Array.from(filesInput.files || []) : [];
+          const commentValue = commentInput ? commentInput.value.trim() : "";
+          showMsg(submitMsg, "", null);
+          if (!commentValue && !files.length) {
+            showMsg(submitMsg, "Добавьте комментарий или файл.", "error");
+            return;
+          }
+          const submitBtn = commentForm.querySelector("button[type='submit']");
+          if (submitBtn) submitBtn.disabled = true;
+          try {
+            const formData = new FormData(commentForm);
+            const resp = await fetch(submitUrl, {
+              method: "POST",
+              headers: { "X-CSRFToken": getCookie("csrftoken") },
+              credentials: "same-origin",
+              body: formData,
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok) {
+              showMsg(submitMsg, data.detail || "Не удалось отправить.", "error");
+              return;
+            }
+            if (commentInput) commentInput.value = "";
+            if (filesInput) { filesInput.value = ""; if (filesLabel) filesLabel.textContent = "Файл не выбран"; }
+            if (Array.isArray(data.submissions) && submissionsList) {
+              const placeholder = submissionsList.querySelector(".task-submissions-empty");
+              if (placeholder) placeholder.remove();
+              data.submissions.forEach((s) => {
+                const li = document.createElement("li");
+                li.className = "submission-item";
+                const meta = document.createElement("div");
+                meta.className = "submission-meta";
+                const author = document.createElement("span");
+                author.className = "submission-author";
+                author.textContent = s.author || s.author_name || "";
+                const date = document.createElement("span");
+                date.className = "submission-date subtle";
+                const created = s.created_label || (s.created_at ? new Date(s.created_at).toLocaleString("ru-RU") : "");
+                date.textContent = created;
+                meta.append(author, date);
+                li.append(meta);
+                if (s.comment) {
+                  const c = document.createElement("div");
+                  c.className = "submission-comment";
+                  c.textContent = s.comment;
+                  li.append(c);
+                }
+                const fileUrl = s.file_url || s.attachment_url;
+                if (fileUrl) {
+                  const a = document.createElement("a");
+                  a.className = "submission-file";
+                  a.href = fileUrl;
+                  a.target = "_blank";
+                  a.rel = "noopener";
+                  a.textContent = s.file_name || s.attachment_name || "Файл";
+                  li.append(a);
+                }
+                submissionsList.prepend(li);
+              });
+              if (commentsCount) {
+                const current = parseInt(commentsCount.textContent || "0", 10);
+                commentsCount.textContent = String(current + data.submissions.length);
+              }
+            }
+            if (data.status) updatePillUI(data.status, data);
+            showMsg(submitMsg, "Отправлено.", "success");
+          } catch {
+            showMsg(submitMsg, "Ошибка сети.", "error");
+          } finally {
+            if (submitBtn) submitBtn.disabled = false;
+          }
+        });
+      }
+    };
   };
 
   const initEmployeeTaskDetail = () => {
