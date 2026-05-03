@@ -1,23 +1,56 @@
 {% extends 'dashboard/manager.html' %}
 
 {% block content %}
-  <div class="card dashboard-hero fade-up">
+  <div class="card dashboard-hero sprint-detail-hero fade-up">
     <div class="hero-header">
       <div>
         <h1>{{ page_title }}</h1>
-        <p class="subtle">{{ page_subtitle }}</p>
+        <p class="subtle">{{ sprint_period }}</p>
       </div>
       <div class="hero-actions">
-        <a class="btn btn-ghost btn-inline" href="{% url 'manager-sprints' %}">← Все спринты</a>
+        <a class="btn btn-ghost btn-inline" href="{% url 'manager-sprints' %}">Все спринты</a>
       </div>
     </div>
-    <div class="hero-meta">
-      <div class="meta-chip">
-        <span class="status-pill {{ sprint_status_tone }}" style="font-size: 0.75rem;">{{ sprint_status_label }}</span>
+
+    <div class="sprint-detail-kpis">
+      <div class="sprint-kpi-card">
+        <span>Статус</span>
+        <strong><span class="status-pill {{ sprint_status_tone }}">{{ sprint_status_label }}</span></strong>
       </div>
-      <div class="meta-chip">Задач: {{ tasks_total }}</div>
-      <div class="meta-chip">Выполнено: {{ tasks_done }}</div>
+      <div class="sprint-kpi-card">
+        <span>Задач</span>
+        <strong>{{ tasks_total }}</strong>
+      </div>
+      <div class="sprint-kpi-card">
+        <span>Выполнено</span>
+        <strong>{{ tasks_done }}</strong>
+      </div>
+      <div class="sprint-kpi-card">
+        <span>Без исполнителя</span>
+        <strong>{{ unassigned_tasks|length }}</strong>
+      </div>
     </div>
+
+    <div class="sprint-hero-progress">
+      <div class="sprint-track-labels">
+        <span>Прогресс выполнения</span>
+        <strong>{{ progress }}%</strong>
+      </div>
+      <div class="sprint-progress">
+        <div class="sprint-progress-bar" style="width: {{ progress }}%;"></div>
+      </div>
+    </div>
+    {% if sprint.status == 'active' %}
+      <div class="sprint-hero-progress">
+        <div class="sprint-track-labels">
+          <span>День {{ days_gone }} из {{ total_days }}</span>
+          <strong>{{ time_progress }}%</strong>
+        </div>
+        <div class="sprint-progress sprint-progress-time">
+          <div class="sprint-progress-bar is-time" style="width: {{ time_progress }}%;"></div>
+        </div>
+      </div>
+    {% endif %}
   </div>
 
   {% if error %}
@@ -26,108 +59,193 @@
   {% if success %}
     <div class="form-message is-success fade-up" style="margin-top: 1rem;">{{ success }}</div>
   {% endif %}
+  {% if messages %}
+    {% for message in messages %}
+      <div class="form-message is-{{ message.tags }} fade-up" style="margin-top: 1rem;">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
 
-  <div class="hero-actions fade-up" style="margin-top: 1rem; gap: 0.5rem; display: flex; flex-wrap: wrap;">
+  <div class="sprint-action-bar fade-up">
     {% if sprint.status == 'planning' %}
-      <form method="post" style="display:inline;">
+      <form method="post">
         {% csrf_token %}
         <input type="hidden" name="action" value="set_active">
         <button class="btn btn-primary btn-inline" type="submit">Запустить спринт</button>
       </form>
     {% elif sprint.status == 'active' %}
-      <form method="post" style="display:inline;">
+      <form method="post">
         {% csrf_token %}
         <input type="hidden" name="action" value="set_completed">
         <button class="btn btn-ghost btn-inline" type="submit" onclick="return confirm('Завершить спринт?')">Завершить спринт</button>
       </form>
     {% elif sprint.status == 'completed' %}
-      <form method="post" style="display:inline;">
+      <form method="post">
         {% csrf_token %}
         <input type="hidden" name="action" value="set_planning">
         <button class="btn btn-ghost btn-inline" type="submit">Вернуть в планирование</button>
       </form>
     {% endif %}
+    <a class="btn btn-ghost btn-inline" href="{% url 'manager-task-create' %}?next={{ request.get_full_path|urlencode }}">Создать задачу</a>
   </div>
 
-  <div style="display: grid; grid-template-columns: 1fr 360px; gap: 1rem; margin-top: 1rem; align-items: start;">
+  <section class="card section-block sprint-goal-card fade-up">
+    <div class="section-header">
+      <div>
+        <h2>Цель спринта</h2>
+        <p class="subtle">Видна сотрудникам во вкладке спринта.</p>
+      </div>
+    </div>
+    <form method="post" class="form-stack">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="update_goal">
+      <div class="form-group">
+        <textarea class="control-input" id="sprint-goal" name="goal" rows="3" placeholder="Например: доработать модуль задач и закрыть критичные замечания">{{ sprint.goal }}</textarea>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary btn-inline btn-sm" type="submit">Сохранить цель</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="card section-block sprint-kanban-section fade-up">
+    <div class="section-header">
+      <div>
+        <h2>Канбан-доска</h2>
+        <p class="subtle">Задачи спринта по статусам.</p>
+      </div>
+      <span class="info-chip">{{ tasks_total }}</span>
+    </div>
+
+    {% if sprint_tasks %}
+      <div class="kanban-board">
+        {% for column in kanban_columns %}
+          <div class="kanban-column">
+            <div class="kanban-column-head">
+              <span class="kanban-column-title">{{ column.title }}</span>
+              <span class="kanban-column-count">{{ column.tasks|length }}</span>
+            </div>
+            <div class="kanban-column-body">
+              {% for task in column.tasks %}
+                <article class="kanban-card">
+                  <div class="kanban-card-title">
+                    <span class="priority-dot is-{{ task.priority }}" aria-hidden="true"></span>
+                    <a href="{% url 'manager-task-detail' task.id %}">{{ task.title }}</a>
+                  </div>
+                  <div class="kanban-card-meta">
+                    {% if task.taken_name %}
+                      <span class="info-chip">{{ task.taken_name }}</span>
+                    {% else %}
+                      <span class="status-pill danger">Без исполнителя</span>
+                    {% endif %}
+                  </div>
+                  {% if sprint.status != 'completed' %}
+                    <form method="post" class="kanban-card-assign">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="assign_task">
+                      <input type="hidden" name="task_id" value="{{ task.id }}">
+                      <div class="custom-select sprint-assignee-select" data-custom-select>
+                        <select name="assignee_id" onchange="this.form.submit()">
+                          <option value="">— исполнитель —</option>
+                          {% for emp in employee_options %}
+                            <option value="{{ emp.id }}" {% if emp.id == task.taken_id %}selected{% endif %}>{{ emp.name }}</option>
+                          {% endfor %}
+                        </select>
+                        <button class="custom-select-trigger" type="button" data-select-trigger>
+                          <span data-select-label></span>
+                          <svg viewBox="0 0 20 20" aria-hidden="true">
+                            <path d="M5 7l5 6 5-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                          </svg>
+                        </button>
+                        <div class="custom-select-menu" data-select-menu>
+                          <div class="custom-select-options" data-select-options></div>
+                        </div>
+                      </div>
+                    </form>
+                  {% endif %}
+                </article>
+              {% empty %}
+                <div class="kanban-empty">—</div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="task-empty" style="padding: 2rem; text-align: center;">
+        <p class="subtle">В спринте пока нет задач. Добавьте их из списка ниже.</p>
+      </div>
+    {% endif %}
+  </section>
+
+  <div class="sprint-detail-layout">
 
     <section class="card section-block fade-up">
       <div class="section-header">
         <div>
-          <h2>Цель спринта</h2>
-          <p class="subtle">Эта цель видна сотрудникам во вкладке спринта.</p>
+          <h2>Задачи без исполнителя</h2>
+          <p class="subtle">Назначьте сотрудника прямо отсюда.</p>
         </div>
-      </div>
-      <form method="post" class="form-stack" style="margin-bottom: 1.25rem;">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="update_goal">
-        <div class="form-group">
-          <label class="form-label" for="sprint-goal">Описание цели</label>
-          <textarea class="control-input" id="sprint-goal" name="goal" rows="4" placeholder="Например: доработать модуль задач и закрыть критичные замечания">{{ sprint.goal }}</textarea>
-        </div>
-        <div class="form-actions">
-          <button class="btn btn-primary btn-inline btn-sm" type="submit">Сохранить цель</button>
-        </div>
-      </form>
-
-      <div class="section-header">
-        <div>
-          <h2>Задачи спринта</h2>
-          <p class="subtle">Все задачи, добавленные в этот спринт.</p>
-        </div>
-        <span class="info-chip">{{ tasks_total }}</span>
+        <span class="info-chip">{{ unassigned_tasks|length }}</span>
       </div>
 
-      {% if sprint_tasks %}
+      {% if unassigned_tasks %}
         <div class="task-list">
-          {% for task in sprint_tasks %}
+          {% for task in unassigned_tasks %}
             <article class="task-list-item">
               <div class="task-list-main">
                 <div class="task-card-title">
                   <span class="priority-dot is-{{ task.priority }}" aria-hidden="true"></span>
-                  <h3>{{ task.title }}</h3>
+                  <h3><a href="{% url 'manager-task-detail' task.id %}">{{ task.title }}</a></h3>
                 </div>
                 <div class="task-list-meta">
                   <span class="subtle">{{ task.priority_label }}</span>
-                  {% if task.taken_name %}
-                    <span class="info-chip">{{ task.taken_name }}</span>
-                  {% else %}
-                    <span class="subtle">Не взята</span>
-                  {% endif %}
+                  <span class="status-pill {{ task.status_tone }}">{{ task.status_label }}</span>
                 </div>
               </div>
               <div class="task-list-side">
-                <span class="status-pill {{ task.status_tone }}">{{ task.status_label }}</span>
                 {% if sprint.status != 'completed' %}
-                  <form method="post" style="display:inline;">
+                  <form method="post" class="sprint-inline-form">
                     {% csrf_token %}
-                    <input type="hidden" name="action" value="remove_task">
+                    <input type="hidden" name="action" value="assign_task">
                     <input type="hidden" name="task_id" value="{{ task.id }}">
-                    <button class="btn btn-ghost btn-inline btn-xs" type="submit">Убрать</button>
+                    <div class="custom-select sprint-assignee-select" data-custom-select>
+                      <select name="assignee_id" required>
+                        <option value="">— выбрать —</option>
+                        {% for emp in employee_options %}
+                          <option value="{{ emp.id }}">{{ emp.name }}</option>
+                        {% endfor %}
+                      </select>
+                      <button class="custom-select-trigger" type="button" data-select-trigger>
+                        <span data-select-label></span>
+                        <svg viewBox="0 0 20 20" aria-hidden="true">
+                          <path d="M5 7l5 6 5-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                      </button>
+                      <div class="custom-select-menu" data-select-menu>
+                        <div class="custom-select-options" data-select-options></div>
+                      </div>
+                    </div>
+                    <button class="btn btn-primary btn-inline btn-xs" type="submit">Назначить</button>
                   </form>
                 {% endif %}
-                <a class="btn btn-ghost btn-inline btn-xs" href="{% url 'manager-task-detail' task.id %}">Открыть</a>
               </div>
             </article>
           {% endfor %}
         </div>
       {% else %}
-        <div class="task-empty" style="padding: 2rem; text-align: center;">
-          <p class="subtle">Добавьте задачи из списка справа.</p>
+        <div class="task-empty" style="padding: 1.25rem; text-align: center;">
+          <p class="subtle">Все задачи имеют исполнителя.</p>
         </div>
       {% endif %}
-    </section>
 
-    {% if sprint.status != 'completed' %}
-      <section class="card section-block fade-up">
-        <div class="section-header">
+      {% if sprint.status != 'completed' %}
+        <div class="section-header sprint-subsection-header">
           <div>
-            <h2>Добавить задачу</h2>
-            <p class="subtle">Задачи без спринта.</p>
+            <h2>Добавить задачу в спринт</h2>
+            <p class="subtle">Задачи отдела, которые ещё не привязаны к спринту.</p>
           </div>
           <span class="info-chip">{{ available_tasks|length }}</span>
         </div>
-
         {% if available_tasks %}
           <div class="task-list">
             {% for task in available_tasks %}
@@ -153,13 +271,69 @@
             {% endfor %}
           </div>
         {% else %}
-          <div class="task-empty" style="padding: 1.5rem; text-align: center;">
-            <p class="subtle">Все задачи уже в спринтах или завершены.</p>
-            <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'manager-task-create' %}" style="margin-top: 0.75rem;">Создать задачу</a>
+          <div class="task-empty" style="padding: 1rem; text-align: center;">
+            <p class="subtle">Все задачи уже в спринтах.</p>
+            <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'manager-task-create' %}" style="margin-top: 0.5rem;">Создать задачу</a>
           </div>
         {% endif %}
-      </section>
-    {% endif %}
+      {% endif %}
+    </section>
+
+    <section class="card section-block fade-up">
+      <div class="section-header">
+        <div>
+          <h2>Загрузка команды</h2>
+          <p class="subtle">Активные задачи в этом спринте.</p>
+        </div>
+      </div>
+
+      {% if team_load %}
+        <ul class="team-load-list">
+          {% for member in team_load %}
+            <li class="team-load-item">
+              <div class="team-load-row">
+                <span class="team-load-name">{{ member.name }}</span>
+                <span class="team-load-count">{{ member.tasks }}</span>
+              </div>
+              <p class="subtle team-load-position">{{ member.position }}</p>
+              <div class="sprint-progress">
+                <div class="sprint-progress-bar" style="width: {{ member.percent }}%;"></div>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="task-empty" style="padding: 1rem; text-align: center;">
+          <p class="subtle">В отделе пока нет сотрудников.</p>
+        </div>
+      {% endif %}
+
+      <div class="sprint-side-block">
+        <h3>Управление задачами</h3>
+        {% if sprint_tasks %}
+          <div class="sprint-task-mini-list">
+            {% for task in sprint_tasks %}
+              <div class="sprint-task-mini">
+                <div class="sprint-task-mini-title">
+                  <span class="priority-dot is-{{ task.priority }}" aria-hidden="true"></span>
+                  <a href="{% url 'manager-task-detail' task.id %}">{{ task.title }}</a>
+                </div>
+                {% if sprint.status != 'completed' %}
+                  <form method="post" style="display:inline;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="remove_task">
+                    <input type="hidden" name="task_id" value="{{ task.id }}">
+                    <button class="btn btn-ghost btn-inline btn-xs" type="submit" title="Убрать из спринта">×</button>
+                  </form>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="subtle" style="font-size: 0.85rem;">Задач нет.</p>
+        {% endif %}
+      </div>
+    </section>
 
   </div>
 {% endblock %}

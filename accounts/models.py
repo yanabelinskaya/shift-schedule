@@ -501,6 +501,7 @@ class LeaveRequest(models.Model):
         ("pending", "На рассмотрении"),
         ("approved", "Одобрено"),
         ("rejected", "Отклонено"),
+        ("cancelled", "Отменено"),
     ]
 
     user = models.ForeignKey(
@@ -575,6 +576,68 @@ class Substitution(models.Model):
         return f"{self.absent_user_id} → {self.substitute_user_id} {self.start_date}..{self.end_date}"
 
 
+class TaskReassignment(models.Model):
+    REASON_CHOICES = [
+        ("vacation", "Отпуск"),
+        ("sick", "Больничный"),
+        ("substitution", "Замещение"),
+        ("manual", "Перераспределение"),
+    ]
+
+    task = models.ForeignKey(
+        DepartmentTask,
+        on_delete=models.CASCADE,
+        related_name="reassignments",
+    )
+    previous_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reassignments_lost",
+    )
+    new_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reassignments_gained",
+    )
+    reason = models.CharField(max_length=20, choices=REASON_CHOICES, default="manual")
+    note = models.CharField(max_length=255, blank=True)
+    leave_request = models.ForeignKey(
+        "LeaveRequest",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="task_reassignments",
+    )
+    substitution = models.ForeignKey(
+        "Substitution",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="task_reassignments",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_task_reassignments",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["task", "created_at"], name="idx_task_reassign_task"),
+        ]
+
+    def __str__(self):
+        return f"Task {self.task_id}: {self.previous_user_id} → {self.new_user_id}"
+
+
 class PasswordResetRequest(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Ожидает'),
@@ -593,6 +656,72 @@ class PasswordResetRequest(models.Model):
 
     def __str__(self):
         return f'Reset request for {self.email} ({self.status})'
+
+
+class TaskMessage(models.Model):
+    task = models.ForeignKey(
+        DepartmentTask,
+        on_delete=models.CASCADE,
+        related_name='messages',
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='task_messages',
+    )
+    text = models.TextField(blank=True)
+    attachment = models.FileField(upload_to='task_messages/%Y/%m/%d/', null=True, blank=True)
+    reply_to = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='replies',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['task', 'created_at'], name='idx_msg_task_created'),
+        ]
+
+    def __str__(self):
+        return f'Message on task {self.task_id} by {self.author_id}'
+
+
+class TaskMessageReadState(models.Model):
+    task = models.ForeignKey(
+        DepartmentTask,
+        on_delete=models.CASCADE,
+        related_name='message_read_states',
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='task_message_read_states',
+    )
+    last_read_message = models.ForeignKey(
+        TaskMessage,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['task', 'user'], name='uniq_task_message_read_state'),
+        ]
+        indexes = [
+            models.Index(fields=['user', 'task'], name='idx_msg_read_user_task'),
+        ]
+
+    def __str__(self):
+        return f'Read state for task {self.task_id} by {self.user_id}'
 
 
 class GlobalSettings(models.Model):

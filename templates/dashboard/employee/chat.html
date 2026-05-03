@@ -1,18 +1,135 @@
 {% extends 'dashboard/employee.html' %}
 
 {% block content %}
-  <div class="card dashboard-hero fade-up">
-    <div class="hero-header">
-      <div>
-        <h1>{{ page_title }}</h1>
-        <p class="subtle">{{ page_subtitle }}</p>
-      </div>
-    </div>
-  </div>
+  <div
+    class="employee-chat-layout fade-up"
+    data-employee-chat
+    data-selected-task="{{ selected_task_id|default:'' }}"
+  >
 
-  <div class="card fade-up" style="margin-top: 1rem;">
-    <div style="padding: 2rem; text-align: center; color: var(--text-subtle);">
-      <p>Страница в разработке</p>
-    </div>
+    {# ── Task sidebar ──────────────────────────────────────────────── #}
+    <aside class="chat-sidebar">
+      <div class="chat-sidebar-header">
+        <h2 class="chat-sidebar-title">Задачи</h2>
+      </div>
+
+      {% if task_list %}
+        <ul class="chat-tasks-list" role="list">
+          {% for task in task_list %}
+            <li
+              class="chat-task-item{% if task.id == selected_task_id %} is-active{% endif %}"
+              role="listitem"
+              data-chat-task-item
+              data-task-id="{{ task.id }}"
+              data-task-title="{{ task.title }}"
+              data-messages-url="{{ task.messages_url }}"
+              data-task-url="{{ task.task_url }}"
+            >
+              <div class="chat-task-item-body">
+                <span class="chat-task-item-title">{{ task.title }}</span>
+                <span class="chat-task-item-status">{{ task.status_label }}</span>
+              </div>
+              {% if task.unread_count %}
+                <span class="chat-task-item-badge" data-chat-unread-badge>{{ task.unread_count }}</span>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="chat-no-tasks">
+          <p>Нет доступных задач</p>
+        </div>
+      {% endif %}
+    </aside>
+
+    {# ── Chat panel ────────────────────────────────────────────────── #}
+    <section class="chat-main" data-chat-panel>
+
+      {# Header #}
+      <div class="chat-header" data-chat-header>
+        <div class="chat-header-info">
+          <span class="chat-header-title" data-chat-task-title>
+            {% if selected_task_id %}Загрузка…{% else %}Выберите задачу{% endif %}
+          </span>
+        </div>
+        <a
+          class="btn btn-ghost btn-inline btn-xs chat-open-task-btn"
+          data-chat-open-task
+          href="#"
+          hidden
+        >Открыть задачу</a>
+      </div>
+
+      {# Messages area #}
+      <div class="chat-messages-wrap">
+        <div class="chat-messages" data-chat-messages></div>
+
+        <div class="chat-empty-state" data-chat-empty hidden>
+          <svg viewBox="0 0 48 48" fill="none" aria-hidden="true" class="chat-empty-icon">
+            <path d="M8 10A4 4 0 0 1 12 6h24a4 4 0 0 1 4 4v18a4 4 0 0 1-4 4H16l-8 8V10Z"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M16 16h16M16 23h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <p>Сообщений пока нет.<br>Начните обсуждение первым!</p>
+        </div>
+      </div>
+
+      {# Footer — reply banner + form #}
+      <div class="chat-footer">
+        <div class="chat-reply-banner" data-chat-reply-banner hidden>
+          <span class="chat-reply-banner-text" data-chat-reply-text></span>
+          <button type="button" class="chat-reply-cancel" data-chat-reply-cancel aria-label="Отменить ответ">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+
+        <form class="chat-form" data-chat-form autocomplete="off">
+          {% csrf_token %}
+          <label class="chat-attach-label" title="Прикрепить файл" data-chat-attach-label>
+            <input
+              type="file"
+              class="chat-attach-input"
+              data-chat-attach
+              accept=".pdf,.jpg,.jpeg,.png,.txt,.doc,.docx,.xls,.xlsx"
+              hidden
+            />
+            <svg viewBox="0 0 20 20" aria-hidden="true" class="chat-attach-icon">
+              <path d="M16.5 10.5l-7 7a4.95 4.95 0 0 1-7-7l7.5-7.5a3 3 0 0 1 4.24 4.24L7.75 14.3a1.06 1.06 0 0 1-1.5-1.5L12.5 6.5"
+                fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+          </label>
+          <textarea
+            class="chat-input"
+            data-chat-input
+            placeholder="Написать сообщение…"
+            rows="1"
+            maxlength="4000"
+          ></textarea>
+          <button
+            type="submit"
+            class="chat-send-btn"
+            data-chat-send-btn
+            aria-label="Отправить"
+          >
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M17.5 10L3 4l2.5 6-2.5 6 14.5-6z" fill="currentColor"/>
+            </svg>
+          </button>
+        </form>
+
+        <div class="chat-attach-filename" data-chat-attach-name hidden>
+          <span data-chat-attach-filename></span>
+          <button type="button" class="chat-attach-clear" data-chat-attach-clear aria-label="Удалить прикрепленный файл">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+    </section>
+
   </div>
 {% endblock %}

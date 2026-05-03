@@ -93,6 +93,17 @@
               </button>
             {% endif %}
 
+            {% if can_complete %}
+              <button
+                class="btn btn-primary btn-inline btn-sm"
+                type="button"
+                data-task-detail-action="status"
+                data-target-status="completed"
+              >
+                Отметить выполненной
+              </button>
+            {% endif %}
+
             {% if can_resume %}
               <button
                 class="btn btn-primary btn-inline btn-sm"
@@ -113,6 +124,10 @@
                 Отказаться от задачи
               </button>
             {% endif %}
+
+            <a class="btn btn-ghost btn-inline btn-sm" href="{{ task_chat_url }}">
+              Открыть чат задачи
+            </a>
 
             {% if task.status == 'on_review' %}
               <p class="subtle task-detail-review-hint">

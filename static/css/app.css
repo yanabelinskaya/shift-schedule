@@ -31,14 +31,14 @@
   --ink: #f3eee7;
   --muted: #a9a29a;
   --line: rgba(255, 255, 255, 0.08);
-  --accent: #4bc1ac;
-  --accent-2: #f0a066;
-  --accent-3: #7da8e8;
+  --accent: #9abda9;
+  --accent-2: #d79362;
+  --accent-3: #8faed4;
   --shadow: 0 24px 50px rgba(8, 10, 14, 0.55);
   --sidebar-bg: #0a0c10;
   --sidebar-ink: #f4efe6;
   --sidebar-muted: #8d8a86;
-  --btn-text: #000000;
+  --btn-text: #101411;
 }
 
 * {
@@ -1551,6 +1551,53 @@ a {
 
 body.modal-open {
   overflow: hidden;
+}
+
+/* Profile inline modals */
+.modal[aria-hidden="false"] {
+  display: flex;
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 24, 22, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+.modal-dialog {
+  position: relative;
+  width: min(520px, 94vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  z-index: 1;
+}
+
+.modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius);
+  cursor: pointer;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.modal-close:hover {
+  background: var(--surface-2);
+  color: var(--ink);
 }
 
 .btn-inline {
@@ -3550,11 +3597,13 @@ body.modal-open {
 
 .custom-date {
   position: relative;
+  display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .custom-date .date-input {
+  width: 100%;
   border: 1px solid var(--line);
   background: var(--surface-2);
   border-radius: 10px;
@@ -3618,6 +3667,9 @@ body.modal-open {
 }
 
 .date-panel-day {
+  border: 0;
+  background: transparent;
+  color: var(--ink);
   border-radius: 8px;
   padding: 6px 0;
   text-align: center;

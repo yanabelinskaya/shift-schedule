@@ -3,7 +3,7 @@ from pathlib import Path
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.db.models import Prefetch, Q
+from django.db.models import Count, F, OuterRef, Prefetch, Q, Subquery
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -15,6 +15,8 @@ from .models import (
     LeaveRequest,
     Sprint,
     Substitution,
+    TaskMessage,
+    TaskMessageReadState,
     TaskSubmission,
     UserRole,
 )
@@ -47,6 +49,8 @@ def employee_dashboard(request):
         "confirmed": "Подтверждено",
         "conflict": "Конфликт",
         "in_progress": "В процессе",
+        "on_review": "На проверке",
+        "returned": "Возвращена",
         "completed": "Выполнено",
     }
     status_tones = {
@@ -54,6 +58,8 @@ def employee_dashboard(request):
         "confirmed": "success",
         "conflict": "danger",
         "in_progress": "warning",
+        "on_review": "info",
+        "returned": "danger",
         "completed": "success",
     }
 
@@ -84,11 +90,14 @@ def employee_dashboard(request):
         DepartmentTask.TaskStatus.AWAITING_CONFIRMATION,
         DepartmentTask.TaskStatus.CONFIRMED,
         DepartmentTask.TaskStatus.IN_PROGRESS,
+        DepartmentTask.TaskStatus.ON_REVIEW,
+        DepartmentTask.TaskStatus.RETURNED,
         DepartmentTask.TaskStatus.CONFLICT,
     ]
 
-    in_progress_tasks = []
-    upcoming_tasks = []
+    current_tasks = []
+    deadline_tasks = []
+    accessible_task_ids = []
 
     if department:
         my_tasks = (
@@ -105,15 +114,20 @@ def employee_dashboard(request):
             .order_by('date', 'due_time')
         )
 
+        week_end = today + timedelta(days=7)
         for task in my_tasks:
             overdue = is_task_overdue(task)
             tone = 'danger' if overdue else status_tones.get(task.status, 'muted')
             sprint_label = None
             if task.sprint:
                 sprint_label = f"Спринт: {fmt_date(task.sprint.start_date)} — {fmt_date(task.sprint.end_date)}"
+            description_short = task.description[:120].rstrip() if task.description else ""
+            if task.description and len(task.description) > 120:
+                description_short += "..."
             item = {
                 'id': task.id,
                 'title': task.title,
+                'description_short': description_short,
                 'priority': task.priority,
                 'priority_label': priority_labels.get(task.priority, task.priority),
                 'status': task.status,
@@ -122,22 +136,35 @@ def employee_dashboard(request):
                 'deadline_label': deadline_label(task),
                 'sprint_label': sprint_label,
                 'is_overdue': overdue,
+                'url': reverse('employee-task-detail', args=[task.id]),
+                'chat_url': f"{reverse('employee-chat')}?task_id={task.id}",
             }
-            if task.status == DepartmentTask.TaskStatus.IN_PROGRESS:
-                in_progress_tasks.append(item)
-            else:
-                upcoming_tasks.append(item)
+            accessible_task_ids.append(task.id)
+            current_tasks.append(item)
+            if overdue or task.date <= week_end:
+                deadline_tasks.append(item)
 
     # Workload
-    total_active = len(in_progress_tasks) + len(upcoming_tasks)
+    total_active = len(current_tasks)
+    workload_score = 0
+    priority_weights = {'high': 26, 'mid': 18, 'low': 12}
+    for task in current_tasks:
+        workload_score += priority_weights.get(task['priority'], 18)
+        if task['is_overdue']:
+            workload_score += 18
+        elif task['deadline_label'].startswith('Сегодня'):
+            workload_score += 12
+        elif task['deadline_label'].startswith('Завтра'):
+            workload_score += 6
+    workload_pct = min(100, workload_score)
     if total_active == 0:
         workload_label, workload_tone, workload_pct = "Свободен", "success", 0
-    elif total_active <= 2:
-        workload_label, workload_tone, workload_pct = "Нормальная загрузка", "success", 40
-    elif total_active <= 5:
-        workload_label, workload_tone, workload_pct = "Высокая загрузка", "warning", 70
+    elif workload_pct < 55:
+        workload_label, workload_tone = "Нормальная загрузка", "success"
+    elif workload_pct < 85:
+        workload_label, workload_tone = "Высокая загрузка", "warning"
     else:
-        workload_label, workload_tone, workload_pct = "Перегружен", "danger", 100
+        workload_label, workload_tone = "Перегружен", "danger"
 
     # Notifications derived from recent events
     notifications = []
@@ -164,6 +191,54 @@ def employee_dashboard(request):
                 'date_label': fmt_date(task.date),
                 'ts': task.created_at,
             })
+
+        redistributed_tasks = (
+            DepartmentTask.objects.filter(
+                id__in=accessible_task_ids,
+                updated_at__gte=since,
+            )
+            .exclude(created_at__gte=since)
+            .order_by('-updated_at')[:4]
+        )
+        for task in redistributed_tasks:
+            notifications.append({
+                'kind': 'task',
+                'text': f'Задача перераспределена или обновлена: {task.title}',
+                'url': reverse('employee-task-detail', args=[task.id]),
+                'date_label': fmt_date(task.date),
+                'ts': task.updated_at,
+            })
+
+        if accessible_task_ids:
+            read_states = {
+                state.task_id: state.last_read_message_id or 0
+                for state in TaskMessageReadState.objects.filter(task_id__in=accessible_task_ids, user=user)
+            }
+            seen_chat_tasks = set()
+            recent_messages = (
+                TaskMessage.objects.filter(
+                    task_id__in=accessible_task_ids,
+                    created_at__gte=since,
+                )
+                .exclude(author=user)
+                .select_related('task', 'author')
+                .order_by('-created_at')[:30]
+            )
+            for message in recent_messages:
+                if message.task_id in seen_chat_tasks:
+                    continue
+                if message.id <= read_states.get(message.task_id, 0):
+                    continue
+                seen_chat_tasks.add(message.task_id)
+                author_label = message.author.get_full_name().strip() or message.author.username if message.author else '—'
+                local_created = timezone.localtime(message.created_at)
+                notifications.append({
+                    'kind': 'chat',
+                    'text': f'Новое сообщение от {author_label}: {message.task.title}',
+                    'url': f"{reverse('employee-chat')}?task_id={message.task_id}",
+                    'date_label': f"{local_created.day} {month_names[local_created.month - 1]}, {local_created:%H:%M}",
+                    'ts': message.created_at,
+                })
 
         # Leave requests reviewed
         reviewed = LeaveRequest.objects.filter(
@@ -196,7 +271,7 @@ def employee_dashboard(request):
             notifications.append({
                 'kind': 'sub',
                 'text': f'Вы назначены заменой для {absent_name}',
-                'url': '#',
+                'url': reverse('employee-tasks'),
                 'date_label': f'{fmt_date(sub.start_date)} — {fmt_date(sub.end_date)}',
                 'ts': sub.created_at,
             })
@@ -208,8 +283,8 @@ def employee_dashboard(request):
         'page_title': 'Дашборд',
         'page_subtitle': f'Добро пожаловать, {user.get_full_name().strip() or user.username}',
         'department_name': department.name if department else '—',
-        'in_progress_tasks': in_progress_tasks,
-        'upcoming_tasks': upcoming_tasks[:8],
+        'current_tasks': current_tasks,
+        'deadline_tasks': deadline_tasks[:8],
         'notifications': notifications[:10],
         'total_active': total_active,
         'workload_label': workload_label,
@@ -470,6 +545,7 @@ def employee_task_detail(request, task_id):
     can_drop = task.status in ("awaiting_confirmation", "confirmed") and task.taken_by_id == user.id
     can_start = task.status == "confirmed"
     can_send_review = task.status == "in_progress"
+    can_complete = task.status == "in_progress"
     can_resume = task.status == "returned"
 
     sprint_label = ""
@@ -511,7 +587,9 @@ def employee_task_detail(request, task_id):
         "can_drop": can_drop,
         "can_start": can_start,
         "can_send_review": can_send_review,
+        "can_complete": can_complete,
         "can_resume": can_resume,
+        "task_chat_url": f"{reverse('employee-chat')}?task_id={task.id}",
         "back_url": back_url,
         **_get_employee_next_slot_context(request.user),
     }
@@ -902,6 +980,18 @@ def employee_requests(request):
     }
     invalid_fields = []
 
+    if request.method == 'POST' and request.POST.get('action') == 'cancel_request':
+        lr_id = request.POST.get('request_id', '')
+        try:
+            lr = LeaveRequest.objects.get(id=int(lr_id), user=user)
+            if lr.status == 'pending':
+                lr.status = 'cancelled'
+                lr.save(update_fields=['status', 'updated_at'])
+                request.session['employee_request_success'] = 'Заявка отменена.'
+        except (LeaveRequest.DoesNotExist, ValueError, TypeError):
+            pass
+        return redirect(reverse('employee-requests'))
+
     if request.method == 'POST':
         show_form = True
         request_type = request.POST.get('request_type', '').strip()
@@ -981,8 +1071,8 @@ def employee_requests(request):
             request.session['employee_request_success'] = 'Заявка отправлена на рассмотрение.'
             return redirect(reverse('employee-requests'))
 
-    status_labels = {'pending': 'На рассмотрении', 'approved': 'Одобрено', 'rejected': 'Отклонено'}
-    status_tones = {'pending': 'warning', 'approved': 'success', 'rejected': 'danger'}
+    status_labels = {'pending': 'На рассмотрении', 'approved': 'Одобрено', 'rejected': 'Отклонено', 'cancelled': 'Отменено'}
+    status_tones = {'pending': 'warning', 'approved': 'success', 'rejected': 'danger', 'cancelled': 'muted'}
     type_labels = {'vacation': 'Отпуск', 'sick': 'Больничный'}
 
     month_names = [
@@ -1014,6 +1104,7 @@ def employee_requests(request):
             'attachment_url': attachment_url,
             'attachment_name': attachment_name,
             'created_display': fmt(created_local.date()),
+            'can_cancel': lr.status == 'pending',
         })
 
     counts = {
@@ -1021,6 +1112,7 @@ def employee_requests(request):
         'pending': LeaveRequest.objects.filter(user=user, status='pending').count(),
         'approved': LeaveRequest.objects.filter(user=user, status='approved').count(),
         'rejected': LeaveRequest.objects.filter(user=user, status='rejected').count(),
+        'cancelled': LeaveRequest.objects.filter(user=user, status='cancelled').count(),
     }
 
     return render(
@@ -1042,14 +1134,77 @@ def employee_requests(request):
 
 
 @login_required
+@require_http_methods(["GET"])
 def employee_chat(request):
-    return _render_employee_page(
-        request,
-        'dashboard/employee/chat.html',
-        'chat',
-        'Чаты',
-        'Обсуждения задач с командой',
-    )
+    _ensure_role(request, 'employee')
+    user = request.user
+    profile = EmployeeProfile.objects.select_related('department').filter(user=user).first()
+    department = profile.department if profile else None
+
+    status_labels = {
+        "awaiting_confirmation": "Новая",
+        "confirmed": "Взята",
+        "in_progress": "В работе",
+        "on_review": "На проверке",
+        "completed": "Выполнена",
+        "returned": "Возвращена",
+        "conflict": "Конфликт",
+    }
+
+    task_list = []
+    if department:
+        base = DepartmentTask.objects.filter(department=department)
+        qs = (
+            (base.filter(task_type='employee', assigned_to=user) |
+             base.filter(task_type='department'))
+            .distinct()
+            .annotate(
+                last_read_message_id=Subquery(
+                    TaskMessageReadState.objects.filter(task_id=OuterRef('pk'), user=user)
+                    .values('last_read_message_id')[:1]
+                )
+            )
+            .annotate(
+                unread_count=Count(
+                    'messages',
+                    filter=(
+                        ~Q(messages__author_id=user.id)
+                        & (
+                            Q(last_read_message_id__isnull=True)
+                            | Q(messages__id__gt=F('last_read_message_id'))
+                        )
+                    ),
+                )
+            )
+            .order_by('-updated_at', '-created_at')
+        )
+
+        for task in qs:
+            task_list.append({
+                'id': task.id,
+                'title': task.title,
+                'status': task.status,
+                'status_label': status_labels.get(task.status, task.status),
+                'unread_count': task.unread_count,
+                'messages_url': reverse('api-employee-task-messages', args=[task.id]),
+                'task_url': reverse('employee-task-detail', args=[task.id]),
+            })
+
+    selected_task_id = None
+    try:
+        selected_task_id = int(request.GET.get('task_id', ''))
+    except (ValueError, TypeError):
+        pass
+    if not selected_task_id and task_list:
+        selected_task_id = task_list[0]['id']
+
+    return render(request, 'dashboard/employee/chat.html', {
+        'active_tab': 'chat',
+        'page_title': 'Чаты',
+        'page_subtitle': 'Обсуждения задач с командой',
+        'task_list': task_list,
+        'selected_task_id': selected_task_id,
+    })
 
 
 @login_required
@@ -1074,6 +1229,7 @@ def employee_profile(request):
     tasks_active = 0
     tasks_overdue = 0
     sprints_count = 0
+    recent_tasks = []
 
     if department:
         all_tasks = DepartmentTask.objects.filter(
@@ -1102,16 +1258,28 @@ def employee_profile(request):
             .count()
         )
 
+        priority_labels = {"high": "Высокий", "mid": "Средний", "low": "Низкий"}
+        for task in all_tasks.filter(status=DepartmentTask.TaskStatus.COMPLETED).order_by('-updated_at')[:5]:
+            recent_tasks.append({
+                'id': task.id,
+                'title': task.title,
+                'due_label': f"{task.date.day} {month_names[task.date.month - 1]} {task.date.year}",
+                'priority_label': priority_labels.get(task.priority, task.priority),
+                'url': reverse('employee-task-detail', args=[task.id]),
+            })
+
     # ── Leave request history ─────────────────────────────────────────────
     leave_status_labels = {
         'pending': 'На рассмотрении',
         'approved': 'Одобрено',
         'rejected': 'Отклонено',
+        'cancelled': 'Отменено',
     }
     leave_status_tones = {
         'pending': 'warning',
         'approved': 'success',
         'rejected': 'danger',
+        'cancelled': 'muted',
     }
     leave_type_labels = {
         'vacation': 'Отпуск',
@@ -1156,4 +1324,5 @@ def employee_profile(request):
         'tasks_overdue': tasks_overdue,
         'sprints_count': sprints_count,
         'leave_requests': leave_requests,
+        'recent_tasks': recent_tasks,
     })

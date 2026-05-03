@@ -304,6 +304,211 @@
     // Allow the rest of the page to work even if custom select init fails.
   }
 
+  const parseCustomDateValue = (value) => {
+    const trimmed = String(value || "").trim();
+    if (!trimmed) {
+      return null;
+    }
+    const dotMatch = trimmed.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (dotMatch) {
+      const [, day, month, year] = dotMatch;
+      return new Date(Number(year), Number(month) - 1, Number(day));
+    }
+    const dashMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (dashMatch) {
+      const [, year, month, day] = dashMatch;
+      return new Date(Number(year), Number(month) - 1, Number(day));
+    }
+    return null;
+  };
+
+  const formatCustomDateDisplay = (date) => {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+      return "";
+    }
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    return `${day}.${month}.${date.getFullYear()}`;
+  };
+
+  const formatCustomDateIso = (date) => {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+      return "";
+    }
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    return `${date.getFullYear()}-${month}-${day}`;
+  };
+
+  const initCustomDatePickers = (scope = document) => {
+    const pickers = Array.from(scope.querySelectorAll("[data-date-picker]"));
+    if (!pickers.length) {
+      return;
+    }
+
+    const monthNames = [
+      "Январь",
+      "Февраль",
+      "Март",
+      "Апрель",
+      "Май",
+      "Июнь",
+      "Июль",
+      "Август",
+      "Сентябрь",
+      "Октябрь",
+      "Ноябрь",
+      "Декабрь",
+    ];
+    const weekdayLabels = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+
+    const renderCalendar = (panel, state) => {
+      panel.innerHTML = "";
+      const header = document.createElement("div");
+      header.className = "date-panel-header";
+      const prev = document.createElement("button");
+      prev.type = "button";
+      prev.textContent = "‹";
+      const next = document.createElement("button");
+      next.type = "button";
+      next.textContent = "›";
+      const label = document.createElement("div");
+      label.textContent = `${monthNames[state.viewDate.getMonth()]} ${state.viewDate.getFullYear()}`;
+      header.append(prev, label, next);
+      panel.append(header);
+
+      const grid = document.createElement("div");
+      grid.className = "date-panel-grid";
+      weekdayLabels.forEach((dayLabel) => {
+        const cell = document.createElement("div");
+        cell.className = "date-panel-weekday";
+        cell.textContent = dayLabel;
+        grid.append(cell);
+      });
+
+      const year = state.viewDate.getFullYear();
+      const month = state.viewDate.getMonth();
+      const firstDay = new Date(year, month, 1);
+      const startOffset = (firstDay.getDay() + 6) % 7;
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const daysInPrev = new Date(year, month, 0).getDate();
+
+      for (let i = 0; i < 42; i += 1) {
+        const dayIndex = i - startOffset + 1;
+        const cell = document.createElement("button");
+        cell.type = "button";
+        cell.className = "date-panel-day";
+        let cellDate;
+        if (dayIndex <= 0) {
+          cellDate = new Date(year, month - 1, daysInPrev + dayIndex);
+          cell.classList.add("is-muted");
+        } else if (dayIndex > daysInMonth) {
+          cellDate = new Date(year, month + 1, dayIndex - daysInMonth);
+          cell.classList.add("is-muted");
+        } else {
+          cellDate = new Date(year, month, dayIndex);
+        }
+        cell.textContent = String(cellDate.getDate());
+        if (state.selectedDate && cellDate.toDateString() === state.selectedDate.toDateString()) {
+          cell.classList.add("is-selected");
+        }
+        cell.addEventListener("click", () => {
+          state.selectedDate = cellDate;
+          state.input.value = formatCustomDateDisplay(cellDate);
+          if (state.isoInput) {
+            state.isoInput.value = formatCustomDateIso(cellDate);
+          }
+          state.panel.hidden = true;
+          state.input.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        grid.append(cell);
+      }
+
+      panel.append(grid);
+      prev.addEventListener("click", () => {
+        state.viewDate = new Date(year, month - 1, 1);
+        renderCalendar(panel, state);
+      });
+      next.addEventListener("click", () => {
+        state.viewDate = new Date(year, month + 1, 1);
+        renderCalendar(panel, state);
+      });
+    };
+
+    pickers.forEach((picker) => {
+      if (picker.dataset.dateReady === "true") {
+        return;
+      }
+      picker.dataset.dateReady = "true";
+      const input = picker.querySelector("[data-date-input]");
+      const panel = picker.querySelector("[data-date-panel]");
+      const trigger = picker.querySelector("[data-date-trigger]");
+      const isoInput = picker.querySelector("[data-date-iso]");
+      if (!input || !panel || !trigger) {
+        return;
+      }
+
+      const initialDate = parseCustomDateValue(isoInput ? isoInput.value : input.value) || parseCustomDateValue(input.value);
+      if (initialDate) {
+        input.value = formatCustomDateDisplay(initialDate);
+        if (isoInput) {
+          isoInput.value = formatCustomDateIso(initialDate);
+        }
+      }
+      const state = {
+        input,
+        isoInput,
+        panel,
+        viewDate: initialDate
+          ? new Date(initialDate.getFullYear(), initialDate.getMonth(), 1)
+          : new Date(),
+        selectedDate: initialDate,
+      };
+
+      const openPanel = () => {
+        if (input.disabled) {
+          return;
+        }
+        state.selectedDate = parseCustomDateValue(isoInput ? isoInput.value : input.value) || parseCustomDateValue(input.value);
+        state.viewDate = state.selectedDate
+          ? new Date(state.selectedDate.getFullYear(), state.selectedDate.getMonth(), 1)
+          : new Date();
+        panel.hidden = false;
+        renderCalendar(panel, state);
+      };
+
+      trigger.addEventListener("click", (event) => {
+        event.stopPropagation();
+        openPanel();
+      });
+      input.addEventListener("focus", openPanel);
+      input.addEventListener("change", () => {
+        const parsed = parseCustomDateValue(input.value);
+        if (parsed && isoInput) {
+          input.value = formatCustomDateDisplay(parsed);
+          isoInput.value = formatCustomDateIso(parsed);
+        }
+      });
+    });
+
+    document.addEventListener("click", (event) => {
+      pickers.forEach((picker) => {
+        const panel = picker.querySelector("[data-date-panel]");
+        if (panel && !picker.contains(event.target)) {
+          panel.hidden = true;
+        }
+      });
+    });
+  };
+
+  window.initCustomDatePickers = initCustomDatePickers;
+
+  try {
+    initCustomDatePickers();
+  } catch (error) {
+    // Date fields should not block the rest of the page.
+  }
+
   const initTagInput = (wrapper) => {
     const input = wrapper.querySelector("[data-tag-field]");
     const addButton = wrapper.querySelector("[data-tag-add]");
@@ -5689,7 +5894,710 @@
     }
   };
 
+  const initEmployeeDashboard = () => {
+    const links = Array.from(document.querySelectorAll("[data-href]"));
+    links.forEach((card) => {
+      if (card.dataset.dashboardBound === "1") return;
+      card.dataset.dashboardBound = "1";
+      card.addEventListener("click", (event) => {
+        if (event.target.closest("a, button, input, textarea, select, label")) return;
+        const href = card.dataset.href;
+        if (href) window.location.href = href;
+      });
+    });
+  };
+
   // ── SPA navigation for employee shell ───────────────────────────────
+  const initEmployeeChat = () => {
+    const root = document.querySelector("[data-employee-chat]");
+    if (!root) return;
+
+    const taskItems = Array.from(root.querySelectorAll("[data-chat-task-item]"));
+    const messagesContainer = root.querySelector("[data-chat-messages]");
+    const messagesWrap = root.querySelector(".chat-messages-wrap");
+    const emptyState = root.querySelector("[data-chat-empty]");
+    const chatHeaderTitle = root.querySelector("[data-chat-task-title]");
+    const sendForm = root.querySelector("[data-chat-form]");
+    const textInput = root.querySelector("[data-chat-input]");
+    const attachInput = root.querySelector("[data-chat-attach]");
+    const attachNameEl = root.querySelector("[data-chat-attach-name]");
+    const attachFileNameText = root.querySelector("[data-chat-attach-filename]");
+    const attachClearBtn = root.querySelector("[data-chat-attach-clear]");
+    const replyBanner = root.querySelector("[data-chat-reply-banner]");
+    const replyText = root.querySelector("[data-chat-reply-text]");
+    const replyCancelBtn = root.querySelector("[data-chat-reply-cancel]");
+    const sendBtn = root.querySelector("[data-chat-send-btn]");
+
+    let activeTaskId = null;
+    let activeMessagesUrl = null;
+    let lastMessageId = 0;
+    let pollTimer = null;
+    let replyToId = null;
+
+    const escapeHtml = (s) =>
+      String(s || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+
+    const scrollToBottom = () => {
+      if (messagesWrap) messagesWrap.scrollTop = messagesWrap.scrollHeight;
+    };
+
+    const clearTaskUnread = (taskId) => {
+      const item = root.querySelector(`[data-chat-task-item][data-task-id="${taskId}"]`);
+      const badge = item?.querySelector("[data-chat-unread-badge]");
+      if (badge) badge.remove();
+    };
+
+    const clearAttachment = () => {
+      if (attachInput) attachInput.value = "";
+      if (attachFileNameText) attachFileNameText.textContent = "";
+      if (attachNameEl) attachNameEl.hidden = true;
+    };
+
+    const updateAttachmentName = () => {
+      const file = attachInput?.files?.[0];
+      if (attachFileNameText) attachFileNameText.textContent = file ? file.name : "";
+      if (attachNameEl) attachNameEl.hidden = !file;
+    };
+
+    const isNearBottom = () => {
+      if (!messagesWrap) return true;
+      return messagesWrap.scrollHeight - messagesWrap.scrollTop - messagesWrap.clientHeight < 120;
+    };
+
+    const renderMessage = (msg) => {
+      const div = document.createElement("div");
+      div.className = "chat-message" + (msg.is_mine ? " is-mine" : "");
+      div.dataset.msgId = msg.id;
+
+      let replyHtml = "";
+      if (msg.reply_to) {
+        replyHtml = `<div class="chat-message-reply">
+          <span class="chat-reply-author">${escapeHtml(msg.reply_to.author)}</span>
+          <span class="chat-reply-text">${escapeHtml(msg.reply_to.text)}</span>
+        </div>`;
+      }
+
+      let attachHtml = "";
+      if (msg.attachment_url) {
+        attachHtml = `<a class="chat-message-attach" href="${escapeHtml(msg.attachment_url)}" target="_blank" rel="noopener">
+          <svg viewBox="0 0 16 16" aria-hidden="true" class="chat-attach-icon">
+            <path d="M4 2h6l4 4v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M9 2v4h4" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          </svg>
+          ${escapeHtml(msg.attachment_name || "Файл")}
+        </a>`;
+      }
+
+      const authorHtml = !msg.is_mine
+        ? `<div class="chat-message-author">${escapeHtml(msg.author)}</div>`
+        : "";
+      const textHtml = msg.text
+        ? `<div class="chat-message-text">${escapeHtml(msg.text)}</div>`
+        : "";
+
+      div.innerHTML = `${replyHtml}
+        <div class="chat-message-bubble">
+          ${authorHtml}${textHtml}${attachHtml}
+          <div class="chat-message-meta">
+            <span class="chat-message-time">${escapeHtml(msg.created_label)}</span>
+            <button type="button" class="chat-reply-btn"
+              data-reply-id="${msg.id}"
+              data-reply-author="${escapeHtml(msg.author)}"
+              data-reply-text="${escapeHtml(msg.text || msg.attachment_name || "")}">
+              Ответить
+            </button>
+          </div>
+        </div>`;
+      return div;
+    };
+
+    const appendMessages = (messages, doScroll) => {
+      if (!messagesContainer) return;
+      messages.forEach((msg) => {
+        if (messagesContainer.querySelector(`[data-msg-id="${msg.id}"]`)) return;
+        messagesContainer.appendChild(renderMessage(msg));
+        if (msg.id > lastMessageId) lastMessageId = msg.id;
+      });
+      if (doScroll) scrollToBottom();
+    };
+
+    const clearReply = () => {
+      replyToId = null;
+      if (replyBanner) replyBanner.hidden = true;
+      if (replyText) replyText.textContent = "";
+    };
+
+    const setReply = (id, author, text) => {
+      replyToId = id;
+      if (replyBanner) replyBanner.hidden = false;
+      if (replyText) replyText.textContent = `${author}: ${text}`;
+      if (textInput) textInput.focus();
+    };
+
+    const stopPolling = () => {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    };
+
+    const startPolling = (messagesUrl) => {
+      stopPolling();
+      pollTimer = setInterval(async () => {
+        if (!activeTaskId) return;
+        try {
+          const resp = await fetch(`${messagesUrl}?since=${lastMessageId}`, {
+            credentials: "same-origin",
+          });
+          if (!resp.ok) return;
+          const data = await resp.json();
+          if (data.messages && data.messages.length > 0) {
+            if (emptyState) emptyState.hidden = true;
+            appendMessages(data.messages, isNearBottom());
+          }
+        } catch {}
+      }, 5000);
+    };
+
+    const loadMessages = async (taskId, messagesUrl) => {
+      stopPolling();
+      lastMessageId = 0;
+      if (messagesContainer) messagesContainer.innerHTML = "";
+      if (emptyState) emptyState.hidden = true;
+
+      // Show spinner
+      if (messagesContainer) {
+        messagesContainer.innerHTML =
+          '<div class="chat-loading"><span class="chat-spinner"></span></div>';
+      }
+
+      try {
+        const resp = await fetch(messagesUrl, { credentials: "same-origin" });
+        if (!resp.ok) throw new Error("fail");
+        const data = await resp.json();
+        if (messagesContainer) messagesContainer.innerHTML = "";
+
+        if (data.messages && data.messages.length > 0) {
+          appendMessages(data.messages, true);
+        } else {
+          if (emptyState) emptyState.hidden = false;
+        }
+      } catch {
+        if (messagesContainer) messagesContainer.innerHTML = "";
+        if (emptyState) emptyState.hidden = false;
+      }
+
+      startPolling(messagesUrl);
+    };
+
+    const openTaskBtn = root.querySelector("[data-chat-open-task]");
+
+    const selectTask = (taskId, title, messagesUrl, taskUrl) => {
+      if (String(activeTaskId) === String(taskId)) return;
+      activeTaskId = taskId;
+      activeMessagesUrl = messagesUrl;
+      clearTaskUnread(taskId);
+
+      taskItems.forEach((item) => {
+        item.classList.toggle("is-active", String(item.dataset.taskId) === String(taskId));
+      });
+
+      if (chatHeaderTitle) chatHeaderTitle.textContent = title;
+      if (openTaskBtn) {
+        if (taskUrl) {
+          openTaskBtn.href = taskUrl;
+          openTaskBtn.hidden = false;
+        } else {
+          openTaskBtn.hidden = true;
+        }
+      }
+      clearReply();
+      loadMessages(taskId, messagesUrl);
+    };
+
+    // Task list clicks
+    taskItems.forEach((item) => {
+      item.addEventListener("click", () => {
+        selectTask(item.dataset.taskId, item.dataset.taskTitle, item.dataset.messagesUrl, item.dataset.taskUrl);
+      });
+    });
+
+    // Reply cancel
+    if (replyCancelBtn) {
+      replyCancelBtn.addEventListener("click", clearReply);
+    }
+
+    // Reply buttons (delegated from messages container)
+    if (messagesContainer) {
+      messagesContainer.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-reply-id]");
+        if (btn) setReply(btn.dataset.replyId, btn.dataset.replyAuthor, btn.dataset.replyText);
+      });
+    }
+
+    // File attachment name display
+    if (attachInput) {
+      attachInput.addEventListener("change", updateAttachmentName);
+    }
+
+    if (attachClearBtn) {
+      attachClearBtn.addEventListener("click", clearAttachment);
+    }
+
+    // Auto-grow textarea
+    if (textInput) {
+      textInput.addEventListener("input", () => {
+        textInput.style.height = "auto";
+        textInput.style.height = Math.min(textInput.scrollHeight, 120) + "px";
+      });
+      // Send on Enter (Shift+Enter = newline)
+      textInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendForm && sendForm.requestSubmit();
+        }
+      });
+    }
+
+    // Send form
+    if (sendForm) {
+      sendForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        if (!activeTaskId || !activeMessagesUrl) return;
+
+        const text = textInput ? textInput.value.trim() : "";
+        const file = attachInput ? attachInput.files[0] : null;
+        if (!text && !file) return;
+
+        if (sendBtn) sendBtn.disabled = true;
+        const fd = new FormData();
+        if (text) fd.append("text", text);
+        if (file) fd.append("attachment", file);
+        if (replyToId) fd.append("reply_to", replyToId);
+
+        try {
+          const resp = await fetch(activeMessagesUrl, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "X-CSRFToken": getCookie("csrftoken") },
+            body: fd,
+          });
+          if (!resp.ok) return;
+          const data = await resp.json();
+          if (data.message) {
+            if (emptyState) emptyState.hidden = true;
+            appendMessages([data.message], true);
+          }
+          if (textInput) {
+            textInput.value = "";
+            textInput.style.height = "auto";
+          }
+          clearAttachment();
+          clearReply();
+        } catch {
+          /* network error – silently ignore */
+        } finally {
+          if (sendBtn) sendBtn.disabled = false;
+        }
+      });
+    }
+
+    // Auto-select initial task
+    const initialId = root.dataset.selectedTask;
+    if (initialId) {
+      const item = root.querySelector(`[data-chat-task-item][data-task-id="${initialId}"]`);
+      if (item) selectTask(item.dataset.taskId, item.dataset.taskTitle, item.dataset.messagesUrl, item.dataset.taskUrl);
+    } else if (taskItems.length > 0) {
+      const first = taskItems[0];
+      selectTask(first.dataset.taskId, first.dataset.taskTitle, first.dataset.messagesUrl, first.dataset.taskUrl);
+    }
+  };
+
+  let _reqOpenDelegated = false;
+
+  const initEmployeeRequests = () => {
+    /* Delegate open-button at document level once — survives SPA swaps */
+    if (!_reqOpenDelegated) {
+      _reqOpenDelegated = true;
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest("[data-open-req-modal]")) return;
+        const m = document.getElementById("req-modal");
+        if (!m) return;
+        m.setAttribute("aria-hidden", "false");
+        m.style.display = "flex";
+        document.body.style.overflow = "hidden";
+      });
+    }
+
+    const modal    = document.getElementById("req-modal");
+    if (!modal) return;
+    if (modal.dataset.reqBound === "1") return;
+    modal.dataset.reqBound = "1";
+
+    const backdrop       = document.getElementById("req-modal-backdrop");
+    const closeBtnHeader = document.getElementById("close-req-modal");
+    const closeBtnFooter = document.getElementById("close-req-modal-footer");
+    const typeSelect     = modal.querySelector('select[name="request_type"]');
+    const attachGroup    = document.getElementById("attach-group");
+    const attachInput    = document.getElementById("req-attachment");
+    const attachLabelTxt = document.getElementById("attach-label-text");
+    const errBox         = document.getElementById("req-errors");
+    const form           = document.getElementById("req-form");
+
+    function openModal() {
+      modal.setAttribute("aria-hidden", "false");
+      modal.style.display = "flex";
+      document.body.style.overflow = "hidden";
+    }
+    function closeModal() {
+      modal.setAttribute("aria-hidden", "true");
+      modal.style.display = "none";
+      document.body.style.overflow = "";
+      document.querySelectorAll("[data-req-panel]").forEach(p => p.hidden = true);
+    }
+
+    if (closeBtnHeader) closeBtnHeader.addEventListener("click", closeModal);
+    if (closeBtnFooter) closeBtnFooter.addEventListener("click", closeModal);
+    if (backdrop) backdrop.addEventListener("click", closeModal);
+
+    document.addEventListener("keydown", function onKey(e) {
+      if (e.key === "Escape" && modal.style.display === "flex") closeModal();
+    });
+
+    if (modal.hasAttribute("data-autoopen")) openModal();
+
+    /* File upload */
+    if (attachInput && attachLabelTxt) {
+      attachInput.addEventListener("change", () => {
+        attachLabelTxt.textContent = attachInput.files.length
+          ? attachInput.files[0].name : "Выбрать файл";
+      });
+    }
+
+    /* Type → show/hide attachment */
+    if (typeSelect && attachGroup) {
+      typeSelect.addEventListener("change", () => {
+        attachGroup.hidden = typeSelect.value !== "sick";
+      });
+    }
+
+    /* Re-init custom selects inside modal */
+    if (typeof initCustomSelects === "function") initCustomSelects(modal);
+
+    /* ── Error helpers ── */
+    function escapeHtml(v) {
+      return String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+                      .replace(/"/g,"&quot;").replace(/'/g,"&#039;");
+    }
+    function clearFieldInvalid(field) {
+      const g = document.querySelector(`[data-req-field="${field}"]`);
+      if (!g) return;
+      g.classList.remove("is-invalid");
+      g.querySelectorAll(".req-date-trigger,.req-file-label,.custom-select")
+        .forEach(el => el.classList.remove("is-invalid"));
+      g.querySelectorAll("[data-select-trigger],[data-req-trigger],input,select,textarea")
+        .forEach(el => el.setAttribute("aria-invalid","false"));
+    }
+    function markInvalid(field) {
+      if (!field) return;
+      const g = document.querySelector(`[data-req-field="${field}"]`);
+      if (!g) return;
+      g.classList.add("is-invalid");
+      g.querySelectorAll(".req-date-trigger,.req-file-label,.custom-select")
+        .forEach(el => el.classList.add("is-invalid"));
+      g.querySelectorAll("[data-select-trigger],[data-req-trigger],input,select,textarea")
+        .forEach(el => el.setAttribute("aria-invalid","true"));
+    }
+    function clearErrors() {
+      document.querySelectorAll("[data-req-field].is-invalid,.req-date-trigger.is-invalid,.req-file-label.is-invalid,.custom-select.is-invalid")
+        .forEach(el => el.classList.remove("is-invalid"));
+      document.querySelectorAll("#req-form [aria-invalid='true']")
+        .forEach(el => el.setAttribute("aria-invalid","false"));
+      if (errBox) { errBox.innerHTML = ""; errBox.hidden = true; }
+    }
+    function showErrors(msgs) {
+      const entries = msgs.map(item =>
+        typeof item === "string" ? { message: item, field: "" } : (item || { message: "", field: "" })
+      );
+      entries.forEach(item => markInvalid(item.field));
+      if (!errBox) return;
+      errBox.innerHTML =
+        '<div class="req-error-title">Проверьте поля заявки</div>' +
+        entries.map(item =>
+          `<div class="req-error-item">
+             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+             <span>${escapeHtml(item.message)}</span>
+           </div>`
+        ).join("");
+      errBox.hidden = false;
+    }
+
+    /* ── Mini datepicker ── */
+    const MONTHS = ["Январь","Февраль","Март","Апрель","Май","Июнь",
+                    "Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+    const WDAYS  = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
+
+    function fmtDisplay(d) {
+      return String(d.getDate()).padStart(2,"0") + "." +
+             String(d.getMonth()+1).padStart(2,"0") + "." + d.getFullYear();
+    }
+    function fmtIso(d) {
+      return d.getFullYear() + "-" +
+             String(d.getMonth()+1).padStart(2,"0") + "-" +
+             String(d.getDate()).padStart(2,"0");
+    }
+    function parseIsoDate(v) {
+      if (!v) return null;
+      const p = v.split("-");
+      if (p.length !== 3) return null;
+      const d = new Date(+p[0], +p[1]-1, +p[2]);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    function startOfDay(d) { const c = new Date(d); c.setHours(0,0,0,0); return c; }
+
+    const today  = startOfDay(new Date());
+    const vacMin = new Date(today); vacMin.setDate(vacMin.getDate() + 7);
+    function getMinDate() { return typeSelect && typeSelect.value === "vacation" ? vacMin : today; }
+
+    function buildCalendar(panel, state) {
+      panel.innerHTML = "";
+      const y = state.view.getFullYear(), m = state.view.getMonth();
+      const minDate = getMinDate();
+      const hdr  = document.createElement("div"); hdr.className = "rdp-header";
+      const prev = document.createElement("button"); prev.type = "button"; prev.className = "rdp-nav"; prev.textContent = "‹";
+      const next = document.createElement("button"); next.type = "button"; next.className = "rdp-nav"; next.textContent = "›";
+      const ttl  = document.createElement("span");  ttl.className = "rdp-title"; ttl.textContent = MONTHS[m] + " " + y;
+      hdr.append(prev, ttl, next); panel.append(hdr);
+      const grid = document.createElement("div"); grid.className = "rdp-grid";
+      WDAYS.forEach(d => { const c = document.createElement("div"); c.className = "rdp-wday"; c.textContent = d; grid.append(c); });
+      const off  = (new Date(y,m,1).getDay()+6) % 7;
+      const tot  = new Date(y,m+1,0).getDate();
+      const prevT = new Date(y,m,0).getDate();
+      for (let i = 0; i < 42; i++) {
+        const idx = i - off + 1;
+        const cell = document.createElement("button"); cell.type = "button"; cell.className = "rdp-day";
+        let cd;
+        if      (idx <= 0)   { cd = new Date(y,m-1,prevT+idx); cell.classList.add("rdp-day--muted"); }
+        else if (idx > tot)  { cd = new Date(y,m+1,idx-tot);  cell.classList.add("rdp-day--muted"); }
+        else                 { cd = new Date(y,m,idx); }
+        const cds = startOfDay(cd);
+        if (cds < minDate) { cell.classList.add("rdp-day--disabled"); cell.disabled = true; }
+        if (cds.toDateString() === today.toDateString()) cell.classList.add("rdp-day--today");
+        if (state.selected && cds.toDateString() === startOfDay(state.selected).toDateString()) cell.classList.add("rdp-day--selected");
+        cell.textContent = cd.getDate();
+        cell.addEventListener("click", () => {
+          state.selected = cd;
+          state.isoInput.value = fmtIso(cd);
+          state.trigger.querySelector("[data-req-display]").textContent = fmtDisplay(cd);
+          state.trigger.classList.add("req-date-trigger--filled");
+          clearFieldInvalid(state.isoInput.name);
+          panel.hidden = true;
+        });
+        grid.append(cell);
+      }
+      panel.append(grid);
+      prev.addEventListener("click", e => { e.stopPropagation(); state.view = new Date(y,m-1,1); buildCalendar(panel,state); });
+      next.addEventListener("click", e => { e.stopPropagation(); state.view = new Date(y,m+1,1); buildCalendar(panel,state); });
+    }
+
+    modal.querySelectorAll("[data-req-picker]").forEach(picker => {
+      const isoInput = picker.querySelector("[data-req-iso]");
+      const trigger  = picker.querySelector("[data-req-trigger]");
+      const panel    = picker.querySelector("[data-req-panel]");
+      if (!isoInput || !trigger || !panel) return;
+      const state = {
+        view: new Date(getMinDate().getFullYear(), getMinDate().getMonth(), 1),
+        selected: parseIsoDate(isoInput.value), isoInput, trigger
+      };
+      if (state.selected) state.view = new Date(state.selected.getFullYear(), state.selected.getMonth(), 1);
+      trigger.addEventListener("click", e => {
+        e.stopPropagation();
+        const wasHidden = panel.hidden;
+        document.querySelectorAll("[data-req-panel]").forEach(p => p.hidden = true);
+        if (wasHidden) {
+          const min = getMinDate();
+          if (state.view < new Date(min.getFullYear(), min.getMonth(), 1))
+            state.view = new Date(min.getFullYear(), min.getMonth(), 1);
+          /* Position panel fixed relative to viewport so modal overflow-y doesn't clip it */
+          const rect = trigger.getBoundingClientRect();
+          const panelW = 280;
+          let left = rect.left;
+          if (left + panelW > window.innerWidth - 8) left = window.innerWidth - panelW - 8;
+          const spaceBelow = window.innerHeight - rect.bottom - 8;
+          const panelH = 320;
+          if (spaceBelow >= panelH || spaceBelow >= window.innerHeight - rect.top - 8) {
+            panel.style.top  = (rect.bottom + 6) + "px";
+            panel.style.bottom = "auto";
+          } else {
+            panel.style.bottom = (window.innerHeight - rect.top + 6) + "px";
+            panel.style.top = "auto";
+          }
+          panel.style.left = left + "px";
+          panel.hidden = false;
+          buildCalendar(panel, state);
+        }
+      });
+    });
+    modal.addEventListener("click", e => {
+      if (!e.target.closest("[data-req-picker]"))
+        document.querySelectorAll("[data-req-panel]").forEach(p => p.hidden = true);
+    });
+    if (typeSelect) {
+      typeSelect.addEventListener("change", () => {
+        clearFieldInvalid("request_type");
+        const min = getMinDate();
+        modal.querySelectorAll("[data-req-picker]").forEach(picker => {
+          const iso = picker.querySelector("[data-req-iso]");
+          const trg = picker.querySelector("[data-req-trigger]");
+          const disp = trg ? trg.querySelector("[data-req-display]") : null;
+          if (!iso || !disp) return;
+          if (iso.value) {
+            const p = iso.value.split("-");
+            const d = new Date(+p[0], +p[1]-1, +p[2]);
+            if (startOfDay(d) < min) { iso.value = ""; disp.textContent = "Выберите дату"; trg.classList.remove("req-date-trigger--filled"); }
+          }
+        });
+      });
+    }
+    if (attachInput) attachInput.addEventListener("change", () => clearFieldInvalid("attachment"));
+
+    /* ── Form validation ── */
+    if (form) {
+      form.addEventListener("submit", e => {
+        clearErrors();
+        const errs = [];
+        const type = typeSelect ? typeSelect.value : "";
+        const pickers = Array.from(modal.querySelectorAll("[data-req-picker]"));
+        const startIso = pickers[0] ? pickers[0].querySelector("[data-req-iso]").value : "";
+        const endIso   = pickers[1] ? pickers[1].querySelector("[data-req-iso]").value : "";
+        if (!type) errs.push({ field:"request_type", message:"Выберите тип заявки." });
+        if (!startIso) {
+          errs.push({ field:"start_date", message:"Укажите дату начала." });
+        } else {
+          const s = startOfDay(new Date(startIso));
+          if (s < getMinDate()) errs.push({ field:"start_date", message: type==="vacation" ? "Отпуск можно подать минимум за 7 дней до начала." : "Дата начала не может быть в прошлом." });
+        }
+        if (!endIso) {
+          errs.push({ field:"end_date", message:"Укажите дату окончания." });
+        } else if (startIso && new Date(endIso) < new Date(startIso)) {
+          errs.push({ field:"end_date", message:"Дата окончания не может быть раньше даты начала." });
+        }
+        if (attachInput && attachInput.files.length) {
+          const f = attachInput.files[0];
+          if (!/\.(pdf|jpe?g|png)$/i.test(f.name)) errs.push({ field:"attachment", message:"Документ должен быть в формате PDF, JPG или PNG." });
+          if (f.size > 10*1024*1024) errs.push({ field:"attachment", message:"Размер документа не должен превышать 10 МБ." });
+        }
+        if (errs.length) { e.preventDefault(); showErrors(errs); }
+      });
+    }
+
+    /* ── Filtering ── */
+    document.querySelectorAll("[data-req-filter]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const f = btn.dataset.reqFilter;
+        document.querySelectorAll("[data-req-filter]").forEach(b => {
+          b.classList.toggle("btn-primary", b === btn);
+          b.classList.toggle("btn-ghost",   b !== btn);
+        });
+        let visible = 0;
+        document.querySelectorAll(".req-card").forEach(card => {
+          const show = f === "all" || card.dataset.reqStatus === f;
+          card.style.display = show ? "" : "none";
+          if (show) visible++;
+        });
+        const em = document.getElementById("req-empty-msg");
+        if (em) em.style.display = visible === 0 ? "" : "none";
+      });
+    });
+
+    /* ── Cancel request ── */
+    document.querySelectorAll("[data-cancel-request]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        if (!confirm("Вы уверены, что хотите отменить заявку?")) return;
+        const reqId = btn.dataset.cancelRequest;
+        const csrf  = (document.cookie.split(";").find(c => c.trim().startsWith("csrftoken=")) || "").trim().split("=")[1] || "";
+        const f = document.createElement("form");
+        f.method = "post";
+        f.innerHTML = `<input type="hidden" name="csrfmiddlewaretoken" value="${csrf}"><input type="hidden" name="action" value="cancel_request"><input type="hidden" name="request_id" value="${reqId}">`;
+        document.body.appendChild(f);
+        f.submit();
+      });
+    });
+
+    /* ── Auto-hide success banner ── */
+    const successMsg = document.getElementById("req-success-message");
+    if (successMsg) {
+      setTimeout(() => {
+        successMsg.style.transition = "opacity 0.25s ease";
+        successMsg.style.opacity = "0";
+        setTimeout(() => { successMsg.hidden = true; }, 260);
+      }, 8000);
+    }
+  };
+
+  const initManagerDashboard = () => {
+    /* Make notification items clickable */
+    document.querySelectorAll(".mgr-notif-item[data-href]").forEach(item => {
+      if (item.dataset.mgrNotifBound) return;
+      item.dataset.mgrNotifBound = "1";
+      item.style.cursor = "pointer";
+      item.addEventListener("click", (e) => {
+        if (e.target.closest("a")) return;
+        window.location.href = item.dataset.href;
+      });
+      item.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          window.location.href = item.dataset.href;
+        }
+      });
+    });
+  };
+
+  let _teamFilterDelegated = false;
+  const initManagerTeam = () => {
+    if (_teamFilterDelegated) return;
+    _teamFilterDelegated = true;
+    document.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-team-filter]");
+      if (!btn) return;
+      const filterBar = btn.closest("[data-team-filters]");
+      if (!filterBar) return;
+
+      filterBar.querySelectorAll("[data-team-filter]").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+
+      const filter = btn.dataset.teamFilter;
+      const cards = document.querySelectorAll("[data-team-cards] .team-emp-card");
+      const emptyMsg = document.querySelector("[data-team-empty]");
+      let visible = 0;
+
+      cards.forEach(card => {
+        let show = false;
+        if (filter === "all") {
+          show = true;
+        } else if (filter === "free") {
+          show = card.dataset.empLoad === "free";
+        } else if (filter === "overloaded") {
+          show = card.dataset.empLoad === "overloaded";
+        } else if (filter === "vacation") {
+          show = card.dataset.empStatus === "vacation";
+        } else if (filter === "sick") {
+          show = card.dataset.empStatus === "sick";
+        }
+        card.style.display = show ? "" : "none";
+        if (show) visible++;
+      });
+
+      if (emptyMsg) emptyMsg.style.display = visible === 0 ? "" : "none";
+    });
+  };
+
   const initSpaNavigation = () => {
     const contentEl = document.querySelector("[data-spa-content]");
     if (!contentEl) return;
@@ -5702,6 +6610,14 @@
       ["/dashboard/employee/chat", "chat"],
       ["/dashboard/employee/profile", "profile"],
       ["/dashboard/employee/", "dashboard"],
+      ["/dashboard/manager/tasks", "tasks"],
+      ["/dashboard/manager/sprints", "sprints"],
+      ["/dashboard/manager/team", "team"],
+      ["/dashboard/manager/leave-requests", "leave-requests"],
+      ["/dashboard/manager/substitutions", "substitutions"],
+      ["/dashboard/manager/chat", "chat"],
+      ["/dashboard/manager/profile", "profile"],
+      ["/dashboard/manager/", "dashboard"],
     ];
 
     const tabFromPath = (path) => {
@@ -5721,10 +6637,16 @@
 
     const reinitPage = () => {
       if (typeof initCustomSelects === "function") initCustomSelects(contentEl);
+      if (typeof initCustomDatePickers === "function") initCustomDatePickers(contentEl);
       initEmployeeAvailability();
       initEmployeeTasks();
       initEmployeeTasksV2();
       initEmployeeTaskDetail();
+      initEmployeeDashboard();
+      initEmployeeChat();
+      initEmployeeRequests();
+      initManagerDashboard();
+      initManagerTeam();
     };
 
     const navigate = async (url, push = true) => {
@@ -5745,7 +6667,7 @@
           credentials: "same-origin",
           headers: { "X-Requested-With": "XMLHttpRequest" },
         });
-        if (!resp.ok || resp.redirected && !resp.url.includes("/dashboard/employee/")) {
+        if (!resp.ok || resp.redirected && !resp.url.includes("/dashboard/employee/") && !resp.url.includes("/dashboard/manager/")) {
           window.location.href = url;
           return;
         }
@@ -5785,7 +6707,7 @@
       reinitPage();
     };
 
-    // Intercept only employee nav links and profile button
+    // Intercept employee and manager nav links
     document.addEventListener("click", (e) => {
       const link = e.target.closest("a[href]");
       if (!link) return;
@@ -5796,15 +6718,20 @@
       let url;
       try { url = new URL(href); } catch { return; }
 
-      // Only same-origin employee dashboard pages
+      // Only same-origin employee/manager dashboard tab pages
       if (url.origin !== location.origin) return;
-      if (!url.pathname.startsWith("/dashboard/employee/")) return;
+      const isEmployee = url.pathname.startsWith("/dashboard/employee/");
+      const isManager  = url.pathname.startsWith("/dashboard/manager/");
+      if (!isEmployee && !isManager) return;
 
       // Let logout and file links go through normally
       if (url.pathname.includes("/logout")) return;
       if (link.getAttribute("target") === "_blank" || link.hasAttribute("download")) return;
-      // Let task panel partial pass through (handled by AJAX in initEmployeeTasksV2)
+      // Let task panel partial pass through
       if (url.pathname.includes("/panel/")) return;
+      // Let manager sub-pages (detail/create/edit) go through as full page loads
+      if (isManager && url.pathname.match(/\/dashboard\/manager\/(tasks|sprints|team)\/\d+/)) return;
+      if (isManager && url.pathname.match(/\/dashboard\/manager\/(tasks|sprints)\/(create|[0-9]+\/edit)/)) return;
 
       e.preventDefault();
       if (url.href !== location.href) navigate(url.href);
@@ -5828,6 +6755,11 @@
   initEmployeeTasks();
   initEmployeeTasksV2();
   initEmployeeTaskDetail();
+  initEmployeeDashboard();
+  initEmployeeChat();
+  initEmployeeRequests();
+  initManagerDashboard();
+  initManagerTeam();
   initSpaNavigation();
   const initDepartmentDetail = () => {
     const detailRoot = document.querySelector("[data-department-detail]");

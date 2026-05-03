@@ -17,24 +17,27 @@
   <div class="dashboard-grid fade-up">
 
     {# ── Мои текущие задачи ──────────────────────────────────────── #}
-    <section class="card section-block">
+    <section class="card section-block dashboard-notifications-section">
       <div class="section-header">
         <div>
           <h2>Мои текущие задачи</h2>
-          <p class="subtle">Задачи, которые сейчас в работе.</p>
+          <p class="subtle">Назначенные задачи и задачи, которые вы уже взяли.</p>
         </div>
-        <span class="info-chip">{{ in_progress_tasks|length }}</span>
+        <span class="info-chip">{{ current_tasks|length }}</span>
       </div>
 
-      {% if in_progress_tasks %}
+      {% if current_tasks %}
         <div class="task-list">
-          {% for task in in_progress_tasks %}
-            <article class="task-list-item{% if task.is_overdue %} is-overdue{% endif %}">
+          {% for task in current_tasks %}
+            <article class="task-list-item dashboard-task-link{% if task.is_overdue %} is-overdue{% endif %}" data-href="{{ task.url }}">
               <div class="task-list-main">
                 <div class="task-card-title">
                   <span class="priority-dot is-{{ task.priority }}" aria-hidden="true"></span>
                   <h3>{{ task.title }}</h3>
                 </div>
+                {% if task.description_short %}
+                  <p class="dashboard-task-description">{{ task.description_short }}</p>
+                {% endif %}
                 <div class="task-list-meta">
                   {% if task.sprint_label %}
                     <span class="subtle">{{ task.sprint_label }}</span>
@@ -45,7 +48,7 @@
               </div>
               <div class="task-list-side">
                 <span class="status-pill {{ task.status_tone }}">{{ task.status_label }}</span>
-                <a class="btn btn-ghost btn-inline btn-xs" href="{% url 'employee-task-detail' task.id %}">Открыть</a>
+                <a class="btn btn-ghost btn-inline btn-xs" href="{{ task.url }}">Открыть</a>
               </div>
             </article>
           {% endfor %}
@@ -63,20 +66,23 @@
       <div class="section-header">
         <div>
           <h2>Ближайшие дедлайны</h2>
-          <p class="subtle">Подтверждённые задачи, срок скоро наступит.</p>
+          <p class="subtle">Задачи на сегодня, завтра и ближайшую неделю.</p>
         </div>
-        <span class="info-chip">{{ upcoming_tasks|length }}</span>
+        <span class="info-chip">{{ deadline_tasks|length }}</span>
       </div>
 
-      {% if upcoming_tasks %}
+      {% if deadline_tasks %}
         <div class="task-list">
-          {% for task in upcoming_tasks %}
-            <article class="task-list-item{% if task.is_overdue %} is-overdue{% endif %}">
+          {% for task in deadline_tasks %}
+            <article class="task-list-item dashboard-task-link{% if task.is_overdue %} is-overdue{% endif %}" data-href="{{ task.url }}">
               <div class="task-list-main">
                 <div class="task-card-title">
                   <span class="priority-dot is-{{ task.priority }}" aria-hidden="true"></span>
                   <h3>{{ task.title }}</h3>
                 </div>
+                {% if task.description_short %}
+                  <p class="dashboard-task-description">{{ task.description_short }}</p>
+                {% endif %}
                 <div class="task-list-meta">
                   {% if task.sprint_label %}
                     <span class="subtle">{{ task.sprint_label }}</span>
@@ -84,11 +90,12 @@
                   <span class="subtle"{% if task.is_overdue %} style="color: #d94b4b;"{% endif %}>
                     {% if task.is_overdue %}Просрочена — {% endif %}{{ task.deadline_label }}
                   </span>
+                  <span class="subtle">{{ task.priority_label }}</span>
                 </div>
               </div>
               <div class="task-list-side">
                 <span class="status-pill {{ task.status_tone }}">{{ task.status_label }}</span>
-                <a class="btn btn-ghost btn-inline btn-xs" href="{% url 'employee-task-detail' task.id %}">Открыть</a>
+                <a class="btn btn-ghost btn-inline btn-xs" href="{{ task.url }}">Открыть</a>
               </div>
             </article>
           {% endfor %}
@@ -115,29 +122,36 @@
       </div>
 
       {% if notifications %}
-        <div class="task-list">
+        <div class="dashboard-notifications">
           {% for n in notifications %}
-            <article class="task-list-item">
-              <div class="task-list-main">
-                <div class="task-card-title">
-                  {% if n.kind == 'task' %}
-                    <span class="priority-dot is-mid" aria-hidden="true"></span>
-                  {% elif n.kind == 'leave' %}
-                    <span class="priority-dot is-low" aria-hidden="true"></span>
-                  {% else %}
-                    <span class="priority-dot is-high" aria-hidden="true"></span>
-                  {% endif %}
-                  <h3>{{ n.text }}</h3>
-                </div>
-                <div class="task-list-meta">
-                  <span class="subtle">{{ n.date_label }}</span>
-                </div>
+            <article class="dashboard-notification is-{{ n.kind }}{% if n.url %} is-clickable{% endif %}"{% if n.url %} data-href="{{ n.url }}" role="button" tabindex="0"{% endif %}>
+              <div class="dashboard-notification-icon" aria-hidden="true">
+                {% if n.kind == 'task' %}
+                  <svg viewBox="0 0 20 20">
+                    <path d="M6 5h8M6 10h8M6 15h5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                    <path d="M4 2.75h12A1.25 1.25 0 0 1 17.25 4v12A1.25 1.25 0 0 1 16 17.25H4A1.25 1.25 0 0 1 2.75 16V4A1.25 1.25 0 0 1 4 2.75Z" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                  </svg>
+                {% elif n.kind == 'chat' %}
+                  <svg viewBox="0 0 20 20">
+                    <path d="M4 4.5h12A1.5 1.5 0 0 1 17.5 6v6.5A1.5 1.5 0 0 1 16 14H9l-4.5 3v-3H4A1.5 1.5 0 0 1 2.5 12.5V6A1.5 1.5 0 0 1 4 4.5Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                    <path d="M6.5 8h7M6.5 11h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  </svg>
+                {% elif n.kind == 'leave' %}
+                  <svg viewBox="0 0 20 20">
+                    <path d="M6 2.75v3M14 2.75v3M3.5 8h13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                    <path d="M5 4.25h10A1.5 1.5 0 0 1 16.5 5.75V15A1.5 1.5 0 0 1 15 16.5H5A1.5 1.5 0 0 1 3.5 15V5.75A1.5 1.5 0 0 1 5 4.25Z" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                  </svg>
+                {% else %}
+                  <svg viewBox="0 0 20 20">
+                    <path d="M7 6h6l2 4-5 6-5-6 2-4Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                    <path d="M10 6v10M5 10h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  </svg>
+                {% endif %}
               </div>
-              {% if n.url and n.url != '#' %}
-                <div class="task-list-side">
-                  <a class="btn btn-ghost btn-inline btn-xs" href="{{ n.url }}">Открыть</a>
-                </div>
-              {% endif %}
+              <div class="dashboard-notification-body">
+                <h3>{{ n.text }}</h3>
+                <span>{{ n.date_label }}</span>
+              </div>
             </article>
           {% endfor %}
         </div>
@@ -184,15 +198,15 @@
             <span class="subtle">Задач в работе</span>
           </div>
           <div class="task-list-side">
-            <span class="info-chip">{{ in_progress_tasks|length }}</span>
+            <span class="info-chip">{{ current_tasks|length }}</span>
           </div>
         </div>
         <div class="task-list-item" style="padding: 14px 16px;">
           <div class="task-list-main">
-            <span class="subtle">Подтверждено / Ожидает</span>
+            <span class="subtle">Ближайшие дедлайны</span>
           </div>
           <div class="task-list-side">
-            <span class="info-chip">{{ upcoming_tasks|length }}</span>
+            <span class="info-chip">{{ deadline_tasks|length }}</span>
           </div>
         </div>
         <div class="task-list-item" style="padding: 14px 16px;">

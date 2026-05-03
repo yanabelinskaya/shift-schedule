@@ -5,12 +5,32 @@
     <div class="hero-header">
       <div>
         <h1>{{ page_title }}</h1>
-        <p class="subtle">{{ page_subtitle }}</p>
+        <p class="subtle">{{ page_subtitle }} · планирование задач на конкретный период</p>
       </div>
       <div class="hero-actions">
-        <a class="btn btn-primary btn-inline" href="{% url 'manager-sprint-create' %}">Новый спринт</a>
+        <a class="btn btn-primary btn-inline" href="{% url 'manager-sprint-create' %}">Создать спринт</a>
       </div>
     </div>
+    {% if department %}
+      <div class="sprint-overview">
+        <div class="sprint-overview-item is-active">
+          <span>Активные</span>
+          <strong>{{ active_sprints|length }}</strong>
+        </div>
+        <div class="sprint-overview-item">
+          <span>Будущие</span>
+          <strong>{{ upcoming_sprints|length }}</strong>
+        </div>
+        <div class="sprint-overview-item">
+          <span>Завершённые</span>
+          <strong>{{ completed_sprints|length }}</strong>
+        </div>
+        <div class="sprint-overview-item">
+          <span>Всего</span>
+          <strong>{{ sprints_total }}</strong>
+        </div>
+      </div>
+    {% endif %}
   </div>
 
   {% if not department %}
@@ -20,7 +40,7 @@
         <p class="subtle">Обратитесь к администратору.</p>
       </div>
     </section>
-  {% elif not sprints %}
+  {% elif sprints_total == 0 %}
     <section class="card section-block fade-up" style="margin-top: 1rem;">
       <div class="task-empty-hero">
         <div class="task-empty-badge">Спринтов нет</div>
@@ -34,27 +54,55 @@
       </div>
     </section>
   {% else %}
-    <section class="card section-block fade-up" style="margin-top: 1rem;">
-      <div class="task-list">
-        {% for sprint in sprints %}
-          <article class="task-list-item">
-            <div class="task-list-main">
-              <div class="task-card-title">
-                <h3>{{ sprint.title }}</h3>
-              </div>
-              <div class="task-list-meta">
-                <span class="subtle">{{ sprint.period }}</span>
-                <span class="info-chip">Задач: {{ sprint.task_count }}</span>
-                {% if sprint.task_count %}<span class="info-chip">Выполнено: {{ sprint.done_count }}</span>{% endif %}
-              </div>
-            </div>
-            <div class="task-list-side">
-              <span class="status-pill {{ sprint.status_tone }}">{{ sprint.status_label }}</span>
-              <a class="btn btn-ghost btn-inline btn-xs" href="{% url 'manager-sprint-detail' sprint.id %}">Открыть</a>
-            </div>
-          </article>
-        {% endfor %}
-      </div>
-    </section>
+    {% if active_sprints %}
+      <section class="card section-block sprint-section sprint-section-active fade-up">
+        <div class="section-header">
+          <div>
+            <h2>Активный спринт</h2>
+            <p class="subtle">Идёт прямо сейчас — отслеживайте прогресс.</p>
+          </div>
+          <span class="info-chip">{{ active_sprints|length }}</span>
+        </div>
+        <div class="sprint-grid">
+          {% for sprint in active_sprints %}
+            {% include 'dashboard/manager/_sprint_card.html' with sprint=sprint %}
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
+
+    {% if upcoming_sprints %}
+      <section class="card section-block sprint-section fade-up">
+        <div class="section-header">
+          <div>
+            <h2>Будущие спринты</h2>
+            <p class="subtle">В планировании — добавьте задачи и запустите вовремя.</p>
+          </div>
+          <span class="info-chip">{{ upcoming_sprints|length }}</span>
+        </div>
+        <div class="sprint-grid">
+          {% for sprint in upcoming_sprints %}
+            {% include 'dashboard/manager/_sprint_card.html' with sprint=sprint %}
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
+
+    {% if completed_sprints %}
+      <section class="card section-block sprint-section fade-up">
+        <div class="section-header">
+          <div>
+            <h2>Завершённые спринты</h2>
+            <p class="subtle">Архив — чтобы посмотреть итоги.</p>
+          </div>
+          <span class="info-chip">{{ completed_sprints|length }}</span>
+        </div>
+        <div class="sprint-grid">
+          {% for sprint in completed_sprints %}
+            {% include 'dashboard/manager/_sprint_card.html' with sprint=sprint %}
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
   {% endif %}
 {% endblock %}

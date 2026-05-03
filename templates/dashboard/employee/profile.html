@@ -77,6 +77,47 @@
         </div>
       </section>
 
+      {# История задач #}
+      <section class="card section-block" style="margin-top: 1rem;">
+        <div class="section-header">
+          <div>
+            <h2>История задач</h2>
+            <p class="subtle">Последние выполненные задачи.</p>
+          </div>
+          <span class="info-chip">{{ recent_tasks|length }}</span>
+        </div>
+
+        {% if recent_tasks %}
+          <div class="task-list">
+            {% for task in recent_tasks %}
+              <article class="task-list-item">
+                <div class="task-list-main">
+                  <div class="task-card-title">
+                    <h3>{{ task.title }}</h3>
+                  </div>
+                  <div class="task-list-meta">
+                    <span class="subtle">{{ task.due_label }}</span>
+                    <span class="subtle">{{ task.priority_label }}</span>
+                  </div>
+                </div>
+                <div class="task-list-side">
+                  <span class="status-pill success">Выполнена</span>
+                  <a class="btn btn-ghost btn-inline btn-xs" href="{{ task.url }}">Открыть</a>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+          <div style="margin-top: 1rem;">
+            <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'employee-tasks' %}">Посмотреть все задачи</a>
+          </div>
+        {% else %}
+          <div class="task-empty" style="padding: 2rem; text-align: center;">
+            <p class="subtle">Выполненных задач пока нет.</p>
+            <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'employee-tasks' %}" style="margin-top: 0.75rem;">Все задачи</a>
+          </div>
+        {% endif %}
+      </section>
+
       {# История заявок #}
       <section class="card section-block" style="margin-top: 1rem;">
         <div class="section-header">
@@ -121,6 +162,9 @@
                 </div>
               </article>
             {% endfor %}
+          </div>
+          <div style="margin-top: 1rem;">
+            <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'employee-requests' %}">Посмотреть все заявки</a>
           </div>
         {% else %}
           <div class="task-empty" style="padding: 2rem; text-align: center;">

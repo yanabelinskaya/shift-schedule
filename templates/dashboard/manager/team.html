@@ -10,8 +10,8 @@
     </div>
     <div class="hero-meta">
       <div class="meta-chip">Всего: {{ stats.total }}</div>
-      <div class="meta-chip">Работает: {{ stats.active }}</div>
-      <div class="meta-chip">В отпуске/больничный: {{ stats.on_leave }}</div>
+      <div class="meta-chip">Работают: {{ stats.active }}</div>
+      <div class="meta-chip">Отсутствуют: {{ stats.on_leave }}</div>
       {% if stats.inactive %}<div class="meta-chip">Неактивны: {{ stats.inactive }}</div>{% endif %}
     </div>
   </div>
@@ -34,26 +34,56 @@
     </section>
   {% else %}
     <section class="card section-block fade-up" style="margin-top: 1rem;">
-      <div class="task-list">
+      <div class="team-filters" data-team-filters>
+        <button class="tab-pill active" type="button" data-team-filter="all">Все</button>
+        <button class="tab-pill" type="button" data-team-filter="free">Свободные</button>
+        <button class="tab-pill" type="button" data-team-filter="overloaded">Перегруженные</button>
+        <button class="tab-pill" type="button" data-team-filter="vacation">В отпуске</button>
+        <button class="tab-pill" type="button" data-team-filter="sick">На больничном</button>
+      </div>
+
+      <div class="team-cards-grid" data-team-cards>
         {% for emp in employees %}
-          <article class="task-list-item">
-            <div class="task-list-main">
-              <div class="task-card-title">
-                <h3>{{ emp.full_name }}</h3>
-              </div>
-              <div class="task-list-meta">
-                <span class="subtle">{{ emp.position }}</span>
-                {% if emp.active_tasks %}
-                  <span class="info-chip">Активных задач: {{ emp.active_tasks }}</span>
-                {% endif %}
-              </div>
+        <article class="team-emp-card"
+          data-emp-status="{{ emp.status_code }}"
+          data-emp-load="{{ emp.load_code }}">
+          <div class="team-emp-header">
+            <div class="team-emp-avatar">{{ emp.full_name|slice:":1"|upper }}</div>
+            <div class="team-emp-identity">
+              <a class="team-emp-name" href="{% url 'manager-employee-detail' emp.id %}">{{ emp.full_name }}</a>
+              <div class="team-emp-position">{{ emp.position }}</div>
             </div>
-            <div class="task-list-side">
-              <span class="status-pill {{ emp.status_tone }}">{{ emp.status_label }}</span>
-              <a class="btn btn-ghost btn-inline btn-xs" href="{% url 'manager-employee-detail' emp.id %}">Профиль</a>
+            <span class="status-pill {{ emp.status_tone }}">{{ emp.status_label }}</span>
+          </div>
+          <div class="team-emp-load">
+            <div class="team-emp-load-top">
+              <span class="team-emp-load-title">Загрузка</span>
+              <span class="mgr-load-badge mgr-load-badge--{{ emp.load_code }}">{{ emp.load_label }}</span>
             </div>
-          </article>
+            <div class="mgr-bar">
+              <div class="mgr-bar-fill mgr-bar-fill--{{ emp.load_code }}" style="width: {{ emp.load_percent }}%"></div>
+            </div>
+          </div>
+          <div class="team-emp-stats">
+            <div class="team-emp-stat">
+              <span class="team-emp-stat-label">Активных задач</span>
+              <span class="team-emp-stat-value">{{ emp.active_tasks }}</span>
+            </div>
+            <div class="team-emp-stat">
+              <span class="team-emp-stat-label">Ближайший дедлайн</span>
+              <span class="team-emp-stat-value">{{ emp.next_deadline }}</span>
+            </div>
+          </div>
+          <div class="team-emp-actions">
+            <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'manager-employee-detail' emp.id %}">Профиль</a>
+            <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'manager-task-create' %}?employee={{ emp.id }}&next={{ request.path|urlencode }}">Назначить задачу</a>
+          </div>
+        </article>
         {% endfor %}
+      </div>
+
+      <div class="team-filter-empty" data-team-empty style="display:none;">
+        <p class="subtle" style="text-align:center; padding: 2rem 0;">Нет сотрудников по выбранному фильтру.</p>
       </div>
     </section>
   {% endif %}

@@ -1,0 +1,49 @@
+<article class="sprint-card">
+  <header class="sprint-card-head">
+    <div class="sprint-card-title">
+      <h3>{{ sprint.title }}</h3>
+      <span class="status-pill {{ sprint.status_tone }}">{{ sprint.status_label }}</span>
+    </div>
+    <p class="subtle sprint-card-period">{{ sprint.period }}</p>
+  </header>
+  {% if sprint.goal %}
+    <p class="sprint-card-goal">{{ sprint.goal|truncatechars:140 }}</p>
+  {% endif %}
+  <div class="sprint-card-stats">
+    <div class="sprint-stat">
+      <span class="sprint-stat-label">Задач</span>
+      <span class="sprint-stat-value">{{ sprint.task_count }}</span>
+    </div>
+    <div class="sprint-stat">
+      <span class="sprint-stat-label">Выполнено</span>
+      <span class="sprint-stat-value">{{ sprint.done_count }}</span>
+    </div>
+    <div class="sprint-stat">
+      <span class="sprint-stat-label">Прогресс</span>
+      <span class="sprint-stat-value">{{ sprint.progress }}%</span>
+    </div>
+  </div>
+  <div class="sprint-card-track">
+    <div class="sprint-progress">
+      <div class="sprint-progress-bar" style="width: {{ sprint.progress }}%;"></div>
+    </div>
+    <div class="sprint-track-labels">
+      <span>Выполнение</span>
+      <strong>{{ sprint.progress }}%</strong>
+    </div>
+  </div>
+  {% if sprint.status == 'active' %}
+    <div class="sprint-card-track">
+      <div class="sprint-progress sprint-progress-time">
+        <div class="sprint-progress-bar is-time" style="width: {{ sprint.time_progress }}%;"></div>
+      </div>
+      <div class="sprint-track-labels">
+        <span>Время спринта</span>
+        <strong>{{ sprint.time_progress }}%</strong>
+      </div>
+    </div>
+  {% endif %}
+  <div class="sprint-card-actions">
+    <a class="btn btn-ghost btn-inline btn-xs" href="{% url 'manager-sprint-detail' sprint.id %}">Открыть</a>
+  </div>
+</article>

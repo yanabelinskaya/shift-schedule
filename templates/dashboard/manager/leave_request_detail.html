@@ -1,0 +1,163 @@
+{% extends 'dashboard/manager.html' %}
+
+{% block content %}
+  <div class="card dashboard-hero fade-up">
+    <div class="hero-header">
+      <div>
+        <h1>{{ page_title }}</h1>
+        <p class="subtle">{{ page_subtitle }}</p>
+      </div>
+      <div class="hero-actions">
+        <a class="btn btn-ghost btn-inline" href="{% url 'manager-leave-requests' %}">← К списку заявок</a>
+      </div>
+    </div>
+    <div class="hero-meta">
+      <div class="meta-chip">
+        <span class="status-pill {{ status_tone }}" style="font-size: 0.75rem;">{{ status_label }}</span>
+      </div>
+      <div class="meta-chip">{{ type_label }}</div>
+      <div class="meta-chip">{{ start_display }} — {{ end_display }}</div>
+      <div class="meta-chip">Дней: {{ duration_days }}</div>
+    </div>
+  </div>
+
+  {% if error %}
+    <div class="form-message is-error fade-up" style="margin-top: 1rem;">{{ error }}</div>
+  {% endif %}
+  {% if success %}
+    <div class="form-message is-success fade-up" style="margin-top: 1rem;">{{ success }}</div>
+  {% endif %}
+
+  {% if lr.status == 'approved' and period_tasks and not has_substitution %}
+    <div class="form-message is-warning fade-up" style="margin-top: 1rem;">
+      <strong>У сотрудника есть задачи на период отсутствия.</strong>
+      Требуется замещение или перераспределение.
+      <a class="btn btn-primary btn-inline btn-xs" href="{% url 'manager-substitutions' %}?absent={{ lr.user_id }}&start={{ lr.start_date|date:'Y-m-d' }}&end={{ lr.end_date|date:'Y-m-d' }}" style="margin-left: 0.5rem;">Перейти к замещениям</a>
+    </div>
+  {% endif %}
+
+  <div style="display: grid; grid-template-columns: 1fr 380px; gap: 1rem; margin-top: 1rem; align-items: start;">
+
+    <section class="card section-block fade-up">
+      <div class="section-header">
+        <div>
+          <h2>Сотрудник</h2>
+          <p class="subtle">Данные о заявителе.</p>
+        </div>
+      </div>
+      <dl class="info-list">
+        <div class="info-row"><dt>Имя</dt><dd>{{ employee_name }}</dd></div>
+        <div class="info-row"><dt>Должность</dt><dd>{{ employee_position }}</dd></div>
+        {% if employee_phone %}<div class="info-row"><dt>Телефон</dt><dd>{{ employee_phone }}</dd></div>{% endif %}
+        <div class="info-row"><dt>Тип</dt><dd>{{ type_label }}</dd></div>
+        <div class="info-row"><dt>Период</dt><dd>{{ start_display }} — {{ end_display }} ({{ duration_days }} дн.)</dd></div>
+        {% if lr.comment %}<div class="info-row"><dt>Комментарий</dt><dd>{{ lr.comment }}</dd></div>{% endif %}
+        {% if lr.attachment %}
+          <div class="info-row"><dt>Файл</dt><dd><a href="{{ lr.attachment.url }}" target="_blank" rel="noopener">Скачать вложение</a></dd></div>
+        {% endif %}
+        {% if lr.status == 'rejected' and lr.rejection_reason %}
+          <div class="info-row"><dt>Причина отказа</dt><dd>{{ lr.rejection_reason }}</dd></div>
+        {% endif %}
+      </dl>
+
+      <div class="section-header" style="margin-top: 1.5rem;">
+        <div>
+          <h2>Задачи в период отсутствия</h2>
+          <p class="subtle">Эти задачи попадают на даты заявки.</p>
+        </div>
+        <span class="info-chip">{{ period_tasks|length }}</span>
+      </div>
+      {% if period_tasks %}
+        <div class="task-list">
+          {% for task in period_tasks %}
+            <article class="task-list-item">
+              <div class="task-list-main">
+                <div class="task-card-title">
+                  <span class="priority-dot is-{{ task.priority }}" aria-hidden="true"></span>
+                  <h3><a href="{% url 'manager-task-detail' task.id %}">{{ task.title }}</a></h3>
+                </div>
+                <div class="task-list-meta">
+                  <span class="subtle">{{ task.date }}</span>
+                </div>
+              </div>
+              <div class="task-list-side">
+                <span class="status-pill {{ task.status_tone }}">{{ task.status_label }}</span>
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="task-empty" style="padding: 1.25rem; text-align: center;">
+          <p class="subtle">Задач на период отсутствия нет.</p>
+        </div>
+      {% endif %}
+
+      <div class="section-header" style="margin-top: 1.5rem;">
+        <div>
+          <h2>Текущие задачи сотрудника</h2>
+          <p class="subtle">Все активные задачи (за пределами периода — серым).</p>
+        </div>
+        <span class="info-chip">{{ current_tasks|length }}</span>
+      </div>
+      {% if current_tasks %}
+        <div class="task-list">
+          {% for task in current_tasks %}
+            <article class="task-list-item{% if not task.in_period %} is-muted{% endif %}">
+              <div class="task-list-main">
+                <div class="task-card-title">
+                  <span class="priority-dot is-{{ task.priority }}" aria-hidden="true"></span>
+                  <h3><a href="{% url 'manager-task-detail' task.id %}">{{ task.title }}</a></h3>
+                </div>
+                <div class="task-list-meta">
+                  <span class="subtle">{{ task.date }}</span>
+                </div>
+              </div>
+              <div class="task-list-side">
+                <span class="status-pill {{ task.status_tone }}">{{ task.status_label }}</span>
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="task-empty" style="padding: 1.25rem; text-align: center;">
+          <p class="subtle">Активных задач у сотрудника нет.</p>
+        </div>
+      {% endif %}
+    </section>
+
+    <section class="card section-block fade-up">
+      <div class="section-header">
+        <div>
+          <h2>Действия</h2>
+          <p class="subtle">Решение по заявке.</p>
+        </div>
+      </div>
+
+      {% if lr.status == 'pending' %}
+        <form method="post" class="form-stack">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="approve">
+          <button class="btn btn-primary btn-inline" type="submit">Одобрить заявку</button>
+        </form>
+        <form method="post" class="form-stack" style="margin-top: 0.75rem;">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="reject">
+          <div class="form-group">
+            <label class="form-label" for="rejection_reason">Причина отказа</label>
+            <input class="control-input" type="text" id="rejection_reason" name="rejection_reason" placeholder="Не обязательно">
+          </div>
+          <button class="btn btn-ghost btn-inline" type="submit" onclick="return confirm('Отклонить заявку?')">Отклонить</button>
+        </form>
+      {% else %}
+        <p class="subtle">Заявка уже рассмотрена.</p>
+        {% if lr.reviewed_at %}
+          <p class="subtle">Рассмотрена: {{ lr.reviewed_at|date:'d.m.Y H:i' }}</p>
+        {% endif %}
+        {% if lr.status == 'approved' %}
+          <a class="btn btn-primary btn-inline" href="{% url 'manager-substitutions' %}?absent={{ lr.user_id }}&start={{ lr.start_date|date:'Y-m-d' }}&end={{ lr.end_date|date:'Y-m-d' }}">Перейти к замещениям</a>
+        {% endif %}
+      {% endif %}
+    </section>
+
+  </div>
+{% endblock %}

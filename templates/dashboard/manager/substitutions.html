@@ -25,6 +25,48 @@
       <div class="form-message is-success fade-up" style="margin-top: 1rem;">{{ success }}</div>
     {% endif %}
 
+    {% if situations %}
+      <section class="card section-block fade-up" style="margin-top: 1rem;">
+        <div class="section-header">
+          <div>
+            <h2>Ситуации, где нужна замена</h2>
+            <p class="subtle">Одобренные отсутствия, задачи без исполнителя и частично закрытые периоды.</p>
+          </div>
+          <span class="info-chip">{{ situations|length }}</span>
+        </div>
+
+        <div class="situation-list">
+          {% for sit in situations %}
+            <article class="situation-card situation-{{ sit.status_code }}">
+              <div class="situation-main">
+                <div class="situation-title">
+                  <h3>{{ sit.absent_name }}</h3>
+                  <span class="status-pill {% if sit.status_code == 'needed' %}danger{% elif sit.status_code == 'partial' %}warning{% else %}success{% endif %}">{{ sit.status_label }}</span>
+                </div>
+                <div class="situation-meta">
+                  <span class="subtle">{{ sit.reason }}</span>
+                  {% if not sit.is_no_assignee %}
+                    <span class="subtle">{{ sit.start }} — {{ sit.end }}</span>
+                  {% endif %}
+                  <span class="info-chip">Задач: {{ sit.tasks_count }}</span>
+                  {% if sit.reassigned_count %}
+                    <span class="info-chip">Переназначено: {{ sit.reassigned_count }}</span>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="situation-side">
+                {% if sit.is_no_assignee %}
+                  <a class="btn btn-primary btn-inline btn-xs" href="{% url 'manager-tasks' %}">Открыть задачи</a>
+                {% else %}
+                  <a class="btn btn-primary btn-inline btn-xs" href="?absent={{ sit.absent_id }}&start={{ sit.start_iso }}&end={{ sit.end_iso }}">Назначить замену</a>
+                {% endif %}
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
+
     <div style="display: grid; grid-template-columns: 1fr 380px; gap: 1rem; margin-top: 1rem; align-items: start;">
 
       <section class="card section-block fade-up">
@@ -52,8 +94,10 @@
                 <div class="task-list-side">
                   {% if sub.is_active %}
                     <span class="status-pill success">Активно</span>
-                  {% else %}
+                  {% elif sub.is_future %}
                     <span class="status-pill neutral">Плановое</span>
+                  {% else %}
+                    <span class="status-pill muted">Завершено</span>
                   {% endif %}
                   {% if sub.can_delete %}
                     <form method="post" style="display:inline;" onsubmit="return confirm('Удалить замещение?')">
@@ -72,13 +116,99 @@
             <p class="subtle">Замещений пока нет.</p>
           </div>
         {% endif %}
+
+        {% if affected_tasks %}
+          <div class="section-header" style="margin-top: 1.5rem;">
+            <div>
+              <h2>Затронутые задачи</h2>
+              <p class="subtle">Распределите задачи между сотрудниками.</p>
+            </div>
+            <span class="info-chip">{{ affected_tasks|length }}</span>
+          </div>
+
+          <div class="task-list">
+            {% for task in affected_tasks %}
+              <article class="task-list-item">
+                <div class="task-list-main">
+                  <div class="task-card-title">
+                    <span class="priority-dot is-{{ task.priority }}" aria-hidden="true"></span>
+                    <h3><a href="{% url 'manager-task-detail' task.id %}">{{ task.title }}</a></h3>
+                  </div>
+                  <div class="task-list-meta">
+                    <span class="subtle">{{ task.date }}</span>
+                    <span class="subtle">{{ task.priority_label }}</span>
+                    <span class="status-pill {{ task.status_tone }}">{{ task.status_label }}</span>
+                  </div>
+                </div>
+                <div class="task-list-side">
+                  <form method="post" style="display:flex; gap: 0.4rem; align-items: center;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="reassign_task">
+                    <input type="hidden" name="task_id" value="{{ task.id }}">
+                    <input type="hidden" name="reason" value="substitution">
+                    <div class="custom-select substitution-select" data-custom-select>
+                      <select name="new_user_id" required>
+                        <option value="">— выбрать —</option>
+                        {% for emp in employees %}
+                          {% if emp.id != selected_absent_id %}
+                            <option value="{{ emp.id }}">{{ emp.name }} ({{ emp.tasks }} задач)</option>
+                          {% endif %}
+                        {% endfor %}
+                      </select>
+                      <button class="custom-select-trigger" type="button" data-select-trigger>
+                        <span data-select-label></span>
+                        <svg viewBox="0 0 20 20" aria-hidden="true">
+                          <path d="M5 7l5 6 5-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                      </button>
+                      <div class="custom-select-menu" data-select-menu>
+                        <div class="custom-select-options" data-select-options></div>
+                      </div>
+                    </div>
+                    <button class="btn btn-primary btn-inline btn-xs" type="submit">Назначить</button>
+                  </form>
+                  <form method="post" style="display:inline; margin-top: 0.3rem;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="unassign_task">
+                    <input type="hidden" name="task_id" value="{{ task.id }}">
+                    <button class="btn btn-ghost btn-inline btn-xs" type="submit" title="Снять исполнителя">Снять</button>
+                  </form>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        {% if history %}
+          <div class="section-header" style="margin-top: 1.5rem;">
+            <div>
+              <h2>История переназначений</h2>
+              <p class="subtle">Последние изменения исполнителей.</p>
+            </div>
+          </div>
+          <div class="reassignment-history">
+            {% for h in history %}
+              <div class="history-item">
+                <div class="history-row">
+                  <a href="{% url 'manager-task-detail' h.task_id %}">{{ h.task_title }}</a>
+                  <span class="subtle">{{ h.created_at }}</span>
+                </div>
+                <div class="history-meta">
+                  <span class="subtle">{{ h.previous_name }} → {{ h.new_name }}</span>
+                  <span class="info-chip">{{ h.reason_label }}</span>
+                  {% if h.note %}<span class="subtle">{{ h.note }}</span>{% endif %}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
       </section>
 
       <section class="card section-block fade-up">
         <div class="section-header">
           <div>
             <h2>Назначить замену</h2>
-            <p class="subtle">Укажите кто отсутствует и кто заменяет.</p>
+            <p class="subtle">Создание общего замещения на период.</p>
           </div>
         </div>
 
@@ -88,32 +218,74 @@
 
           <div class="form-group">
             <label class="form-label" for="absent_user_id">Отсутствующий сотрудник</label>
-            <select class="control-select" id="absent_user_id" name="absent_user_id" required>
-              <option value="">— выберите —</option>
-              {% for emp in employees %}
-                <option value="{{ emp.id }}">{{ emp.name }}</option>
-              {% endfor %}
-            </select>
+            <div class="custom-select substitution-select" data-custom-select>
+              <select id="absent_user_id" name="absent_user_id" required>
+                <option value="">— выберите —</option>
+                {% for emp in employees %}
+                  <option value="{{ emp.id }}" {% if emp.id == selected_absent_id %}selected{% endif %}>
+                    {{ emp.name }}{% if emp.absent %} (отсутствует){% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+              <button class="custom-select-trigger" type="button" data-select-trigger>
+                <span data-select-label></span>
+                <svg viewBox="0 0 20 20" aria-hidden="true">
+                  <path d="M5 7l5 6 5-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
+              <div class="custom-select-menu" data-select-menu>
+                <div class="custom-select-options" data-select-options></div>
+              </div>
+            </div>
           </div>
 
           <div class="form-group">
             <label class="form-label" for="substitute_user_id">Замена</label>
-            <select class="control-select" id="substitute_user_id" name="substitute_user_id" required>
-              <option value="">— выберите —</option>
-              {% for emp in employees %}
-                <option value="{{ emp.id }}">{{ emp.name }}</option>
-              {% endfor %}
-            </select>
+            <div class="custom-select substitution-select" data-custom-select>
+              <select id="substitute_user_id" name="substitute_user_id" required>
+                <option value="">— выберите —</option>
+                {% for emp in employees %}
+                  <option value="{{ emp.id }}">{{ emp.name }} — задач: {{ emp.tasks }}</option>
+                {% endfor %}
+              </select>
+              <button class="custom-select-trigger" type="button" data-select-trigger>
+                <span data-select-label></span>
+                <svg viewBox="0 0 20 20" aria-hidden="true">
+                  <path d="M5 7l5 6 5-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
+              <div class="custom-select-menu" data-select-menu>
+                <div class="custom-select-options" data-select-options></div>
+              </div>
+            </div>
           </div>
 
           <div class="form-group">
             <label class="form-label" for="sub_start_date">Дата начала</label>
-            <input class="control-input" type="date" id="sub_start_date" name="start_date" required>
+            <div class="custom-date sprint-date-picker" data-date-picker>
+              <input type="hidden" id="sub_start_date" name="start_date" value="{{ selected_start }}" data-date-iso>
+              <input class="date-input" type="text" value="{{ selected_start }}" placeholder="ДД.ММ.ГГГГ" data-date-input required>
+              <button class="date-trigger" type="button" data-date-trigger aria-label="Открыть календарь даты начала">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 7h16v13H4zM7 3v4M17 3v4M4 11h16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
+              <span class="date-panel" data-date-panel hidden></span>
+            </div>
           </div>
 
           <div class="form-group">
             <label class="form-label" for="sub_end_date">Дата окончания</label>
-            <input class="control-input" type="date" id="sub_end_date" name="end_date" required>
+            <div class="custom-date sprint-date-picker" data-date-picker>
+              <input type="hidden" id="sub_end_date" name="end_date" value="{{ selected_end }}" data-date-iso>
+              <input class="date-input" type="text" value="{{ selected_end }}" placeholder="ДД.ММ.ГГГГ" data-date-input required>
+              <button class="date-trigger" type="button" data-date-trigger aria-label="Открыть календарь даты окончания">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 7h16v13H4zM7 3v4M17 3v4M4 11h16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
+              <span class="date-panel" data-date-panel hidden></span>
+            </div>
           </div>
 
           <div class="form-group">
@@ -121,10 +293,44 @@
             <input class="control-input" type="text" id="sub_note" name="note" placeholder="Причина, задачи...">
           </div>
 
+          <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="checkbox" name="reassign_all" value="1">
+              <span>Переназначить все задачи периода на замену</span>
+            </label>
+          </div>
+
           <div class="form-actions">
             <button class="btn btn-primary btn-inline" type="submit">Создать замещение</button>
           </div>
         </form>
+
+        {% if recommendations %}
+          <div class="section-header" style="margin-top: 1.5rem;">
+            <div>
+              <h2>Рекомендуемые кандидаты</h2>
+              <p class="subtle">Сортировка по загрузке и совпадению должности.</p>
+            </div>
+          </div>
+          <ul class="recommend-list">
+            {% for rec in recommendations|slice:":5" %}
+              <li class="recommend-item">
+                <div class="recommend-row">
+                  <span class="recommend-name">{{ rec.name }}</span>
+                  <span class="recommend-score">{{ rec.score }}</span>
+                </div>
+                <div class="recommend-meta">
+                  <span class="subtle">{{ rec.position }}</span>
+                  <span class="info-chip">Задач: {{ rec.tasks }}</span>
+                  {% if rec.same_position %}<span class="status-pill success">Подходит по должности</span>{% endif %}
+                </div>
+                <div class="sprint-progress" style="margin-top: 0.4rem;">
+                  <div class="sprint-progress-bar" style="width: {{ rec.percent }}%;"></div>
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+        {% endif %}
       </section>
 
     </div>

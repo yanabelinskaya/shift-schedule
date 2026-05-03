@@ -22,34 +22,59 @@
       <div class="form-message is-error fade-up" style="margin-top: 1rem;">{{ error }}</div>
     {% endif %}
     {% if success %}
-      <div class="form-message is-success fade-up" style="margin-top: 1rem;">{{ success }}</div>
+      <div class="form-message is-success fade-up" style="margin-top: 1rem;">
+        {{ success }}
+        {% if warning_url %}
+          <a class="btn btn-ghost btn-inline btn-xs" href="{{ warning_url }}" style="margin-left: 0.5rem;">Открыть заявку</a>
+        {% endif %}
+      </div>
     {% endif %}
 
     <section class="card section-block fade-up" style="margin-top: 1rem;">
       <div class="section-header">
         <div>
           <h2>Заявки</h2>
-          <p class="subtle">Выберите статус для фильтрации.</p>
+          <p class="subtle">Фильтр по статусу и типу заявки.</p>
         </div>
-        <div class="period-switch">
-          <a class="btn btn-inline btn-sm{% if status_filter == 'pending' %} btn-primary{% else %} btn-ghost{% endif %}" href="?status=pending">На рассмотрении</a>
-          <a class="btn btn-inline btn-sm{% if status_filter == 'approved' %} btn-primary{% else %} btn-ghost{% endif %}" href="?status=approved">Одобренные</a>
-          <a class="btn btn-inline btn-sm{% if status_filter == 'rejected' %} btn-primary{% else %} btn-ghost{% endif %}" href="?status=rejected">Отклонённые</a>
-          <a class="btn btn-inline btn-sm{% if status_filter == 'all' %} btn-primary{% else %} btn-ghost{% endif %}" href="?status=all">Все</a>
+      </div>
+
+      <div class="filter-bar">
+        <div class="filter-group">
+          <span class="filter-label">Статус:</span>
+          <a class="btn btn-inline btn-sm{% if status_filter == 'pending' %} btn-primary{% else %} btn-ghost{% endif %}" href="?status=pending&type={{ type_filter }}">Новые ({{ counts.pending }})</a>
+          <a class="btn btn-inline btn-sm{% if status_filter == 'approved' %} btn-primary{% else %} btn-ghost{% endif %}" href="?status=approved&type={{ type_filter }}">Одобренные ({{ counts.approved }})</a>
+          <a class="btn btn-inline btn-sm{% if status_filter == 'rejected' %} btn-primary{% else %} btn-ghost{% endif %}" href="?status=rejected&type={{ type_filter }}">Отклонённые ({{ counts.rejected }})</a>
+          <a class="btn btn-inline btn-sm{% if status_filter == 'all' %} btn-primary{% else %} btn-ghost{% endif %}" href="?status=all&type={{ type_filter }}">Все ({{ counts.all }})</a>
+        </div>
+        <div class="filter-group">
+          <span class="filter-label">Тип:</span>
+          <a class="btn btn-inline btn-sm{% if type_filter == 'all' %} btn-primary{% else %} btn-ghost{% endif %}" href="?status={{ status_filter }}&type=all">Все</a>
+          <a class="btn btn-inline btn-sm{% if type_filter == 'vacation' %} btn-primary{% else %} btn-ghost{% endif %}" href="?status={{ status_filter }}&type=vacation">Отпуск ({{ counts.vacation }})</a>
+          <a class="btn btn-inline btn-sm{% if type_filter == 'sick' %} btn-primary{% else %} btn-ghost{% endif %}" href="?status={{ status_filter }}&type=sick">Больничный ({{ counts.sick }})</a>
         </div>
       </div>
 
       {% if leave_requests %}
-        <div class="task-list">
+        <div class="task-list" style="margin-top: 1rem;">
           {% for lr in leave_requests %}
             <article class="task-list-item">
               <div class="task-list-main">
                 <div class="task-card-title">
-                  <h3>{{ lr.employee_name }} — {{ lr.type_label }}</h3>
+                  <h3>
+                    <a href="{% url 'manager-leave-request-detail' lr.id %}">{{ lr.employee_name }} — {{ lr.type_label }}</a>
+                  </h3>
                 </div>
                 <div class="task-list-meta">
                   <span class="subtle">{{ lr.start_display }} — {{ lr.end_display }}</span>
-                  {% if lr.comment %}<span class="subtle">{{ lr.comment }}</span>{% endif %}
+                  {% if lr.comment %}<span class="subtle">{{ lr.comment|truncatechars:80 }}</span>{% endif %}
+                  {% if lr.has_attachment %}
+                    <a href="{{ lr.attachment_url }}" class="info-chip" target="_blank" rel="noopener">📎 Файл</a>
+                  {% endif %}
+                  {% if lr.has_conflict and not lr.has_substitution %}
+                    <span class="status-pill danger">Нужно замещение</span>
+                  {% elif lr.has_substitution %}
+                    <span class="status-pill success">Замена назначена</span>
+                  {% endif %}
                   {% if lr.status == 'rejected' and lr.rejection_reason %}
                     <span class="subtle" style="color: var(--color-danger);">Причина: {{ lr.rejection_reason }}</span>
                   {% endif %}
@@ -57,6 +82,7 @@
               </div>
               <div class="task-list-side">
                 <span class="status-pill {{ lr.status_tone }}">{{ lr.status_label }}</span>
+                <a class="btn btn-ghost btn-inline btn-xs" href="{% url 'manager-leave-request-detail' lr.id %}">Открыть</a>
                 {% if lr.status == 'pending' %}
                   <form method="post" style="display:inline;">
                     {% csrf_token %}
@@ -93,7 +119,7 @@
         </div>
       {% else %}
         <div class="task-empty" style="padding: 2rem; text-align: center;">
-          <p class="subtle">Заявок с выбранным статусом нет.</p>
+          <p class="subtle">Заявок с выбранными фильтрами нет.</p>
         </div>
       {% endif %}
     </section>

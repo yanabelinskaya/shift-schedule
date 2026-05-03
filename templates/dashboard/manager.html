@@ -140,7 +140,7 @@
             </span>
             <span class="sr-only">Переключить тему</span>
           </button>
-          <a class="profile-button" href="{% url 'profile' %}?next={{ request.get_full_path|urlencode }}" aria-label="Профиль">
+          <a class="profile-button{% if active_tab == 'profile' %} is-active{% endif %}" href="{% url 'manager-profile' %}" aria-label="Профиль">
             <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
               <circle cx="12" cy="8" r="4" fill="currentColor"></circle>
               <path d="M4 20c1.6-3.8 5-6 8-6s6.4 2.2 8 6" fill="currentColor"></path>
@@ -157,9 +157,9 @@
         </div>
       </header>
 
-      <section class="content">
+      <section class="content" data-spa-content data-active-tab="{{ active_tab }}">
         {% if site_config.global_announcement %}
-          <div class="card site-announcement">{{ site_config.global_announcement }}</div>
+          <div class="card site-announcement" data-spa-announcement>{{ site_config.global_announcement }}</div>
         {% endif %}
         {% block content %}{% endblock %}
       </section>

@@ -38,6 +38,8 @@ from .models import (
     LeaveRequest,
     Sprint,
     Substitution,
+    TaskMessage,
+    TaskMessageReadState,
     TaskSubmission,
 )
 from .permissions import IsEmployeeRole, IsManagerRole
@@ -92,6 +94,7 @@ EMPLOYEE_STATUS_TRANSITIONS = {
     },
     DepartmentTask.TaskStatus.IN_PROGRESS: {
         DepartmentTask.TaskStatus.ON_REVIEW,
+        DepartmentTask.TaskStatus.COMPLETED,
     },
     DepartmentTask.TaskStatus.ON_REVIEW: set(),
     DepartmentTask.TaskStatus.COMPLETED: set(),
@@ -1502,6 +1505,124 @@ class EmployeeTaskDropView(generics.GenericAPIView):
         task.status = DepartmentTask.TaskStatus.AWAITING_CONFIRMATION
         task.save(update_fields=['taken_by', 'status', 'updated_at'])
         return Response({'ok': True, 'status': task.status})
+
+
+# ---------------------------------------------------------------------------
+# Employee – Task Chat views
+# ---------------------------------------------------------------------------
+
+_MSG_MONTH_NAMES = [
+    "января", "февраля", "марта", "апреля", "мая", "июня",
+    "июля", "августа", "сентября", "октября", "ноября", "декабря",
+]
+
+
+def _fmt_msg_time(dt):
+    local = timezone.localtime(dt)
+    return f"{local.day} {_MSG_MONTH_NAMES[local.month - 1]}, {local:%H:%M}"
+
+
+def _mark_task_messages_read(task, user):
+    latest_message = (
+        TaskMessage.objects.filter(task=task)
+        .order_by('-id')
+        .only('id')
+        .first()
+    )
+    if not latest_message:
+        return
+    TaskMessageReadState.objects.update_or_create(
+        task=task,
+        user=user,
+        defaults={'last_read_message': latest_message},
+    )
+
+
+class EmployeeTaskMessageListCreateView(generics.GenericAPIView):
+    permission_classes = [IsEmployeeRole]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @extend_schema(tags=['Employee'], summary='Сообщения чата задачи')
+    def get(self, request, task_id):
+        task = get_object_or_404(DepartmentTask, id=task_id)
+        require_employee_task_access(request.user, task)
+        qs = TaskMessage.objects.filter(task=task).select_related(
+            'author', 'reply_to', 'reply_to__author',
+        )
+        since = request.query_params.get('since')
+        if since:
+            try:
+                qs = qs.filter(id__gt=int(since))
+            except (ValueError, TypeError):
+                pass
+        messages = []
+        for msg in qs:
+            reply_data = None
+            if msg.reply_to:
+                ra = msg.reply_to.author
+                reply_data = {
+                    'id': msg.reply_to.id,
+                    'author': ra.get_full_name().strip() or ra.username if ra else '—',
+                    'text': msg.reply_to.text[:120],
+                }
+            a = msg.author
+            messages.append({
+                'id': msg.id,
+                'author': a.get_full_name().strip() or a.username if a else '—',
+                'author_id': a.id if a else None,
+                'is_mine': a.id == request.user.id if a else False,
+                'text': msg.text,
+                'attachment_url': msg.attachment.url if msg.attachment else '',
+                'attachment_name': Path(msg.attachment.name).name if msg.attachment else '',
+                'reply_to': reply_data,
+                'created_label': _fmt_msg_time(msg.created_at),
+            })
+        _mark_task_messages_read(task, request.user)
+        return Response({'messages': messages})
+
+    @extend_schema(tags=['Employee'], summary='Отправить сообщение в чат задачи')
+    def post(self, request, task_id):
+        task = get_object_or_404(DepartmentTask, id=task_id)
+        require_employee_task_access(request.user, task)
+        text = (request.data.get('text') or '').strip()
+        attachment = request.FILES.get('attachment')
+        if not text and not attachment:
+            return Response({'detail': 'Введите сообщение или прикрепите файл.'}, status=400)
+        reply_to = None
+        reply_to_id = request.data.get('reply_to')
+        if reply_to_id:
+            try:
+                reply_to = TaskMessage.objects.get(id=int(reply_to_id), task=task)
+            except (TaskMessage.DoesNotExist, ValueError, TypeError):
+                pass
+        msg = TaskMessage.objects.create(
+            task=task,
+            author=request.user,
+            text=text,
+            attachment=attachment,
+            reply_to=reply_to,
+        )
+        reply_data = None
+        if reply_to:
+            ra = reply_to.author
+            reply_data = {
+                'id': reply_to.id,
+                'author': ra.get_full_name().strip() or ra.username if ra else '—',
+                'text': reply_to.text[:120],
+            }
+        return Response({
+            'message': {
+                'id': msg.id,
+                'author': request.user.get_full_name().strip() or request.user.username,
+                'author_id': request.user.id,
+                'is_mine': True,
+                'text': msg.text,
+                'attachment_url': msg.attachment.url if msg.attachment else '',
+                'attachment_name': Path(msg.attachment.name).name if msg.attachment else '',
+                'reply_to': reply_data,
+                'created_label': _fmt_msg_time(msg.created_at),
+            }
+        }, status=201)
 
 
 # ---------------------------------------------------------------------------
