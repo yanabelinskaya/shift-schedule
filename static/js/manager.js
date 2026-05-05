@@ -1884,6 +1884,7 @@ const initManagerCalendar = (calendarRoot) => {
     }
   };
 
+  window.initManagerTasksPage = () => initManagerTasks(document.querySelector("[data-manager-tasks]"));
   initManagerTasks(document.querySelector("[data-manager-tasks]"));
 })();
 
@@ -2143,69 +2144,97 @@ const initManagerCalendar = (calendarRoot) => {
     }
   };
 
+  window.initSprintDetailPage = () => initSprintDetail();
   initSprintDetail();
 })();
 
 (() => {
-  const root = document.querySelector("[data-substitutions-page]");
-  if (!root) {
-    return;
-  }
+  let escapeBound = false;
 
-  const syncBodyModalState = () => {
-    const openModals = document.querySelectorAll(".modal.is-open");
-    document.body.classList.toggle("modal-open", openModals.length > 0);
-  };
-
-  const openModal = (modal) => {
-    if (!modal) {
+  const initSubstitutionsPage = (rootArg) => {
+    const root = rootArg || document.querySelector("[data-substitutions-page]");
+    if (!root || root.dataset.substitutionsReady === "true") {
       return;
     }
-    modal.removeAttribute("hidden");
-    modal.removeAttribute("inert");
-    modal.classList.add("is-open");
-    modal.setAttribute("aria-hidden", "false");
-    syncBodyModalState();
-    if (typeof window.initCustomSelects === "function") {
-      window.initCustomSelects(modal);
-    }
-    const focusTarget = modal.querySelector("button, [href], input, select, textarea");
-    if (focusTarget) {
-      focusTarget.focus();
-    }
-  };
+    root.dataset.substitutionsReady = "true";
 
-  const closeModal = (modal) => {
-    if (!modal) {
-      return;
-    }
-    modal.classList.remove("is-open");
-    modal.setAttribute("aria-hidden", "true");
-    modal.setAttribute("inert", "");
-    modal.setAttribute("hidden", "");
-    syncBodyModalState();
-  };
+    const syncBodyModalState = () => {
+      const openModals = document.querySelectorAll(".modal.is-open");
+      document.body.classList.toggle("modal-open", openModals.length > 0);
+    };
 
-  root.querySelectorAll("[data-open-substitution-modal]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const target = button.dataset.target;
-      if (!target) {
+    const openModal = (modal) => {
+      if (!modal) {
         return;
       }
-      openModal(root.querySelector(`[data-modal="${target}"]`));
-    });
-  });
+      modal.removeAttribute("hidden");
+      modal.removeAttribute("inert");
+      modal.classList.add("is-open");
+      modal.setAttribute("aria-hidden", "false");
+      syncBodyModalState();
+      if (typeof window.initCustomSelects === "function") {
+        window.initCustomSelects(modal);
+      }
+      if (typeof window.initCustomDatePickers === "function") {
+        window.initCustomDatePickers(modal);
+      }
+      const focusTarget = modal.querySelector("button, [href], input, select, textarea");
+      if (focusTarget) {
+        focusTarget.focus();
+      }
+    };
 
-  root.querySelectorAll("[data-action='close-modal']").forEach((button) => {
-    button.addEventListener("click", () => {
-      closeModal(button.closest(".modal"));
-    });
-  });
+    const closeModal = (modal) => {
+      if (!modal) {
+        return;
+      }
+      modal.classList.remove("is-open");
+      modal.setAttribute("aria-hidden", "true");
+      modal.setAttribute("inert", "");
+      modal.setAttribute("hidden", "");
+      syncBodyModalState();
+    };
 
-  document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") {
-      return;
+    root.querySelectorAll("[data-open-substitution-modal]").forEach((button) => {
+      if (button.dataset.subModalReady === "true") {
+        return;
+      }
+      button.dataset.subModalReady = "true";
+      button.addEventListener("click", () => {
+        const target = button.dataset.target;
+        if (!target) {
+          return;
+        }
+        openModal(root.querySelector(`[data-modal="${target}"]`));
+      });
+    });
+
+    root.querySelectorAll("[data-action='close-modal']").forEach((button) => {
+      if (button.dataset.closeModalReady === "true") {
+        return;
+      }
+      button.dataset.closeModalReady = "true";
+      button.addEventListener("click", () => {
+        closeModal(button.closest(".modal"));
+      });
+    });
+
+    if (!escapeBound) {
+      escapeBound = true;
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") {
+          return;
+        }
+        document
+          .querySelectorAll("[data-substitutions-page] .modal.is-open")
+          .forEach((modal) => closeModal(modal));
+      });
     }
-    root.querySelectorAll(".modal.is-open").forEach((modal) => closeModal(modal));
-  });
+  };
+
+  // Экспортируем для SPA-навигации, чтобы после переключения вкладки
+  // обработчики снова цеплялись к новому DOM.
+  window.initSubstitutionsPage = initSubstitutionsPage;
+
+  initSubstitutionsPage();
 })();

@@ -6681,6 +6681,16 @@
       initEmployeeRequests();
       initManagerDashboard();
       initManagerTeam();
+      // Page-level handlers from manager.js, exposed on window
+      if (typeof window.initSubstitutionsPage === "function") {
+        window.initSubstitutionsPage();
+      }
+      if (typeof window.initManagerTasksPage === "function") {
+        window.initManagerTasksPage();
+      }
+      if (typeof window.initSprintDetailPage === "function") {
+        window.initSprintDetailPage();
+      }
     };
 
     const navigate = async (url, push = true) => {

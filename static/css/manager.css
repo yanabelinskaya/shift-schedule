@@ -3718,13 +3718,37 @@
   line-height: 1.1;
 }
 
+.substitution-situations {
+  position: relative;
+  padding: 22px;
+  border-radius: 18px;
+  border: 1px solid rgba(42, 122, 110, 0.22);
+  background: rgba(42, 122, 110, 0.05);
+}
+
+.substitution-situations::before {
+  content: "Главная задача";
+  position: absolute;
+  top: -12px;
+  left: 24px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(42, 122, 110, 0.32);
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .substitution-section-header {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .substitution-section-header h2 {
@@ -3735,6 +3759,15 @@
 
 .substitution-section-header p {
   margin: 4px 0 0;
+}
+
+.substitution-situations .substitution-card {
+  background: var(--surface);
+  border-color: rgba(42, 122, 110, 0.18);
+}
+
+.substitution-situations .substitution-card:hover {
+  border-color: rgba(42, 122, 110, 0.45);
 }
 
 .substitution-card-grid {
@@ -4157,10 +4190,41 @@
   min-width: 0;
 }
 
+.substitution-task-row > .custom-date {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
 .substitution-task-row > .control-input,
 .substitution-task-row > .control-input-sm {
   flex: 1 1 140px;
   min-width: 0;
+}
+
+.substitution-date-picker .date-trigger {
+  width: 30px;
+  height: 30px;
+}
+
+.substitution-date-picker .date-trigger svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Чтобы выпадающие меню (даты, селекты) не клипились панелью модалки */
+.substitution-modal-card,
+.substitution-modal-body {
+  overflow: visible;
+}
+
+.substitution-modal-card {
+  max-height: min(880px, calc(100vh - 48px));
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.substitution-modal-body {
+  overflow: auto;
 }
 
 .substitution-task-row > .btn {

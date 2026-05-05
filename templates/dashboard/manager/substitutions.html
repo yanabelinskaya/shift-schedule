@@ -218,7 +218,23 @@
                                       {% csrf_token %}
                                       <input type="hidden" name="action" value="move_deadline">
                                       <input type="hidden" name="task_id" value="{{ task.id }}">
-                                      <input class="control-input control-input-sm" type="date" name="date" value="{{ task.date_iso }}" required>
+                                      <div class="custom-date substitution-date-picker" data-date-picker>
+                                        <input
+                                          class="control-input control-input-sm date-input"
+                                          type="text"
+                                          data-date-input
+                                          value="{{ task.date_iso }}"
+                                          autocomplete="off"
+                                          placeholder="дд.мм.гггг"
+                                        />
+                                        <input type="hidden" name="date" data-date-iso value="{{ task.date_iso }}" required>
+                                        <button class="date-trigger" type="button" data-date-trigger aria-label="Открыть календарь">
+                                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                                            <path d="M4 7h16v13H4zM7 3v4M17 3v4M4 11h16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                                          </svg>
+                                        </button>
+                                        <div class="date-panel" data-date-panel hidden></div>
+                                      </div>
                                       <div class="custom-select substitution-time-select" data-custom-select>
                                         <select name="due_time">
                                           <option value="">Без времени</option>
