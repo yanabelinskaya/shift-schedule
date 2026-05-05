@@ -2043,6 +2043,104 @@ const initManagerCalendar = (calendarRoot) => {
         }
       });
     });
+
+    // ── Drag-and-drop kanban ──────────────────────────────────────────
+    const board = root.querySelector("[data-kanban-board]");
+    if (board && !board.dataset.kanbanReady) {
+      board.dataset.kanbanReady = "true";
+      let draggingCard = null;
+
+      board.querySelectorAll("[data-kanban-card][draggable='true']").forEach((card) => {
+        card.addEventListener("dragstart", (event) => {
+          draggingCard = card;
+          card.classList.add("is-dragging");
+          if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = "move";
+            try {
+              event.dataTransfer.setData("text/plain", card.dataset.taskId || "");
+            } catch (_e) {
+              /* noop */
+            }
+          }
+        });
+        card.addEventListener("dragend", () => {
+          card.classList.remove("is-dragging");
+          draggingCard = null;
+          board.querySelectorAll(".is-drop-target").forEach((c) =>
+            c.classList.remove("is-drop-target"),
+          );
+        });
+      });
+
+      board.querySelectorAll("[data-kanban-column]").forEach((column) => {
+        const dropzone = column.querySelector("[data-kanban-dropzone]") || column;
+        column.addEventListener("dragover", (event) => {
+          if (!draggingCard) return;
+          event.preventDefault();
+          if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+          column.classList.add("is-drop-target");
+        });
+        column.addEventListener("dragleave", (event) => {
+          if (!column.contains(event.relatedTarget)) {
+            column.classList.remove("is-drop-target");
+          }
+        });
+        column.addEventListener("drop", async (event) => {
+          event.preventDefault();
+          column.classList.remove("is-drop-target");
+          if (!draggingCard) return;
+          const taskId = draggingCard.dataset.taskId;
+          const targetStatus = column.dataset.status;
+          const fromColumn = draggingCard.closest("[data-kanban-column]");
+          if (!taskId || !targetStatus || !fromColumn) return;
+          if (fromColumn === column) return;
+
+          // Оптимистично двигаем карточку
+          dropzone.appendChild(draggingCard);
+          updateColumnCounts(board);
+
+          try {
+            const formData = new FormData();
+            formData.append("action", "update_task_status");
+            formData.append("task_id", taskId);
+            formData.append("status", targetStatus);
+            const csrfInput = root.querySelector("input[name='csrfmiddlewaretoken']");
+            if (csrfInput) {
+              formData.append("csrfmiddlewaretoken", csrfInput.value);
+            }
+            const response = await fetch(window.location.href, {
+              method: "POST",
+              headers: {
+                "X-Requested-With": "XMLHttpRequest",
+                "X-CSRFToken": getCookie("csrftoken") || "",
+              },
+              credentials: "same-origin",
+              body: formData,
+            });
+            if (!response.ok) {
+              throw new Error("status update failed");
+            }
+            // Обновляем выпадашку статуса внутри карточки, если она там есть
+            const select = draggingCard.querySelector("select[name='status']");
+            if (select) {
+              select.value = targetStatus;
+              select.dispatchEvent(new Event("change", { bubbles: true }));
+            }
+          } catch (e) {
+            // откат: возвращаем карточку и просим страницу обновиться
+            window.location.reload();
+          }
+        });
+      });
+    }
+
+    function updateColumnCounts(boardEl) {
+      boardEl.querySelectorAll("[data-kanban-column]").forEach((col) => {
+        const count = col.querySelectorAll("[data-kanban-card]").length;
+        const counter = col.querySelector("[data-kanban-count]");
+        if (counter) counter.textContent = String(count);
+      });
+    }
   };
 
   initSprintDetail();

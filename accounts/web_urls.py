@@ -41,6 +41,7 @@ from .web_views import (
     manager_task_edit,
     manager_team,
 )
+from .web_views_notifications import notifications_view, notifications_mark_read
 
 urlpatterns = [
     path('logout/', logout_view, name='logout'),
@@ -83,6 +84,9 @@ urlpatterns = [
     path('dashboard/employee/requests/', employee_requests, name='employee-requests'),
     path('dashboard/employee/chat/', employee_chat, name='employee-chat'),
     path('dashboard/employee/profile/', employee_profile, name='employee-profile'),
+    # Notifications
+    path('dashboard/notifications/', notifications_view, name='notifications'),
+    path('dashboard/notifications/mark-read/', notifications_mark_read, name='notifications-mark-read'),
     # Legacy redirects (kept for any bookmarked links)
     path('dashboard/employee/schedule/', employee_schedule, name='employee-schedule'),
     path('dashboard/employee/availability/', employee_availability, name='employee-availability'),

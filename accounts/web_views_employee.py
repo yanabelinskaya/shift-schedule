@@ -13,10 +13,12 @@ from .models import (
     DepartmentTask,
     EmployeeProfile,
     LeaveRequest,
+    Notification,
     Sprint,
     Substitution,
     TaskMessage,
     TaskMessageReadState,
+    TaskStatusHistory,
     TaskSubmission,
     UserRole,
 )
@@ -27,6 +29,7 @@ from .web_views_shared import (
     _render_employee_page,
     _resolve_back_url,
 )
+from .notifications import notify_leave_request_new
 
 @login_required
 @require_http_methods(["GET"])
@@ -567,6 +570,26 @@ def employee_task_detail(request, task_id):
 
     back_url = _resolve_back_url(request, reverse("employee-tasks"))
 
+    status_history_payload = []
+    for entry in (
+        TaskStatusHistory.objects.select_related("actor")
+        .filter(task=task)
+        .order_by("-created_at")[:30]
+    ):
+        actor_name = "Система"
+        if entry.actor:
+            actor_name = entry.actor.get_full_name().strip() or entry.actor.username
+        from_label = status_labels.get(entry.from_status, entry.from_status or "—")
+        to_label = status_labels.get(entry.to_status, entry.to_status)
+        local_dt = timezone.localtime(entry.created_at)
+        status_history_payload.append({
+            "from_label": from_label if entry.from_status else "",
+            "to_label": to_label,
+            "actor": actor_name,
+            "comment": entry.comment,
+            "created_label": f"{local_dt:%d.%m.%Y %H:%M}",
+        })
+
     ctx = {
         "active_tab": "tasks",
         "page_title": task.title,
@@ -582,6 +605,9 @@ def employee_task_detail(request, task_id):
         "sprint_label": sprint_label,
         "sprint_dates": sprint_dates,
         "submissions": submissions_payload,
+        "status_history": status_history_payload,
+        "manager_review_comment": task.manager_review_comment or "",
+        "refusal_reason": task.refusal_reason or "",
         "can_add_comment": can_add_comment,
         "can_take": can_take,
         "can_drop": can_drop,
@@ -1060,7 +1086,7 @@ def employee_requests(request):
                 invalid_fields.append('attachment')
 
         if not errors:
-            LeaveRequest.objects.create(
+            leave = LeaveRequest.objects.create(
                 user=user,
                 request_type=request_type,
                 start_date=start,
@@ -1068,6 +1094,7 @@ def employee_requests(request):
                 comment=comment,
                 attachment=attachment,
             )
+            notify_leave_request_new(leave)
             request.session['employee_request_success'] = 'Заявка отправлена на рассмотрение.'
             return redirect(reverse('employee-requests'))
 

@@ -94,6 +94,18 @@
             </span>
             <span class="nav-text">Чаты</span>
           </a>
+          <a class="sidebar-link{% if active_tab == 'notifications' %} active{% endif %}" href="{% url 'notifications' %}" title="Уведомления" aria-label="Уведомления">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" role="presentation">
+                <path d="M6 8a6 6 0 0 1 12 0v4l1.5 3H4.5L6 12V8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+                <path d="M10 18a2 2 0 1 0 4 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+              </svg>
+              {% if notifications_unread_count %}
+                <span class="nav-badge" aria-hidden="true">{{ notifications_unread_count }}</span>
+              {% endif %}
+            </span>
+            <span class="nav-text">Уведомления</span>
+          </a>
         </nav>
       </div>
 

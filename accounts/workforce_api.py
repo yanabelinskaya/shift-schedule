@@ -48,6 +48,14 @@ from .models import (
     TaskSubmission,
 )
 from .permissions import IsEmployeeRole, IsManagerRole
+from .notifications import (
+    notify_task_taken,
+    notify_task_dropped,
+    notify_task_on_review,
+    notify_task_returned,
+    notify_task_completed,
+    record_status_change,
+)
 
 
 def _format_user_name(user):
@@ -1174,8 +1182,17 @@ class EmployeeTaskStatusUpdateView(generics.GenericAPIView):
             allowed_statuses = EMPLOYEE_STATUS_TRANSITIONS.get(task.status, set())
             if status_value not in allowed_statuses:
                 raise ValidationError({'detail': 'Недопустимый переход статуса задачи.'})
+            previous_status = task.status
             task.status = status_value
             task.save(update_fields=['status', 'updated_at'])
+            record_status_change(
+                task,
+                from_status=previous_status,
+                to_status=task.status,
+                actor=request.user,
+            )
+            if task.status == DepartmentTask.TaskStatus.ON_REVIEW:
+                notify_task_on_review(task, request.user)
 
         return Response(
             {
@@ -1229,8 +1246,17 @@ class EmployeeTaskSubmissionCreateView(generics.GenericAPIView):
             )
 
         if task.task_type != 'department' and task.status != DepartmentTask.TaskStatus.COMPLETED:
+            previous_status = task.status
             task.status = DepartmentTask.TaskStatus.COMPLETED
             task.save(update_fields=['status', 'updated_at'])
+            record_status_change(
+                task,
+                from_status=previous_status,
+                to_status=task.status,
+                actor=request.user,
+                comment=comment,
+            )
+            notify_task_on_review(task, request.user)
 
         payload = {
             'ok': True,
@@ -1487,9 +1513,18 @@ class EmployeeTaskTakeView(generics.GenericAPIView):
         require_employee_task_access(request.user, task)
         if task.taken_by_id:
             raise ValidationError({'detail': 'Задача уже взята другим сотрудником.'})
+        previous_status = task.status
         task.taken_by = request.user
         task.status = DepartmentTask.TaskStatus.CONFIRMED
         task.save(update_fields=['taken_by', 'status', 'updated_at'])
+        record_status_change(
+            task,
+            from_status=previous_status,
+            to_status=task.status,
+            actor=request.user,
+            comment="Сотрудник взял задачу в работу",
+        )
+        notify_task_taken(task, request.user)
         return Response({'ok': True, 'status': task.status})
 
 
@@ -1506,10 +1541,23 @@ class EmployeeTaskDropView(generics.GenericAPIView):
         require_employee_task_access(request.user, task)
         if task.taken_by_id != request.user.id:
             raise ValidationError({'detail': 'Нельзя отказаться от чужой задачи.'})
+        reason = (request.data.get('reason') or request.POST.get('reason') or '').strip()
+        if not reason:
+            raise ValidationError({'reason': 'Укажите причину отказа.'})
+        previous_status = task.status
         task.taken_by = None
         task.status = DepartmentTask.TaskStatus.AWAITING_CONFIRMATION
-        task.save(update_fields=['taken_by', 'status', 'updated_at'])
-        return Response({'ok': True, 'status': task.status})
+        task.refusal_reason = reason
+        task.save(update_fields=['taken_by', 'status', 'refusal_reason', 'updated_at'])
+        record_status_change(
+            task,
+            from_status=previous_status,
+            to_status=task.status,
+            actor=request.user,
+            comment=f"Отказ от задачи. Причина: {reason}",
+        )
+        notify_task_dropped(task, request.user, reason=reason)
+        return Response({'ok': True, 'status': task.status, 'reason': reason})
 
 
 # ---------------------------------------------------------------------------

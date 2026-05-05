@@ -415,6 +415,8 @@ class DepartmentTask(models.Model):
         choices=TaskStatus.choices,
         default=TaskStatus.AWAITING_CONFIRMATION,
     )
+    refusal_reason = models.TextField(blank=True)
+    manager_review_comment = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -551,6 +553,8 @@ class Substitution(models.Model):
     substitute_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name="substitutions_as_substitute",
     )
     start_date = models.DateField()
@@ -852,3 +856,96 @@ class SystemBackup(models.Model):
 
     def __str__(self):
         return self.file_name
+
+
+class Notification(models.Model):
+    """Адресные уведомления внутри системы."""
+
+    class Kind(models.TextChoices):
+        TASK_TAKEN = "task_taken", "Сотрудник взял задачу"
+        TASK_DROPPED = "task_dropped", "Сотрудник отказался от задачи"
+        TASK_ON_REVIEW = "task_on_review", "Задача отправлена на проверку"
+        TASK_RETURNED = "task_returned", "Задача возвращена на доработку"
+        TASK_COMPLETED = "task_completed", "Задача принята"
+        TASK_ASSIGNED = "task_assigned", "Назначена новая задача"
+        TASK_REASSIGNED = "task_reassigned", "Задача переназначена"
+        LEAVE_REQUEST_NEW = "leave_request_new", "Новая заявка на отпуск/больничный"
+        LEAVE_REQUEST_DECISION = "leave_request_decision", "Решение по заявке"
+        SUBSTITUTION_ASSIGNED = "substitution_assigned", "Назначена замена"
+
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="emitted_notifications",
+    )
+    kind = models.CharField(max_length=40, choices=Kind.choices)
+    title = models.CharField(max_length=200)
+    body = models.TextField(blank=True)
+    url = models.CharField(max_length=512, blank=True)
+    task = models.ForeignKey(
+        DepartmentTask,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="notifications",
+    )
+    leave_request = models.ForeignKey(
+        LeaveRequest,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="notifications",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["recipient", "read_at"], name="idx_notif_recipient_read"),
+            models.Index(fields=["recipient", "-created_at"], name="idx_notif_recipient_date"),
+        ]
+
+    def __str__(self):
+        return f"{self.kind} → {self.recipient_id}"
+
+    @property
+    def is_unread(self) -> bool:
+        return self.read_at is None
+
+
+class TaskStatusHistory(models.Model):
+    """Лог переходов статуса задачи. Заполняется бизнес-логикой."""
+
+    task = models.ForeignKey(
+        DepartmentTask,
+        on_delete=models.CASCADE,
+        related_name="status_history",
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="task_status_changes",
+    )
+    from_status = models.CharField(max_length=30, blank=True)
+    to_status = models.CharField(max_length=30)
+    comment = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["task", "-created_at"], name="idx_task_history_task"),
+        ]
+
+    def __str__(self):
+        return f"Task {self.task_id}: {self.from_status} → {self.to_status}"

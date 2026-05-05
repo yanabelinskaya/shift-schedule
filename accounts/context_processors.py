@@ -1,4 +1,19 @@
-from .models import GlobalSettings
+from .models import GlobalSettings, Notification
+
+
+def notifications_unread(request):
+    """Кол-во непрочитанных уведомлений у текущего пользователя.
+
+    Подключается в `TEMPLATES.OPTIONS.context_processors` — сайдбары
+    показывают бейдж с этим числом."""
+    user = getattr(request, "user", None)
+    if not user or not user.is_authenticated:
+        return {"notifications_unread_count": 0}
+    try:
+        count = Notification.objects.filter(recipient=user, read_at__isnull=True).count()
+    except Exception:
+        count = 0
+    return {"notifications_unread_count": count}
 
 
 def site_config(request):

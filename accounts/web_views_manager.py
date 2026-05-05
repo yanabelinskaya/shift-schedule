@@ -18,13 +18,17 @@ from .models import (
     Department,
     DepartmentTask,
     EmployeeAbsence,
+    EmployeeAvailabilityOverride,
+    EmployeeBaseAvailability,
     EmployeeProfile,
     LeaveRequest,
+    Notification,
     Sprint,
     Substitution,
     TaskReassignment,
     TaskMessage,
     TaskMessageReadState,
+    TaskStatusHistory,
     TaskSubmission,
 )
 from .web_views_shared import (
@@ -33,6 +37,15 @@ from .web_views_shared import (
     _get_manager_department,
     _render_manager_page,
     _resolve_back_url,
+)
+from .notifications import (
+    notify_leave_request_decision,
+    notify_substitution_assigned,
+    notify_task_assigned,
+    notify_task_completed,
+    notify_task_reassigned,
+    notify_task_returned,
+    record_status_change,
 )
 
 @login_required
@@ -971,6 +984,15 @@ def manager_task_create(request):
         priority=priority,
         status=status_value,
     )
+    record_status_change(
+        task,
+        from_status="",
+        to_status=task.status,
+        actor=manager,
+        comment="Задача создана",
+    )
+    if assigned_to:
+        notify_task_assigned(task, manager)
 
     comment = (payload.get("comment") or "").strip()
     attachments = request.FILES.getlist("attachments") if not is_json else []
@@ -1011,6 +1033,7 @@ def manager_task_detail(request, task_id):
         if action == "set_status":
             status_value = request.POST.get("status")
             if status_value in {choice[0] for choice in DepartmentTask.TaskStatus.choices}:
+                previous_status = task.status
                 task.status = status_value
                 task.save(update_fields=["status", "updated_at"])
                 status_comment = (request.POST.get("comment") or "").strip()
@@ -1020,14 +1043,48 @@ def manager_task_detail(request, task_id):
                         author=request.user,
                         comment=status_comment,
                     )
+                record_status_change(
+                    task,
+                    from_status=previous_status,
+                    to_status=task.status,
+                    actor=manager,
+                    comment=status_comment,
+                )
+                if task.status == DepartmentTask.TaskStatus.COMPLETED:
+                    notify_task_completed(task, manager)
+                elif task.status == DepartmentTask.TaskStatus.RETURNED:
+                    notify_task_returned(task, manager, comment=status_comment)
             return redirect(request.get_full_path())
         if action == "complete":
+            previous_status = task.status
             task.status = DepartmentTask.TaskStatus.COMPLETED
             task.save(update_fields=["status", "updated_at"])
+            record_status_change(
+                task,
+                from_status=previous_status,
+                to_status=task.status,
+                actor=manager,
+                comment="Принято менеджером",
+            )
+            notify_task_completed(task, manager)
             return redirect(request.get_full_path())
         if action == "return":
+            review_comment = (request.POST.get("comment") or "").strip()
+            previous_status = task.status
             task.status = DepartmentTask.TaskStatus.RETURNED
-            task.save(update_fields=["status", "updated_at"])
+            if review_comment:
+                task.manager_review_comment = review_comment
+                task.save(update_fields=["status", "manager_review_comment", "updated_at"])
+            else:
+                task.save(update_fields=["status", "updated_at"])
+            record_status_change(
+                task,
+                from_status=previous_status,
+                to_status=task.status,
+                actor=manager,
+                comment=review_comment,
+            )
+            notify_task_returned(task, manager, comment=review_comment)
             return redirect(request.get_full_path())
         if action == "assign":
             assignee_id = request.POST.get("assigned_to")
@@ -1045,6 +1102,7 @@ def manager_task_detail(request, task_id):
                     ).first()
             if assignee and EmployeeProfile.objects.filter(user=assignee, department=department).exists():
                 previous = task.assigned_to or task.taken_by
+                previous_status = task.status
                 task.assigned_to = assignee
                 task.taken_by = assignee
                 if task.status == DepartmentTask.TaskStatus.AWAITING_CONFIRMATION:
@@ -1059,6 +1117,17 @@ def manager_task_detail(request, task_id):
                         note="Назначение менеджером",
                         created_by=manager,
                     )
+                    if previous:
+                        notify_task_reassigned(task, manager, previous_user=previous)
+                    else:
+                        notify_task_assigned(task, manager)
+                record_status_change(
+                    task,
+                    from_status=previous_status,
+                    to_status=task.status,
+                    actor=manager,
+                    comment=f"Назначена на {assignee.get_full_name().strip() or assignee.username}",
+                )
             return redirect(request.get_full_path())
 
         comment = (request.POST.get("comment") or "").strip()
@@ -1214,25 +1283,57 @@ def manager_task_detail(request, task_id):
             "tasks": task_count,
         })
 
-    history = [
-        {
-            "label": f"Создана {timezone.localtime(task.created_at):%d.%m.%Y %H:%M}",
-            "detail": task.created_by.get_full_name().strip() if task.created_by else "Система",
-        },
-        {
-            "label": f"Обновлена {timezone.localtime(task.updated_at):%d.%m.%Y %H:%M}",
-            "detail": status_labels.get(task.status, task.status),
-        },
-    ]
-    for reassignment in TaskReassignment.objects.select_related("previous_user", "new_user").filter(task=task)[:5]:
+    history_events = []
+    history_events.append(
+        (
+            task.created_at,
+            {
+                "type": "created",
+                "label": f"Создана {timezone.localtime(task.created_at):%d.%m.%Y %H:%M}",
+                "detail": task.created_by.get_full_name().strip() if task.created_by else "Система",
+            },
+        )
+    )
+    for entry in (
+        TaskStatusHistory.objects.select_related("actor").filter(task=task).order_by("created_at")[:50]
+    ):
+        actor_name = (
+            entry.actor.get_full_name().strip() or entry.actor.username
+        ) if entry.actor else "Система"
+        from_label = status_labels.get(entry.from_status, entry.from_status or "—")
+        to_label = status_labels.get(entry.to_status, entry.to_status)
+        if entry.from_status:
+            label_main = f"{from_label} → {to_label}"
+        else:
+            label_main = to_label
+        detail_parts = [actor_name]
+        if entry.comment:
+            detail_parts.append(entry.comment)
+        history_events.append(
+            (
+                entry.created_at,
+                {
+                    "type": "status",
+                    "label": f"{label_main} · {timezone.localtime(entry.created_at):%d.%m.%Y %H:%M}",
+                    "detail": " · ".join(detail_parts),
+                },
+            )
+        )
+    for reassignment in TaskReassignment.objects.select_related("previous_user", "new_user").filter(task=task)[:20]:
         prev_name = reassignment.previous_user.get_full_name().strip() if reassignment.previous_user else "Без исполнителя"
         new_name = reassignment.new_user.get_full_name().strip() if reassignment.new_user else "Без исполнителя"
-        history.append(
-            {
-                "label": f"Смена исполнителя {timezone.localtime(reassignment.created_at):%d.%m.%Y %H:%M}",
-                "detail": f"{prev_name} → {new_name}",
-            }
+        history_events.append(
+            (
+                reassignment.created_at,
+                {
+                    "type": "assignee",
+                    "label": f"Смена исполнителя · {timezone.localtime(reassignment.created_at):%d.%m.%Y %H:%M}",
+                    "detail": f"{prev_name} → {new_name}",
+                },
+            )
         )
+    history_events.sort(key=lambda item: item[0])
+    history = [event for _, event in history_events]
 
     back_url = _resolve_back_url(request, reverse("manager-tasks"))
     return render(
@@ -1424,6 +1525,8 @@ def manager_task_edit(request, task_id):
     if status_value not in {choice[0] for choice in DepartmentTask.TaskStatus.choices}:
         status_value = task.status
 
+    previous_assignee = task.assigned_to or task.taken_by
+    previous_status = task.status
     task.title = title
     task.description = description
     task.task_type = task_type
@@ -1447,6 +1550,28 @@ def manager_task_edit(request, task_id):
             "updated_at",
         ]
     )
+
+    if previous_status != status_value:
+        record_status_change(
+            task,
+            from_status=previous_status,
+            to_status=status_value,
+            actor=manager,
+            comment="Изменено при редактировании",
+        )
+    if assigned_to and assigned_to != previous_assignee:
+        TaskReassignment.objects.create(
+            task=task,
+            previous_user=previous_assignee,
+            new_user=assigned_to,
+            reason="manual",
+            note="Изменён исполнитель при редактировании",
+            created_by=manager,
+        )
+        if previous_assignee:
+            notify_task_reassigned(task, manager, previous_user=previous_assignee)
+        else:
+            notify_task_assigned(task, manager)
 
     return redirect(_resolve_back_url(request, reverse("manager-tasks")))
 
@@ -1914,6 +2039,8 @@ def manager_sprint_detail(request, sprint_id):
                     task = DepartmentTask.objects.get(id=task_id, department=department)
                     task.sprint = sprint
                     task.save(update_fields=['sprint'])
+                    if task.assigned_to or task.taken_by:
+                        notify_task_assigned(task, manager)
                     messages.success(request, 'Задача добавлена в спринт.')
                 except DepartmentTask.DoesNotExist:
                     messages.error(request, 'Задача не найдена.')
@@ -1952,6 +2079,7 @@ def manager_sprint_detail(request, sprint_id):
                                 messages.error(request, 'Сотрудник не из вашего отдела.')
                             else:
                                 previous = task.taken_by_id
+                                previous_status = task.status
                                 task.assigned_to_id = assignee_id_int
                                 task.taken_by_id = assignee_id_int
                                 if task.status == 'awaiting_confirmation':
@@ -1966,6 +2094,22 @@ def manager_sprint_detail(request, sprint_id):
                                         note='Переназначение в спринте',
                                         created_by=manager,
                                     )
+                                    task.refresh_from_db()
+                                    if previous:
+                                        notify_task_reassigned(
+                                            task, manager,
+                                            previous_user=get_user_model().objects.filter(id=previous).first(),
+                                        )
+                                    else:
+                                        notify_task_assigned(task, manager)
+                                if previous_status != task.status:
+                                    record_status_change(
+                                        task,
+                                        from_status=previous_status,
+                                        to_status=task.status,
+                                        actor=manager,
+                                        comment='Назначение в спринте',
+                                    )
                                 messages.success(request, 'Исполнитель назначен.')
                         except (ValueError, TypeError):
                             messages.error(request, 'Неверный сотрудник.')
@@ -1978,10 +2122,27 @@ def manager_sprint_detail(request, sprint_id):
             if task_id and status_value in {choice[0] for choice in DepartmentTask.TaskStatus.choices}:
                 try:
                     task = DepartmentTask.objects.get(id=task_id, sprint=sprint)
+                    previous_status = task.status
                     task.status = status_value
                     task.save(update_fields=['status', 'updated_at'])
+                    if previous_status != status_value:
+                        record_status_change(
+                            task,
+                            from_status=previous_status,
+                            to_status=status_value,
+                            actor=manager,
+                            comment='Изменено в kanban',
+                        )
+                        if status_value == DepartmentTask.TaskStatus.COMPLETED:
+                            notify_task_completed(task, manager)
+                        elif status_value == DepartmentTask.TaskStatus.RETURNED:
+                            notify_task_returned(task, manager)
+                    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                        return JsonResponse({'ok': True, 'status': task.status})
                     messages.success(request, 'Статус задачи обновлён.')
                 except DepartmentTask.DoesNotExist:
+                    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                        return JsonResponse({'ok': False, 'detail': 'Задача не найдена.'}, status=404)
                     messages.error(request, 'Задача не найдена.')
 
         elif action in ('set_active', 'set_completed', 'set_planning'):
@@ -2140,7 +2301,10 @@ def manager_sprint_detail(request, sprint_id):
 
 
 def _approve_leave_request(lr, manager, review_comment=""):
-    """Approve a leave request and auto-create an EmployeeAbsence record."""
+    """Одобрить заявку, создать EmployeeAbsence и при необходимости
+    автоматически завести запись Substitution с пустым substitute_user
+    (placeholder), чтобы менеджер сразу увидел открытую ситуацию в разделе
+    «Замещения». Также шлёт уведомление сотруднику."""
     lr.status = 'approved'
     lr.reviewed_by = manager
     lr.reviewed_at = timezone.now()
@@ -2153,6 +2317,34 @@ def _approve_leave_request(lr, manager, review_comment=""):
         end_date=lr.end_date,
         defaults={'created_by': manager},
     )
+    # Запись о замещении: только если на период есть незакрытые задачи
+    # и ещё нет активного Substitution на пересекающийся период.
+    if _conflicting_tasks_for_leave(lr).exists():
+        existing = Substitution.objects.filter(
+            absent_user_id=lr.user_id,
+            start_date__lte=lr.end_date,
+            end_date__gte=lr.start_date,
+        ).exists()
+        if not existing:
+            Substitution.objects.create(
+                absent_user_id=lr.user_id,
+                substitute_user=None,
+                start_date=lr.start_date,
+                end_date=lr.end_date,
+                created_by=manager,
+                note='Авто: ожидает выбора заменяющего',
+            )
+    notify_leave_request_decision(lr, manager)
+
+
+def _reject_leave_request(lr, manager, review_comment="", rejection_reason=""):
+    lr.status = 'rejected'
+    lr.reviewed_by = manager
+    lr.reviewed_at = timezone.now()
+    lr.review_comment = review_comment
+    lr.rejection_reason = rejection_reason
+    lr.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'review_comment', 'rejection_reason'])
+    notify_leave_request_decision(lr, manager)
 
 
 def _conflicting_tasks_for_leave(lr):
@@ -2195,17 +2387,12 @@ def manager_leave_requests(request):
                     if action == 'approve':
                         _approve_leave_request(lr, manager, review_comment)
                         if _conflicting_tasks_for_leave(lr).exists():
-                            success = 'Заявка одобрена. У сотрудника есть задачи на период отсутствия — требуется замещение.'
-                            warning_url = reverse('manager-leave-request-detail', args=[lr.id])
+                            success = 'Заявка одобрена. Замещение создано автоматически — выберите заменяющего сотрудника.'
+                            warning_url = reverse('manager-substitutions')
                         else:
                             success = 'Заявка одобрена.'
                     else:
-                        lr.status = 'rejected'
-                        lr.reviewed_by = manager
-                        lr.reviewed_at = timezone.now()
-                        lr.review_comment = review_comment
-                        lr.rejection_reason = rejection_reason
-                        lr.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'review_comment', 'rejection_reason'])
+                        _reject_leave_request(lr, manager, review_comment, rejection_reason)
                         success = 'Заявка отклонена.'
             except LeaveRequest.DoesNotExist:
                 error = 'Заявка не найдена.'
@@ -2317,19 +2504,14 @@ def manager_leave_request_detail(request, lr_id):
             else:
                 _approve_leave_request(lr, manager, review_comment)
                 if _conflicting_tasks_for_leave(lr).exists():
-                    success = 'Заявка одобрена. У сотрудника есть задачи на период отсутствия — требуется замещение.'
+                    success = 'Заявка одобрена. Замещение создано — выберите заменяющего сотрудника в разделе «Замещения».'
                 else:
                     success = 'Заявка одобрена.'
         elif action == 'reject':
             if lr.status != 'pending':
                 error = 'Заявка уже рассмотрена.'
             else:
-                lr.status = 'rejected'
-                lr.reviewed_by = manager
-                lr.reviewed_at = timezone.now()
-                lr.review_comment = review_comment
-                lr.rejection_reason = rejection_reason
-                lr.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'review_comment', 'rejection_reason'])
+                _reject_leave_request(lr, manager, review_comment, rejection_reason)
                 success = 'Заявка отклонена.'
 
     type_labels = {'vacation': 'Отпуск', 'sick': 'Больничный'}
@@ -2413,7 +2595,7 @@ def manager_leave_request_detail(request, lr_id):
 
 
 def _build_employee_load_map(department, today):
-    """Returns: dict[user_id] -> {tasks, absent, name, position}."""
+    """Returns: dict[user_id] -> {tasks, absent, name, position, percent}."""
     profiles = list(
         EmployeeProfile.objects.select_related('user')
         .filter(department=department, user__role='employee')
@@ -2449,6 +2631,72 @@ def _build_employee_load_map(department, today):
             'percent': min(task_counts.get(user.id, 0) * 20, 100),
         }
     return result, [r for r in result.values()]
+
+
+def _build_availability_index(user_ids, start, end):
+    """Считает по каждому сотруднику доступность на промежутке [start..end].
+
+    Возвращает dict[user_id] = {
+        'days_total': N,
+        'days_available': X,    # дни с base.mode != 'off'
+        'days_blocked': Y,      # дни с override unavailable/vacation/sick
+        'ratio': X / N,         # 0..1
+        'next_block': 'first day blocked' or None,
+    }
+    """
+    from datetime import timedelta
+    if not user_ids or end < start:
+        return {}
+
+    base_rules = {}  # user_id -> {weekday: mode}
+    for row in EmployeeBaseAvailability.objects.filter(user_id__in=user_ids).values(
+        'user_id', 'weekday', 'mode'
+    ):
+        base_rules.setdefault(row['user_id'], {})[row['weekday']] = row['mode']
+
+    overrides = {}  # (user_id, date) -> override_type
+    for row in EmployeeAvailabilityOverride.objects.filter(
+        user_id__in=user_ids, date__gte=start, date__lte=end,
+    ).values('user_id', 'date', 'override_type'):
+        overrides[(row['user_id'], row['date'])] = row['override_type']
+
+    blocking_overrides = {'unavailable', 'vacation', 'sick'}
+
+    days = []
+    cur = start
+    while cur <= end:
+        days.append(cur)
+        cur = cur + timedelta(days=1)
+
+    result = {}
+    for uid in user_ids:
+        rules = base_rules.get(uid, {})
+        available = 0
+        blocked = 0
+        first_block = None
+        for day in days:
+            override = overrides.get((uid, day))
+            if override in blocking_overrides:
+                blocked += 1
+                if first_block is None:
+                    first_block = day
+                continue
+            base_mode = rules.get(day.weekday(), 'off')
+            if base_mode == 'off':
+                blocked += 1
+                if first_block is None:
+                    first_block = day
+            else:
+                available += 1
+        total = max(1, len(days))
+        result[uid] = {
+            'days_total': len(days),
+            'days_available': available,
+            'days_blocked': blocked,
+            'ratio': available / total,
+            'next_block': first_block,
+        }
+    return result
 
 
 @login_required
@@ -2493,14 +2741,31 @@ def manager_substitutions(request):
                         if absent_id not in dept_ids or sub_id not in dept_ids:
                             error = 'Выбранные сотрудники не из вашего отдела.'
                         else:
-                            sub_obj = Substitution.objects.create(
+                            # Если уже есть авто-плейсхолдер (substitute=None) на пересечение —
+                            # обновляем его, иначе создаём.
+                            placeholder = Substitution.objects.filter(
                                 absent_user_id=absent_id,
-                                substitute_user_id=sub_id,
-                                start_date=start,
-                                end_date=end,
-                                created_by=manager,
-                                note=note,
-                            )
+                                substitute_user__isnull=True,
+                                start_date__lte=end,
+                                end_date__gte=start,
+                            ).first()
+                            if placeholder:
+                                placeholder.substitute_user_id = sub_id
+                                placeholder.start_date = start
+                                placeholder.end_date = end
+                                placeholder.note = note or placeholder.note
+                                placeholder.created_by = placeholder.created_by or manager
+                                placeholder.save()
+                                sub_obj = placeholder
+                            else:
+                                sub_obj = Substitution.objects.create(
+                                    absent_user_id=absent_id,
+                                    substitute_user_id=sub_id,
+                                    start_date=start,
+                                    end_date=end,
+                                    created_by=manager,
+                                    note=note,
+                                )
                             if reassign_all:
                                 tasks = DepartmentTask.objects.filter(
                                     Q(taken_by_id=absent_id) | Q(assigned_to_id=absent_id),
@@ -2509,6 +2774,7 @@ def manager_substitutions(request):
                                 ).exclude(status__in=['completed', 'returned'])
                                 for t in tasks:
                                     prev = t.taken_by_id or t.assigned_to_id
+                                    previous_status = t.status
                                     t.taken_by_id = sub_id
                                     t.assigned_to_id = sub_id
                                     if t.status == DepartmentTask.TaskStatus.AWAITING_CONFIRMATION:
@@ -2528,6 +2794,15 @@ def manager_substitutions(request):
                                             task=t,
                                             author=manager,
                                             text='Вы назначены исполнителем задачи в рамках замещения.',
+                                        )
+                                        t.refresh_from_db()
+                                        notify_substitution_assigned(t, manager)
+                                        record_status_change(
+                                            t,
+                                            from_status=previous_status,
+                                            to_status=t.status,
+                                            actor=manager,
+                                            comment='Замещение всех задач периода',
                                         )
                             success = 'Замещение создано.'
                 except (ValueError, TypeError):
@@ -2558,6 +2833,7 @@ def manager_substitutions(request):
                         error = 'Сотрудник не из вашего отдела.'
                     else:
                         previous = task.taken_by_id or task.assigned_to_id
+                        previous_status = task.status
                         task.taken_by_id = new_user_id_int
                         task.assigned_to_id = new_user_id_int
                         if task.status == 'awaiting_confirmation':
@@ -2576,6 +2852,15 @@ def manager_substitutions(request):
                                 task=task,
                                 author=manager,
                                 text='Вы назначены исполнителем задачи в рамках замещения.',
+                            )
+                            task.refresh_from_db()
+                            notify_substitution_assigned(task, manager)
+                            record_status_change(
+                                task,
+                                from_status=previous_status,
+                                to_status=task.status,
+                                actor=manager,
+                                comment='Переназначение в замещении',
                             )
                         success = 'Задача переназначена.'
                 except (DepartmentTask.DoesNotExist, ValueError, TypeError):
@@ -2685,23 +2970,65 @@ def manager_substitutions(request):
                 'assignee_name': (assignee.get_full_name().strip() or assignee.username) if assignee else 'Без исполнителя',
             }
 
-        def candidate_payload(absent_id=None):
+        def candidate_payload(absent_id=None, period_start=None, period_end=None):
             absent_pos = (employee_load_map.get(absent_id) or {}).get('position', '')
+            availability = {}
+            if period_start and period_end:
+                availability = _build_availability_index(
+                    [e['id'] for e in employees if e['id'] != absent_id],
+                    period_start, period_end,
+                )
             candidates = []
             for emp in employees:
                 if absent_id and emp['id'] == absent_id:
                     continue
                 same_position = bool(absent_pos and emp['position'].lower() == absent_pos.lower())
+                # Базовая нагрузка по числу задач (0-100)
                 load_score = max(0, 100 - emp['tasks'] * 15)
-                availability_bonus = 25 if not emp['absent'] else -60
+
+                # Доступность на период
+                avail = availability.get(emp['id'])
+                if avail:
+                    avail_ratio = avail['ratio']
+                    days_blocked = avail['days_blocked']
+                    days_available = avail['days_available']
+                    days_total = avail['days_total']
+                else:
+                    avail_ratio = 0.0 if emp['absent'] else 1.0
+                    days_blocked = 0
+                    days_available = 0
+                    days_total = 0
+
+                if emp['absent']:
+                    availability_bonus = -60
+                    avail_label = 'Отсутствует сейчас'
+                elif avail_ratio >= 0.8:
+                    availability_bonus = 25
+                    avail_label = (
+                        f'Доступен {days_available}/{days_total} дн.'
+                        if days_total else 'Доступен'
+                    )
+                elif avail_ratio >= 0.4:
+                    availability_bonus = 5
+                    avail_label = f'Частично: {days_available}/{days_total} дн.'
+                elif days_total:
+                    availability_bonus = -30
+                    avail_label = f'Мало доступности: {days_available}/{days_total} дн.'
+                else:
+                    availability_bonus = 0
+                    avail_label = 'График не задан'
+
                 position_bonus = 15 if same_position else 0
                 score = load_score + availability_bonus + position_bonus
                 candidates.append({
                     **emp,
                     'score': score,
                     'same_position': same_position,
-                    'recommended': not emp['absent'] and score >= 85,
-                    'availability_label': 'Доступен' if not emp['absent'] else 'Отсутствует',
+                    'days_available': days_available,
+                    'days_blocked': days_blocked,
+                    'days_total': days_total,
+                    'recommended': not emp['absent'] and score >= 85 and avail_ratio >= 0.5,
+                    'availability_label': avail_label,
                     'skill_label': 'Совпадает должность' if same_position else 'Навыки не указаны',
                 })
             candidates.sort(key=lambda r: (-r['score'], r['tasks'], r['name']))
@@ -2773,8 +3100,8 @@ def manager_substitutions(request):
                 'tasks_count': tasks_count,
                 'reassigned_count': reassigned_count,
                 'tasks': [task_payload(task) for task in tasks_qs],
-                'candidates': candidate_payload(lr.user_id),
-                'recommendation': (candidate_payload(lr.user_id) or [None])[0],
+                'candidates': candidate_payload(lr.user_id, lr.start_date, lr.end_date),
+                'recommendation': (candidate_payload(lr.user_id, lr.start_date, lr.end_date) or [None])[0],
                 'status_code': status_code,
                 'status_label': status_label,
             })
@@ -2798,8 +3125,8 @@ def manager_substitutions(request):
                 'tasks_count': no_assignee_count,
                 'reassigned_count': 0,
                 'tasks': [task_payload(task) for task in no_assignee],
-                'candidates': candidate_payload(),
-                'recommendation': (candidate_payload() or [None])[0],
+                'candidates': candidate_payload(None, today, today + timedelta(days=14)),
+                'recommendation': (candidate_payload(None, today, today + timedelta(days=14)) or [None])[0],
                 'status_code': 'needed',
                 'status_label': 'Нужен исполнитель',
                 'is_no_assignee': True,
@@ -2832,7 +3159,12 @@ def manager_substitutions(request):
                 pass
 
             # ── Recommendations ────────────────────────────────────────
-            recommendations = candidate_payload(selected_absent_id)
+            try:
+                rec_start = date.fromisoformat(selected_start)
+                rec_end = date.fromisoformat(selected_end)
+            except (ValueError, TypeError):
+                rec_start = rec_end = None
+            recommendations = candidate_payload(selected_absent_id, rec_start, rec_end)
 
         # ── Recent reassignment history ────────────────────────────────
         for r in TaskReassignment.objects.filter(

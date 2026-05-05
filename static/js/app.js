@@ -5550,7 +5550,21 @@
             let url = "";
             let body = null;
             if (action === "take") url = takeUrl;
-            else if (action === "drop") url = dropUrl;
+            else if (action === "drop") {
+              url = dropUrl;
+              const reason = window.prompt(
+                "Укажите причину отказа (она будет видна менеджеру):",
+                "",
+              );
+              if (reason === null) { btn.disabled = false; return; }
+              const trimmed = String(reason).trim();
+              if (!trimmed) {
+                showMsg(actionMsg, "Причина обязательна.", "error");
+                btn.disabled = false;
+                return;
+              }
+              body = JSON.stringify({ reason: trimmed });
+            }
             else if (action === "status" && targetStatus) {
               url = updateUrl;
               body = JSON.stringify({ status: targetStatus });
@@ -5744,6 +5758,21 @@
             url = takeUrl;
           } else if (action === "drop") {
             url = dropUrl;
+            const reason = window.prompt(
+              "Укажите причину отказа (она будет видна менеджеру):",
+              "",
+            );
+            if (reason === null) {
+              btn.disabled = false;
+              return;
+            }
+            const trimmed = String(reason).trim();
+            if (!trimmed) {
+              showActionMessage("Причина обязательна.", "error");
+              btn.disabled = false;
+              return;
+            }
+            body = JSON.stringify({ reason: trimmed });
           } else if (action === "status" && targetStatus) {
             url = updateUrl;
             body = JSON.stringify({ status: targetStatus });

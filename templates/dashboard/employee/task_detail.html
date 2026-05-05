@@ -186,8 +186,49 @@
 
       </div>
 
-      {# ── Right column: comments history ─────────────────────────────── #}
+      {# ── Right column: status timeline + comments ───────────────────── #}
       <div class="task-detail-sidebar">
+        {% if manager_review_comment %}
+          <section class="card section-block task-review-banner">
+            <div class="section-header">
+              <h2>Комментарий менеджера</h2>
+            </div>
+            <p class="task-review-comment">{{ manager_review_comment }}</p>
+          </section>
+        {% endif %}
+
+        {% if status_history %}
+          <section class="card section-block task-detail-timeline">
+            <div class="section-header">
+              <div>
+                <h2>История статусов</h2>
+                <p class="subtle">Кто и когда менял статус задачи.</p>
+              </div>
+              <span class="info-chip">{{ status_history|length }}</span>
+            </div>
+            <ol class="task-status-timeline">
+              {% for item in status_history %}
+                <li>
+                  <span class="task-status-dot" aria-hidden="true"></span>
+                  <div class="task-status-body">
+                    <div class="task-status-head">
+                      {% if item.from_label %}
+                        <span class="status-pill muted">{{ item.from_label }}</span>
+                        <span class="task-status-arrow">→</span>
+                      {% endif %}
+                      <span class="status-pill">{{ item.to_label }}</span>
+                    </div>
+                    <div class="task-status-meta subtle">{{ item.actor }} · {{ item.created_label }}</div>
+                    {% if item.comment %}
+                      <div class="task-status-comment">{{ item.comment }}</div>
+                    {% endif %}
+                  </div>
+                </li>
+              {% endfor %}
+            </ol>
+          </section>
+        {% endif %}
+
         <section class="card section-block task-detail-comments">
           <div class="section-header">
             <div>

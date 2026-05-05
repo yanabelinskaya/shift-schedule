@@ -113,17 +113,22 @@
           </div>
 
           {% if sprint_tasks %}
-            <div class="kanban-board sprint-kanban-board">
+            <div class="kanban-board sprint-kanban-board" data-kanban-board>
               {% for column in kanban_columns %}
-                <div class="kanban-column sprint-kanban-column">
+                <div class="kanban-column sprint-kanban-column"
+                     data-kanban-column data-status="{{ column.key }}">
                   <div class="kanban-column-head">
                     <span class="kanban-column-title">{{ column.title }}</span>
-                    <span class="kanban-column-count">{{ column.tasks|length }}</span>
+                    <span class="kanban-column-count" data-kanban-count>{{ column.tasks|length }}</span>
                   </div>
-                  <div class="kanban-column-body">
+                  <div class="kanban-column-body" data-kanban-dropzone>
                     {% for task in column.tasks %}
-                      <article class="kanban-card sprint-kanban-card">
+                      <article class="kanban-card sprint-kanban-card"
+                               data-kanban-card
+                               data-task-id="{{ task.id }}"
+                               draggable="{% if sprint.status != 'completed' %}true{% else %}false{% endif %}">
                         <div class="kanban-card-title">
+                          <span class="kanban-grip" aria-hidden="true">⋮⋮</span>
                           <span class="priority-dot is-{{ task.priority }}" aria-hidden="true"></span>
                           <a href="{% url 'manager-task-detail' task.id %}">{{ task.title }}</a>
                         </div>

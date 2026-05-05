@@ -5386,6 +5386,39 @@
   min-width: 0;
 }
 
+.sprint-kanban-card[draggable="true"] {
+  cursor: grab;
+}
+
+.sprint-kanban-card.is-dragging {
+  opacity: 0.55;
+  cursor: grabbing;
+  transform: scale(0.98);
+}
+
+.kanban-grip {
+  display: inline-block;
+  margin-right: 4px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  letter-spacing: -1px;
+  user-select: none;
+}
+
+.sprint-kanban-column.is-drop-target {
+  outline: 2px dashed rgba(42, 122, 110, 0.45);
+  outline-offset: -4px;
+  background: rgba(42, 122, 110, 0.05);
+}
+
+.sprint-kanban-column.is-drop-target .kanban-column-body {
+  min-height: 60px;
+}
+
+[data-kanban-dropzone] {
+  min-height: 30px;
+}
+
 .sprint-kanban-card .kanban-card-title {
   word-break: break-word;
   overflow-wrap: anywhere;

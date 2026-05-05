@@ -1,0 +1,50 @@
+{% extends 'dashboard/manager.html' %}
+
+{% block content %}
+  <div class="notifications-page">
+    <section class="card dashboard-hero fade-up">
+      <div class="hero-header">
+        <div>
+          <h1>{{ page_title }}</h1>
+          <p class="subtle">{{ page_subtitle }}</p>
+        </div>
+        <div class="hero-actions">
+          <span class="info-chip">{{ notifications|length }}</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card section-block fade-up">
+      {% if notifications %}
+        <ul class="notifications-list">
+          {% for n in notifications %}
+            <li class="notifications-item{% if n.is_unread %} is-unread{% endif %}">
+              <span class="notifications-dot" aria-hidden="true"></span>
+              <div class="notifications-body">
+                <div class="notifications-head">
+                  <span class="notifications-title">{{ n.title }}</span>
+                  <span class="subtle">{{ n.created_label }}</span>
+                </div>
+                {% if n.body %}
+                  <p class="notifications-text">{{ n.body|linebreaksbr }}</p>
+                {% endif %}
+                <div class="notifications-meta">
+                  <span class="info-chip">{{ n.kind_label }}</span>
+                  <span class="subtle">от {{ n.actor }}</span>
+                  {% if n.url %}
+                    <a class="btn btn-ghost btn-inline btn-xs" href="{{ n.url }}">Открыть</a>
+                  {% endif %}
+                </div>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="empty-state">
+          <h3>Уведомлений пока нет</h3>
+          <p class="subtle">Здесь будут события: новые заявки, задачи на проверке, отказы и переназначения.</p>
+        </div>
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}
