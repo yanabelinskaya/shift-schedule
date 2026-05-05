@@ -1251,6 +1251,7 @@ const initManagerCalendar = (calendarRoot) => {
     const filtersForm = root.querySelector("[data-task-filters]");
     const filterSelects = filtersForm ? Array.from(filtersForm.querySelectorAll("select")) : [];
     const weekInput = filtersForm ? filtersForm.querySelector("input[name='week']") : null;
+    const searchInput = filtersForm ? filtersForm.querySelector("input[name='q']") : null;
     const resetButton = root.querySelector("[data-filter-reset]");
     const weekNavLinks = Array.from(root.querySelectorAll("[data-week-nav]"));
     const weekPicker = root.querySelector("[data-week-picker]");
@@ -1324,6 +1325,7 @@ const initManagerCalendar = (calendarRoot) => {
           url.searchParams.set(select.name, value);
         }
       });
+      url.searchParams.delete("q");
       return url.toString();
     };
 
@@ -1339,6 +1341,81 @@ const initManagerCalendar = (calendarRoot) => {
       });
     }
 
+    const taskCards = Array.from(root.querySelectorAll(".manager-task-card"));
+    const taskTableRows = Array.from(root.querySelectorAll("[data-task-row]"));
+    const taskTableDetails = Array.from(root.querySelectorAll("[data-task-details]"));
+    const taskCardEmpty = root.querySelector(".task-board-section .empty-state");
+
+    const normalizeQuery = (value) =>
+      String(value || "")
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim();
+
+    const cardSearchText = (card) => {
+      const title = card.querySelector(".manager-task-card-main h3");
+      const desc = card.querySelector(".manager-task-card-main p");
+      const meta = card.querySelector(".manager-task-card-meta");
+      return [title, desc, meta]
+        .map((node) => (node ? node.textContent : ""))
+        .join(" ")
+        .toLowerCase();
+    };
+
+    const rowSearchText = (row) => {
+      const explicit = row.dataset.taskTitle ? row.dataset.taskTitle.toLowerCase() : "";
+      const cells = Array.from(row.querySelectorAll("td"))
+        .map((cell) => cell.textContent || "")
+        .join(" ")
+        .toLowerCase();
+      return `${explicit} ${cells}`.trim();
+    };
+
+    const applyClientSearch = () => {
+      if (!searchInput) {
+        return;
+      }
+      const query = normalizeQuery(searchInput.value);
+      let visibleCards = 0;
+      taskCards.forEach((card) => {
+        const matches = !query || cardSearchText(card).includes(query);
+        card.hidden = !matches;
+        card.style.display = matches ? "" : "none";
+        if (matches) {
+          visibleCards += 1;
+        }
+      });
+      taskTableRows.forEach((row) => {
+        const matches = !query || rowSearchText(row).includes(query);
+        row.hidden = !matches;
+        row.style.display = matches ? "" : "none";
+        if (!matches) {
+          const detailsId = row.querySelector("[data-task-toggle]")?.getAttribute("aria-controls");
+          if (detailsId) {
+            const detailsRow = document.getElementById(detailsId);
+            if (detailsRow) {
+              detailsRow.hidden = true;
+            }
+          }
+        }
+      });
+      if (taskCardEmpty) {
+        if (taskCards.length && visibleCards === 0) {
+          taskCardEmpty.hidden = false;
+          taskCardEmpty.style.display = "";
+        } else if (taskCards.length) {
+          taskCardEmpty.hidden = true;
+          taskCardEmpty.style.display = "none";
+        }
+      }
+    };
+
+    if (searchInput && filtersForm) {
+      searchInput.addEventListener("input", applyClientSearch);
+      searchInput.addEventListener("search", applyClientSearch);
+      applyClientSearch();
+    }
+
     if (resetButton && filtersForm) {
       resetButton.addEventListener("click", () => {
         filterSelects.forEach((select) => {
@@ -1347,6 +1424,9 @@ const initManagerCalendar = (calendarRoot) => {
             select.value = defaultOption.value;
           }
         });
+        if (searchInput) {
+          searchInput.value = "";
+        }
         loadWeek(buildFilterUrl());
       });
     }
@@ -1464,11 +1544,18 @@ const initManagerCalendar = (calendarRoot) => {
       const toggleButton = row.querySelector("[data-task-toggle]");
       if (toggleButton) {
         toggleButton.addEventListener("click", () => {
-          const nextRow = row.nextElementSibling;
-          const detailsRow =
-            nextRow && nextRow.hasAttribute("data-task-details")
-              ? nextRow
-              : null;
+          const detailsId = toggleButton.getAttribute("aria-controls");
+          let detailsRow = null;
+          if (detailsId) {
+            detailsRow = document.getElementById(detailsId);
+          }
+          if (!detailsRow) {
+            const nextRow = row.nextElementSibling;
+            detailsRow =
+              nextRow && nextRow.hasAttribute("data-task-details")
+                ? nextRow
+                : null;
+          }
           if (!detailsRow) {
             return;
           }
@@ -1478,39 +1565,57 @@ const initManagerCalendar = (calendarRoot) => {
           row.classList.toggle("is-expanded", !isOpen);
         });
       }
+    });
 
-      const deleteButton = row.querySelector("[data-task-delete]");
-      if (deleteButton) {
-        deleteButton.addEventListener("click", () => {
-          const deleteUrl = deleteButton.dataset.deleteUrl;
-          if (!deleteUrl) {
-            return;
+    root.querySelectorAll("[data-task-delete]").forEach((deleteButton) => {
+      deleteButton.addEventListener("click", () => {
+        const deleteUrl = deleteButton.dataset.deleteUrl;
+        if (!deleteUrl) {
+          return;
+        }
+        pendingDeleteUrl = deleteUrl;
+        if (deleteTitle) {
+          const card =
+            deleteButton.closest("[data-task-row]") ||
+            deleteButton.closest(".manager-task-card");
+          let titleText = "";
+          if (card) {
+            const titleNode =
+              card.querySelector(".task-title") ||
+              card.querySelector(".manager-task-card-main h3") ||
+              card.querySelector("h3");
+            if (titleNode) {
+              titleText = titleNode.textContent.trim();
+            }
           }
-          pendingDeleteUrl = deleteUrl;
-          if (deleteTitle) {
-            const titleNode = row.querySelector(".task-title");
-            deleteTitle.textContent = titleNode ? titleNode.textContent.trim() : "";
-          }
-          openModal(deleteModal);
-        });
-      }
+          deleteTitle.textContent = titleText;
+        }
+        openModal(deleteModal);
+      });
+    });
 
-      const extendButton = row.querySelector("[data-task-extend]");
-      if (extendButton) {
-        extendButton.addEventListener("click", () => {
-          const extendUrl = extendButton.dataset.extendUrl;
-          if (!extendUrl) {
-            return;
-          }
-          pendingExtendUrl = extendUrl;
-          if (extendTitle) {
-            extendTitle.textContent = row.dataset.taskTitle || "";
-          }
+    root.querySelectorAll("[data-task-extend]").forEach((extendButton) => {
+      extendButton.addEventListener("click", () => {
+        const extendUrl = extendButton.dataset.extendUrl;
+        if (!extendUrl) {
+          return;
+        }
+        pendingExtendUrl = extendUrl;
+        const row =
+          extendButton.closest("[data-task-row]") ||
+          extendButton.closest(".manager-task-card");
+        if (extendTitle && row) {
+          extendTitle.textContent =
+            row.dataset.taskTitle ||
+            (row.querySelector("h3") || {}).textContent ||
+            "";
+        }
+        if (row) {
           setSelectValue(extendDate, row.dataset.taskDate || "");
           setSelectValue(extendTime, row.dataset.taskDueTime || "");
-          openModal(extendModal);
-        });
-      }
+        }
+        openModal(extendModal);
+      });
     });
 
     if (deleteConfirm) {
@@ -1818,4 +1923,191 @@ const initManagerCalendar = (calendarRoot) => {
   }
 
   syncTaskType();
+})();
+
+(() => {
+  const initSprintDetail = (rootInit) => {
+    const root = rootInit || document.querySelector("[data-sprint-detail]");
+    if (!root || root.dataset.sprintDetailReady === "true") {
+      return;
+    }
+    root.dataset.sprintDetailReady = "true";
+
+    const getCookie = (name) => {
+      if (!document.cookie) {
+        return null;
+      }
+      const part = document.cookie
+        .split(";")
+        .map((c) => c.trim())
+        .find((c) => c.startsWith(`${name}=`));
+      return part ? decodeURIComponent(part.split("=")[1]) : null;
+    };
+
+    let isLoading = false;
+
+    const refresh = async () => {
+      if (isLoading) {
+        return;
+      }
+      isLoading = true;
+      root.classList.add("is-loading");
+      try {
+        const response = await fetch(window.location.href, {
+          headers: { "X-Requested-With": "XMLHttpRequest" },
+          credentials: "same-origin",
+        });
+        if (!response.ok) {
+          throw new Error("bad response");
+        }
+        const html = await response.text();
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        const next = doc.querySelector("[data-sprint-detail]");
+        if (!next) {
+          throw new Error("sprint detail missing");
+        }
+        root.replaceWith(next);
+        if (typeof window.initCustomSelects === "function") {
+          window.initCustomSelects(next);
+        }
+        initSprintDetail(next);
+      } catch (e) {
+        window.location.reload();
+      } finally {
+        isLoading = false;
+      }
+    };
+
+    const submitForm = async (form) => {
+      if (isLoading) {
+        return;
+      }
+      const confirmText = form.dataset.confirm;
+      if (confirmText && !window.confirm(confirmText)) {
+        return;
+      }
+      isLoading = true;
+      root.classList.add("is-loading");
+      try {
+        const formData = new FormData(form);
+        const response = await fetch(window.location.href, {
+          method: "POST",
+          headers: {
+            "X-Requested-With": "XMLHttpRequest",
+            "X-CSRFToken": getCookie("csrftoken") || "",
+          },
+          credentials: "same-origin",
+          body: formData,
+        });
+        if (!response.ok) {
+          throw new Error("bad response");
+        }
+        const html = await response.text();
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        const next = doc.querySelector("[data-sprint-detail]");
+        if (!next) {
+          throw new Error("sprint detail missing");
+        }
+        root.replaceWith(next);
+        if (typeof window.initCustomSelects === "function") {
+          window.initCustomSelects(next);
+        }
+        initSprintDetail(next);
+      } catch (e) {
+        form.submit();
+      } finally {
+        isLoading = false;
+      }
+    };
+
+    root.querySelectorAll("form").forEach((form) => {
+      if (form.dataset.sprintFormReady === "true") {
+        return;
+      }
+      form.dataset.sprintFormReady = "true";
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        submitForm(form);
+      });
+    });
+
+    root.querySelectorAll("select[data-auto-submit]").forEach((select) => {
+      if (select.dataset.autoSubmitReady === "true") {
+        return;
+      }
+      select.dataset.autoSubmitReady = "true";
+      select.addEventListener("change", () => {
+        const form = select.closest("form");
+        if (form) {
+          submitForm(form);
+        }
+      });
+    });
+  };
+
+  initSprintDetail();
+})();
+
+(() => {
+  const root = document.querySelector("[data-substitutions-page]");
+  if (!root) {
+    return;
+  }
+
+  const syncBodyModalState = () => {
+    const openModals = document.querySelectorAll(".modal.is-open");
+    document.body.classList.toggle("modal-open", openModals.length > 0);
+  };
+
+  const openModal = (modal) => {
+    if (!modal) {
+      return;
+    }
+    modal.removeAttribute("hidden");
+    modal.removeAttribute("inert");
+    modal.classList.add("is-open");
+    modal.setAttribute("aria-hidden", "false");
+    syncBodyModalState();
+    if (typeof window.initCustomSelects === "function") {
+      window.initCustomSelects(modal);
+    }
+    const focusTarget = modal.querySelector("button, [href], input, select, textarea");
+    if (focusTarget) {
+      focusTarget.focus();
+    }
+  };
+
+  const closeModal = (modal) => {
+    if (!modal) {
+      return;
+    }
+    modal.classList.remove("is-open");
+    modal.setAttribute("aria-hidden", "true");
+    modal.setAttribute("inert", "");
+    modal.setAttribute("hidden", "");
+    syncBodyModalState();
+  };
+
+  root.querySelectorAll("[data-open-substitution-modal]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = button.dataset.target;
+      if (!target) {
+        return;
+      }
+      openModal(root.querySelector(`[data-modal="${target}"]`));
+    });
+  });
+
+  root.querySelectorAll("[data-action='close-modal']").forEach((button) => {
+    button.addEventListener("click", () => {
+      closeModal(button.closest(".modal"));
+    });
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") {
+      return;
+    }
+    root.querySelectorAll(".modal.is-open").forEach((modal) => closeModal(modal));
+  });
 })();

@@ -11,8 +11,10 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from .models import (
     Department,
     DepartmentPosition,
+    DepartmentTask,
     EmployeeAbsence,
     EmployeeProfile,
+    Sprint,
     SystemBackup,
     SystemLogEntry,
 )
@@ -249,6 +251,7 @@ def _build_task_form_context(
     form_subtitle="",
     submit_label="",
     back_url="",
+    is_edit=False,
 ):
     today_local = timezone.localdate()
 
@@ -309,6 +312,13 @@ def _build_task_form_context(
         full_name = user.get_full_name().strip() or user.username
         employees.append({"id": user.id, "name": full_name})
 
+    sprints = []
+    if department:
+        sprints = [
+            {"id": sprint.id, "title": sprint.title, "status": sprint.status}
+            for sprint in Sprint.objects.filter(department=department).order_by("-start_date", "title")
+        ]
+
     time_options = []
     for hour in range(24):
         for minute in (0, 30):
@@ -328,7 +338,13 @@ def _build_task_form_context(
         "week_offset": week_offset,
         "days": days,
         "employees": employees,
+        "sprints": sprints,
         "time_options": time_options,
+        "status_options": [
+            {"value": value, "label": label}
+            for value, label in DepartmentTask.TaskStatus.choices
+        ],
+        "is_edit": is_edit,
         "initial": initial or {},
         "error_message": error_message,
         "back_url": back_url or reverse("manager-tasks"),

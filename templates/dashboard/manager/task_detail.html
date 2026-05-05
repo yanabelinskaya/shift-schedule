@@ -16,11 +16,13 @@
       <div class="hero-meta">
         <div class="meta-chip">Тип: {{ task_type_label }}</div>
         <div class="meta-chip">Приоритет: {{ task_priority_label }}</div>
+        <div class="meta-chip">Спринт: {{ sprint_label }}</div>
         {% if task_slot_label and task_slot_label != '—' %}
           <div class="meta-chip">Слот: {{ task_slot_label }}</div>
         {% endif %}
         <div class="meta-chip">Для кого: {{ assignee_label }}</div>
         <div class="meta-chip">Отдел: {{ department_label }}</div>
+        <div class="meta-chip">Сообщений: {{ messages_count }}</div>
       </div>
     </div>
 
@@ -31,14 +33,85 @@
           <p class="subtle">Описание и история сдач.</p>
         </div>
         <div class="section-actions">
+          <a class="btn btn-primary btn-inline btn-sm" href="{{ task_chat_url }}">Открыть чат</a>
           <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'manager-task-edit' task.id %}?next={{ request.get_full_path|urlencode }}">Редактировать</a>
         </div>
       </div>
 
       <div class="task-detail-grid">
+        <div class="task-detail-section task-manager-actions">
+          <div class="task-detail-label">Действия менеджера</div>
+          <div class="task-detail-action-grid">
+            <form method="post" class="sprint-inline-form">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="assign">
+              <div class="custom-select sprint-assignee-select" data-custom-select>
+                <select name="assigned_to" required>
+                  <option value="">Выберите исполнителя</option>
+                  {% for employee in employee_options %}
+                    <option value="{{ employee.id }}" {% if employee.name == assignee_label %}selected{% endif %}>{{ employee.name }} · {{ employee.tasks }} задач · {{ employee.load_label }}</option>
+                  {% endfor %}
+                </select>
+                <button class="custom-select-trigger" type="button" data-select-trigger>
+                  <span data-select-label></span>
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="M5 7l5 6 5-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </button>
+                <div class="custom-select-menu" data-select-menu>
+                  <div class="custom-select-options" data-select-options></div>
+                </div>
+              </div>
+              <button class="btn btn-primary btn-inline btn-sm" type="submit">Назначить</button>
+            </form>
+            <form method="post" class="sprint-inline-form">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="set_status">
+              <div class="custom-select sprint-assignee-select" data-custom-select>
+                <select name="status" required>
+                  {% for option in status_options %}
+                    <option value="{{ option.value }}" {% if option.value == task.status %}selected{% endif %}>{{ option.label }}</option>
+                  {% endfor %}
+                </select>
+                <button class="custom-select-trigger" type="button" data-select-trigger>
+                  <span data-select-label></span>
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="M5 7l5 6 5-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </button>
+                <div class="custom-select-menu" data-select-menu>
+                  <div class="custom-select-options" data-select-options></div>
+                </div>
+              </div>
+              <input class="control-input control-input-sm" type="text" name="comment" placeholder="Комментарий к статусу" />
+              <button class="btn btn-primary btn-inline btn-sm" type="submit">Изменить статус</button>
+            </form>
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="return">
+              <button class="btn btn-ghost btn-inline btn-sm" type="submit">Вернуть на доработку</button>
+            </form>
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="complete">
+              <button class="btn btn-primary btn-inline btn-sm" type="submit">Закрыть выполненной</button>
+            </form>
+          </div>
+        </div>
         <div class="task-detail-section">
           <div class="task-detail-label">Описание</div>
           <p class="task-detail-text">{{ task.description|default:"Описание не добавлено." }}</p>
+        </div>
+        <div class="task-detail-section">
+          <div class="task-detail-label">История изменений</div>
+          <ul class="task-submissions-list">
+            {% for item in history %}
+              <li>
+                <div class="submission-meta">{{ item.label }}</div>
+                <div class="submission-comment">{{ item.detail|default:"—" }}</div>
+              </li>
+            {% endfor %}
+          </ul>
         </div>
         <div class="task-detail-section">
           <div class="task-detail-label">Комментарий менеджера</div>

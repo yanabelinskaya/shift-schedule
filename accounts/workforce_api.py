@@ -22,7 +22,12 @@ from .availability import (
     get_week_start,
     resolve_range_availability,
 )
-from .object_access import can_manage_employee, require_employee_task_access, require_manager_department
+from .object_access import (
+    can_manage_employee,
+    get_manager_task_or_404,
+    require_employee_task_access,
+    require_manager_department,
+)
 from .pagination import BoundedListMixin
 from .serializers import DetailMessageSerializer
 from .models import (
@@ -689,7 +694,7 @@ class ManagerTaskListCreateView(BoundedListMixin, generics.ListCreateAPIView):
             queryset = queryset.filter(status=status_filter)
 
         priority_filter = (self.request.query_params.get('priority') or '').strip().lower()
-        if priority_filter in {'high', 'mid', 'low'}:
+        if priority_filter in {'critical', 'high', 'mid', 'low'}:
             queryset = queryset.filter(priority=priority_filter)
 
         type_filter = (self.request.query_params.get('type') or '').strip().lower()
@@ -732,12 +737,11 @@ class ManagerTaskListCreateView(BoundedListMixin, generics.ListCreateAPIView):
         assigned_to = None
         if data['task_type'] == 'employee':
             assigned_to_id = data.get('assigned_to')
-            if not assigned_to_id:
-                raise ValidationError({'detail': 'Выберите сотрудника.'})
-            user_model = get_user_model()
-            assigned_to = user_model.objects.filter(id=assigned_to_id, role='employee', is_active=True).first()
-            if not assigned_to or not EmployeeProfile.objects.filter(user=assigned_to, department=department).exists():
-                raise ValidationError({'detail': 'Сотрудник не найден.'})
+            if assigned_to_id:
+                user_model = get_user_model()
+                assigned_to = user_model.objects.filter(id=assigned_to_id, role='employee', is_active=True).first()
+                if not assigned_to or not EmployeeProfile.objects.filter(user=assigned_to, department=department).exists():
+                    raise ValidationError({'detail': 'Сотрудник не найден.'})
 
         task = DepartmentTask.objects.create(
             department=department,
@@ -749,7 +753,7 @@ class ManagerTaskListCreateView(BoundedListMixin, generics.ListCreateAPIView):
             description=(data.get('description') or '').strip(),
             task_type=data['task_type'],
             priority=data.get('priority', 'mid'),
-            status=DepartmentTask.TaskStatus.AWAITING_CONFIRMATION,
+            status=DepartmentTask.TaskStatus.CONFIRMED if assigned_to else DepartmentTask.TaskStatus.AWAITING_CONFIRMATION,
         )
         return Response(DepartmentTaskSerializer(task).data, status=status.HTTP_201_CREATED)
 
@@ -800,12 +804,13 @@ class ManagerTaskDetailView(generics.GenericAPIView):
         assigned_to = task.assigned_to
         if task_type == 'employee':
             assigned_to_id = data.get('assigned_to', task.assigned_to_id)
-            if not assigned_to_id:
-                raise ValidationError({'detail': 'Выберите сотрудника.'})
-            user_model = get_user_model()
-            assigned_to = user_model.objects.filter(id=assigned_to_id, role='employee', is_active=True).first()
-            if not assigned_to or not EmployeeProfile.objects.filter(user=assigned_to, department=department).exists():
-                raise ValidationError({'detail': 'Сотрудник не найден.'})
+            if assigned_to_id:
+                user_model = get_user_model()
+                assigned_to = user_model.objects.filter(id=assigned_to_id, role='employee', is_active=True).first()
+                if not assigned_to or not EmployeeProfile.objects.filter(user=assigned_to, department=department).exists():
+                    raise ValidationError({'detail': 'Сотрудник не найден.'})
+            else:
+                assigned_to = None
         elif 'assigned_to' in data or task_type == 'department':
             assigned_to = None
 
@@ -1584,6 +1589,91 @@ class EmployeeTaskMessageListCreateView(generics.GenericAPIView):
     def post(self, request, task_id):
         task = get_object_or_404(DepartmentTask, id=task_id)
         require_employee_task_access(request.user, task)
+        text = (request.data.get('text') or '').strip()
+        attachment = request.FILES.get('attachment')
+        if not text and not attachment:
+            return Response({'detail': 'Введите сообщение или прикрепите файл.'}, status=400)
+        reply_to = None
+        reply_to_id = request.data.get('reply_to')
+        if reply_to_id:
+            try:
+                reply_to = TaskMessage.objects.get(id=int(reply_to_id), task=task)
+            except (TaskMessage.DoesNotExist, ValueError, TypeError):
+                pass
+        msg = TaskMessage.objects.create(
+            task=task,
+            author=request.user,
+            text=text,
+            attachment=attachment,
+            reply_to=reply_to,
+        )
+        reply_data = None
+        if reply_to:
+            ra = reply_to.author
+            reply_data = {
+                'id': reply_to.id,
+                'author': ra.get_full_name().strip() or ra.username if ra else '—',
+                'text': reply_to.text[:120],
+            }
+        return Response({
+            'message': {
+                'id': msg.id,
+                'author': request.user.get_full_name().strip() or request.user.username,
+                'author_id': request.user.id,
+                'is_mine': True,
+                'text': msg.text,
+                'attachment_url': msg.attachment.url if msg.attachment else '',
+                'attachment_name': Path(msg.attachment.name).name if msg.attachment else '',
+                'reply_to': reply_data,
+                'created_label': _fmt_msg_time(msg.created_at),
+            }
+        }, status=201)
+
+
+class ManagerTaskMessageListCreateView(generics.GenericAPIView):
+    permission_classes = [IsManagerRole]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @extend_schema(tags=['Manager'], summary='Сообщения чата задачи')
+    def get(self, request, task_id):
+        task = get_manager_task_or_404(request.user, task_id)
+        qs = TaskMessage.objects.filter(task=task).select_related(
+            'author', 'reply_to', 'reply_to__author',
+        )
+        since = request.query_params.get('since')
+        if since:
+            try:
+                qs = qs.filter(id__gt=int(since))
+            except (ValueError, TypeError):
+                pass
+        messages = []
+        for msg in qs:
+            reply_data = None
+            if msg.reply_to:
+                ra = msg.reply_to.author
+                reply_data = {
+                    'id': msg.reply_to.id,
+                    'author': ra.get_full_name().strip() or ra.username if ra else '—',
+                    'text': msg.reply_to.text[:120],
+                }
+            a = msg.author
+            messages.append({
+                'id': msg.id,
+                'author': a.get_full_name().strip() or a.username if a else '—',
+                'author_id': a.id if a else None,
+                'is_mine': a.id == request.user.id if a else False,
+                'text': msg.text,
+                'attachment_url': msg.attachment.url if msg.attachment else '',
+                'attachment_name': Path(msg.attachment.name).name if msg.attachment else '',
+                'reply_to': reply_data,
+                'created_label': _fmt_msg_time(msg.created_at),
+            })
+        _mark_task_messages_read(task, request.user)
+        return Response({'messages': messages})
+
+    @extend_schema(tags=['Manager'], summary='Отправить сообщение в чат задачи')
+    def post(self, request, task_id):
+        task = get_manager_task_or_404(request.user, task_id)
         text = (request.data.get('text') or '').strip()
         attachment = request.FILES.get('attachment')
         if not text and not attachment:

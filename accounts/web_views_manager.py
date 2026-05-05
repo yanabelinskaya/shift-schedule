@@ -1,11 +1,12 @@
 import json
 from datetime import date, time, timedelta
+from pathlib import Path
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.db.models import Q
+from django.db.models import Count, F, OuterRef, Q, Subquery
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -22,6 +23,8 @@ from .models import (
     Sprint,
     Substitution,
     TaskReassignment,
+    TaskMessage,
+    TaskMessageReadState,
     TaskSubmission,
 )
 from .web_views_shared import (
@@ -40,7 +43,7 @@ def manager_dashboard(request):
     today = timezone.localdate()
 
     task_stats = {
-        'total': 0, 'in_progress': 0, 'no_assignee': 0,
+        'total': 0, 'new': 0, 'in_progress': 0, 'no_assignee': 0,
         'on_review': 0, 'completed': 0, 'overdue': 0,
     }
     active_sprint = None
@@ -52,8 +55,9 @@ def manager_dashboard(request):
         # ── Task stats ──────────────────────────────────────────────────
         qs_all = DepartmentTask.objects.filter(department=department)
         task_stats['total']       = qs_all.count()
+        task_stats['new']         = qs_all.filter(status='awaiting_confirmation').count()
         task_stats['in_progress'] = qs_all.filter(status__in=['in_progress', 'confirmed']).count()
-        task_stats['no_assignee'] = qs_all.filter(status='awaiting_confirmation').count()
+        task_stats['no_assignee'] = qs_all.filter(assigned_to__isnull=True, taken_by__isnull=True).count()
         task_stats['on_review']   = qs_all.filter(status='on_review').count()
         task_stats['completed']   = qs_all.filter(status='completed').count()
         task_stats['overdue']     = qs_all.exclude(
@@ -123,6 +127,7 @@ def manager_dashboard(request):
             team_load.append({
                 'id': user.id,
                 'name': full_name,
+                'url': reverse('manager-employee-detail', args=[user.id]),
                 'position': (profile.position or '').strip() or '—',
                 'tasks': tasks,
                 'load_code': load_code,
@@ -169,7 +174,7 @@ def manager_dashboard(request):
                 'kind': 'info',
                 'title': f'Задач без исполнителя: {task_stats["no_assignee"]}',
                 'text': 'Назначьте сотрудников на открытые задачи.',
-                'url': reverse('manager-tasks'),
+                'url': f"{reverse('manager-tasks')}?status=unassigned",
                 'action': 'Назначить',
             })
 
@@ -178,7 +183,7 @@ def manager_dashboard(request):
                 'kind': 'danger',
                 'title': f'Просрочено: {task_stats["overdue"]}',
                 'text': 'Сроки выполнения некоторых задач истекли.',
-                'url': reverse('manager-tasks'),
+                'url': f"{reverse('manager-tasks')}?status=overdue",
                 'action': 'Посмотреть',
             })
 
@@ -317,16 +322,19 @@ def manager_tasks(request):
     status_filter = request.GET.get("status")
     priority_filter = request.GET.get("priority")
     type_filter = request.GET.get("type")
+    sprint_filter = request.GET.get("sprint")
+    search_query = (request.GET.get("q") or "").strip()
 
-    if status_filter not in {
-        DepartmentTask.TaskStatus.AWAITING_CONFIRMATION,
-        DepartmentTask.TaskStatus.CONFIRMED,
-        DepartmentTask.TaskStatus.CONFLICT,
-        DepartmentTask.TaskStatus.IN_PROGRESS,
-        DepartmentTask.TaskStatus.COMPLETED,
-    }:
+    status_filter_options = {
+        "all",
+        "unassigned",
+        "overdue",
+        "active",
+        *{choice[0] for choice in DepartmentTask.TaskStatus.choices},
+    }
+    if status_filter not in status_filter_options:
         status_filter = "all"
-    if priority_filter not in {"high", "mid", "low"}:
+    if priority_filter not in {"critical", "high", "mid", "low"}:
         priority_filter = "all"
     if type_filter not in {"employee", "department"}:
         type_filter = "all"
@@ -338,9 +346,29 @@ def manager_tasks(request):
         except (TypeError, ValueError):
             employee_filter_id = None
 
+    sprint_filter_id = None
+    if sprint_filter and sprint_filter != "all":
+        try:
+            sprint_filter_id = int(sprint_filter)
+        except (TypeError, ValueError):
+            sprint_filter_id = None
+
+    employee_options = list(employees)
+    visible_employees = employees
     if employee_filter_id:
-        employees = [emp for emp in employees if emp["id"] == employee_filter_id]
-    employee_ids = [item["id"] for item in employees]
+        visible_employees = [emp for emp in employees if emp["id"] == employee_filter_id]
+    employee_ids = [item["id"] for item in visible_employees]
+
+    sprint_options = []
+    if department:
+        sprint_options = [
+            {
+                "id": sprint.id,
+                "title": sprint.title,
+                "status": sprint.status,
+            }
+            for sprint in Sprint.objects.filter(department=department).order_by("-start_date", "title")
+        ]
 
     # Build absence map: (user_id, date) → absence_type
     absence_by_user_date = {}
@@ -363,12 +391,36 @@ def manager_tasks(request):
     ) if department else DepartmentTask.objects.none()
 
     tasks_queryset = tasks_week_qs
+    if search_query:
+        tasks_queryset = tasks_queryset.filter(
+            Q(title__icontains=search_query) | Q(description__icontains=search_query)
+        )
     if status_filter != "all":
-        tasks_queryset = tasks_queryset.filter(status=status_filter)
+        if status_filter == "unassigned":
+            tasks_queryset = tasks_queryset.filter(assigned_to__isnull=True, taken_by__isnull=True)
+        elif status_filter == "overdue":
+            tasks_queryset = tasks_queryset.exclude(
+                status__in=[
+                    DepartmentTask.TaskStatus.COMPLETED,
+                    DepartmentTask.TaskStatus.RETURNED,
+                    DepartmentTask.TaskStatus.CONFLICT,
+                ]
+            ).filter(Q(date__lt=today) | Q(date=today, due_time__lt=timezone.localtime().time()))
+        elif status_filter == "active":
+            tasks_queryset = tasks_queryset.filter(
+                status__in=[
+                    DepartmentTask.TaskStatus.CONFIRMED,
+                    DepartmentTask.TaskStatus.IN_PROGRESS,
+                ]
+            )
+        else:
+            tasks_queryset = tasks_queryset.filter(status=status_filter)
     if priority_filter != "all":
         tasks_queryset = tasks_queryset.filter(priority=priority_filter)
     if type_filter != "all":
         tasks_queryset = tasks_queryset.filter(task_type=type_filter)
+    if sprint_filter_id:
+        tasks_queryset = tasks_queryset.filter(sprint_id=sprint_filter_id)
 
     if employee_filter_id:
         if type_filter == "department":
@@ -380,23 +432,27 @@ def manager_tasks(request):
                 Q(assigned_to_id=employee_filter_id) | Q(task_type="department")
             )
 
-    tasks_queryset = tasks_queryset.select_related("assigned_to", "created_by")
+    tasks_queryset = tasks_queryset.select_related("assigned_to", "created_by", "taken_by", "sprint")
 
-    priority_rank = {"high": 3, "mid": 2, "low": 1}
-    priority_labels = {"high": "Высокий", "mid": "Средний", "low": "Низкий"}
+    priority_rank = {"critical": 4, "high": 3, "mid": 2, "low": 1}
+    priority_labels = {"critical": "Критический", "high": "Высокий", "mid": "Средний", "low": "Низкий"}
     status_labels = {
-        DepartmentTask.TaskStatus.AWAITING_CONFIRMATION: "Ожидает подтверждения",
-        DepartmentTask.TaskStatus.CONFIRMED: "Подтверждено",
+        DepartmentTask.TaskStatus.AWAITING_CONFIRMATION: "Без исполнителя",
+        DepartmentTask.TaskStatus.CONFIRMED: "Назначена",
         DepartmentTask.TaskStatus.CONFLICT: "Конфликт",
-        DepartmentTask.TaskStatus.IN_PROGRESS: "В процессе",
+        DepartmentTask.TaskStatus.IN_PROGRESS: "В работе",
+        DepartmentTask.TaskStatus.ON_REVIEW: "На проверке",
         DepartmentTask.TaskStatus.COMPLETED: "Выполнено",
+        DepartmentTask.TaskStatus.RETURNED: "На доработке",
     }
     status_tones = {
         DepartmentTask.TaskStatus.AWAITING_CONFIRMATION: "muted",
         DepartmentTask.TaskStatus.CONFIRMED: "success",
         DepartmentTask.TaskStatus.CONFLICT: "danger",
         DepartmentTask.TaskStatus.IN_PROGRESS: "warning",
+        DepartmentTask.TaskStatus.ON_REVIEW: "info",
         DepartmentTask.TaskStatus.COMPLETED: "success",
+        DepartmentTask.TaskStatus.RETURNED: "warning",
     }
 
     tasks_by_employee_date = {}
@@ -421,7 +477,7 @@ def manager_tasks(request):
     }
 
     employee_rows = []
-    for employee in employees:
+    for employee in visible_employees:
         employee_id = employee["id"]
         cells = []
         for day_date in visible_dates:
@@ -463,6 +519,8 @@ def manager_tasks(request):
                     "extra_count": extra_count,
                 }
             )
+        if not any(cell.get("is_absent") for cell in cells):
+            continue
         employee_rows.append(
             {
                 "id": employee_id,
@@ -520,11 +578,125 @@ def manager_tasks(request):
             "is_overdue": is_overdue,
             "task_type": task.task_type,
             "task_type_label": task_type_label,
+            "slot_label": "—",
+            "sprint_title": task.sprint.title if task.sprint else "Без спринта",
+            "messages_count": 0,
+            "files_count": 0,
         }
         if task.task_type == "employee":
             tasks_list.append(payload)
         else:
             shared_tasks_list.append(payload)
+
+    all_tasks_queryset = DepartmentTask.objects.filter(department=department) if department else DepartmentTask.objects.none()
+    if search_query:
+        all_tasks_queryset = all_tasks_queryset.filter(
+            Q(title__icontains=search_query) | Q(description__icontains=search_query)
+        )
+    if status_filter != "all":
+        if status_filter == "unassigned":
+            all_tasks_queryset = all_tasks_queryset.filter(assigned_to__isnull=True, taken_by__isnull=True)
+        elif status_filter == "overdue":
+            all_tasks_queryset = all_tasks_queryset.exclude(
+                status__in=[
+                    DepartmentTask.TaskStatus.COMPLETED,
+                    DepartmentTask.TaskStatus.RETURNED,
+                    DepartmentTask.TaskStatus.CONFLICT,
+                ]
+            ).filter(Q(date__lt=today) | Q(date=today, due_time__lt=timezone.localtime().time()))
+        elif status_filter == "active":
+            all_tasks_queryset = all_tasks_queryset.filter(
+                status__in=[
+                    DepartmentTask.TaskStatus.CONFIRMED,
+                    DepartmentTask.TaskStatus.IN_PROGRESS,
+                ]
+            )
+        else:
+            all_tasks_queryset = all_tasks_queryset.filter(status=status_filter)
+    if priority_filter != "all":
+        all_tasks_queryset = all_tasks_queryset.filter(priority=priority_filter)
+    if type_filter != "all":
+        all_tasks_queryset = all_tasks_queryset.filter(task_type=type_filter)
+    if sprint_filter_id:
+        all_tasks_queryset = all_tasks_queryset.filter(sprint_id=sprint_filter_id)
+    if employee_filter_id:
+        if type_filter == "department":
+            all_tasks_queryset = all_tasks_queryset.filter(task_type="department")
+        elif type_filter == "employee":
+            all_tasks_queryset = all_tasks_queryset.filter(assigned_to_id=employee_filter_id)
+        else:
+            all_tasks_queryset = all_tasks_queryset.filter(
+                Q(assigned_to_id=employee_filter_id)
+                | Q(taken_by_id=employee_filter_id)
+                | Q(task_type="department")
+            )
+
+    all_tasks_queryset = (
+        all_tasks_queryset.select_related("assigned_to", "taken_by", "created_by", "sprint")
+        .annotate(
+            messages_count=Count("messages", distinct=True),
+            chat_files_count=Count(
+                "messages",
+                filter=Q(messages__attachment__isnull=False) & ~Q(messages__attachment=""),
+                distinct=True,
+            ),
+            files_count=Count(
+                "submissions",
+                filter=Q(submissions__attachment__isnull=False) & ~Q(submissions__attachment=""),
+                distinct=True,
+            ),
+        )
+        .order_by("-date", "-created_at")
+    )
+
+    task_cards = []
+    for task in all_tasks_queryset:
+        due_label = f"{task.date.day} {month_names[task.date.month - 1]}"
+        if task.due_time:
+            due_label = f"{due_label}, {task.due_time:%H:%M}"
+        is_overdue = False
+        if task.status != DepartmentTask.TaskStatus.COMPLETED:
+            if task.date < now.date():
+                is_overdue = True
+            elif task.due_time and task.date == now.date() and task.due_time < now.time():
+                is_overdue = True
+
+        assignee = task.assigned_to or task.taken_by
+        assignee_label = "Без исполнителя"
+        if task.task_type == "department":
+            assignee_label = "Вся команда"
+        if assignee:
+            assignee_label = assignee.get_full_name().strip() or assignee.username
+
+        tone = status_tones.get(task.status, "muted")
+        if is_overdue:
+            tone = "danger"
+        description = (task.description or "").strip()
+        task_cards.append(
+            {
+                "id": task.id,
+                "title": task.title,
+                "description": description,
+                "short_description": description[:150],
+                "assignee": assignee_label,
+                "due_label": due_label,
+                "date_label": f"{task.date.day} {month_names[task.date.month - 1]}",
+                "date_value": task.date.isoformat(),
+                "due_time_value": task.due_time.strftime("%H:%M") if task.due_time else "",
+                "priority": task.priority,
+                "priority_label": priority_labels.get(task.priority, "Средний"),
+                "status": task.status,
+                "status_label": status_labels.get(task.status, "Ожидает подтверждения"),
+                "status_tone": tone,
+                "is_overdue": is_overdue,
+                "task_type": task.task_type,
+                "task_type_label": "Отдел" if task.task_type == "department" else "Сотрудник",
+                "slot_label": "—",
+                "sprint_title": task.sprint.title if task.sprint else "Без спринта",
+                "messages_count": task.messages_count,
+                "files_count": task.files_count + task.chat_files_count,
+            }
+        )
 
     tasks_total = tasks_week_qs.count()
     tasks_done = tasks_week_qs.filter(status=DepartmentTask.TaskStatus.COMPLETED).count()
@@ -585,8 +757,10 @@ def manager_tasks(request):
             'week_prev': week_offset - 1,
             'week_next': week_offset + 1,
             'week_options': week_options,
-            'employees': employees,
-            'tasks': tasks_list,
+            'employees': employee_options,
+            'sprints': sprint_options,
+            'tasks': task_cards,
+            'week_tasks': tasks_list,
             'shared_tasks': shared_tasks_list,
             'tasks_total': tasks_total,
             'tasks_done': tasks_done,
@@ -599,6 +773,8 @@ def manager_tasks(request):
                 'status': status_filter or "all",
                 'priority': priority_filter or "all",
                 'type': type_filter or "all",
+                'sprint': sprint_filter_id or "all",
+                'q': search_query,
                 'week': week_offset,
             },
             'time_options': time_options,
@@ -657,8 +833,11 @@ def manager_task_create(request):
             "employee": request.GET.get("employee") or "",
             "date": request.GET.get("date") or base_date.isoformat(),
             "priority": (request.GET.get("priority") or "mid").strip().lower(),
+            "due_time": request.GET.get("due_time") or "",
+            "sprint": request.GET.get("sprint") or "",
             "title": request.GET.get("title") or "",
             "description": request.GET.get("description") or "",
+            "comment": "",
         }
         if initial["task_type"] not in {"employee", "department"}:
             initial["task_type"] = "employee"
@@ -697,8 +876,11 @@ def manager_task_create(request):
             "employee": payload.get("assigned_to") or "",
             "date": payload.get("date") or base_date.isoformat(),
             "priority": (payload.get("priority") or "mid").strip().lower(),
+            "due_time": payload.get("due_time") or "",
+            "sprint": payload.get("sprint") or "",
             "title": payload.get("title") or "",
             "description": payload.get("description") or "",
+            "comment": payload.get("comment") or "",
         }
         if initial["task_type"] not in {"employee", "department"}:
             initial["task_type"] = "employee"
@@ -740,38 +922,69 @@ def manager_task_create(request):
             assigned_to_id = int(assigned_to_id)
         except (TypeError, ValueError):
             assigned_to_id = None
-        if not assigned_to_id:
-            return fail("Выберите сотрудника.")
-        assigned_to = (
-            get_user_model()
-            .objects.filter(id=assigned_to_id, role="employee", is_active=True)
-            .first()
-        )
-        if not assigned_to or not EmployeeProfile.objects.filter(
-            user=assigned_to, department=department
-        ).exists():
-            return fail("Сотрудник не найден.")
+        if assigned_to_id:
+            assigned_to = (
+                get_user_model()
+                .objects.filter(id=assigned_to_id, role="employee", is_active=True)
+                .first()
+            )
+            if not assigned_to or not EmployeeProfile.objects.filter(
+                user=assigned_to, department=department
+            ).exists():
+                return fail("Сотрудник не найден.")
 
     due_time = parse_time_value(payload.get("due_time"))
 
     priority = (payload.get("priority") or "mid").strip().lower()
-    if priority not in {"high", "mid", "low"}:
+    if priority not in {"critical", "high", "mid", "low"}:
         priority = "mid"
 
+    sprint = None
+    sprint_id = payload.get("sprint")
+    if sprint_id:
+        try:
+            sprint_id = int(sprint_id)
+        except (TypeError, ValueError):
+            sprint_id = None
+        if sprint_id:
+            sprint = Sprint.objects.filter(id=sprint_id, department=department).first()
+            if not sprint:
+                return fail("Спринт не найден.")
+
     description = (payload.get("description") or "").strip()
+    status_value = (
+        DepartmentTask.TaskStatus.CONFIRMED
+        if assigned_to
+        else DepartmentTask.TaskStatus.AWAITING_CONFIRMATION
+    )
 
     task = DepartmentTask.objects.create(
         department=department,
         created_by=manager,
         assigned_to=assigned_to,
+        sprint=sprint,
         date=task_date,
         due_time=due_time,
         title=title,
         description=description,
         task_type=task_type,
         priority=priority,
-        status=DepartmentTask.TaskStatus.AWAITING_CONFIRMATION,
+        status=status_value,
     )
+
+    comment = (payload.get("comment") or "").strip()
+    attachments = request.FILES.getlist("attachments") if not is_json else []
+    if comment or attachments:
+        if attachments:
+            for attachment in attachments:
+                TaskSubmission.objects.create(
+                    task=task,
+                    author=manager,
+                    comment=comment,
+                    attachment=attachment,
+                )
+        else:
+            TaskSubmission.objects.create(task=task, author=manager, comment=comment)
 
     if is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return JsonResponse({"ok": True, "task_id": task.id})
@@ -794,6 +1007,60 @@ def manager_task_detail(request, task_id):
     submission_error = ""
 
     if request.method == "POST":
+        action = (request.POST.get("action") or "comment").strip()
+        if action == "set_status":
+            status_value = request.POST.get("status")
+            if status_value in {choice[0] for choice in DepartmentTask.TaskStatus.choices}:
+                task.status = status_value
+                task.save(update_fields=["status", "updated_at"])
+                status_comment = (request.POST.get("comment") or "").strip()
+                if status_comment:
+                    TaskSubmission.objects.create(
+                        task=task,
+                        author=request.user,
+                        comment=status_comment,
+                    )
+            return redirect(request.get_full_path())
+        if action == "complete":
+            task.status = DepartmentTask.TaskStatus.COMPLETED
+            task.save(update_fields=["status", "updated_at"])
+            return redirect(request.get_full_path())
+        if action == "return":
+            task.status = DepartmentTask.TaskStatus.RETURNED
+            task.save(update_fields=["status", "updated_at"])
+            return redirect(request.get_full_path())
+        if action == "assign":
+            assignee_id = request.POST.get("assigned_to")
+            assignee = None
+            if assignee_id:
+                try:
+                    assignee_id = int(assignee_id)
+                except (TypeError, ValueError):
+                    assignee_id = None
+                if assignee_id:
+                    assignee = get_user_model().objects.filter(
+                        id=assignee_id,
+                        role="employee",
+                        is_active=True,
+                    ).first()
+            if assignee and EmployeeProfile.objects.filter(user=assignee, department=department).exists():
+                previous = task.assigned_to or task.taken_by
+                task.assigned_to = assignee
+                task.taken_by = assignee
+                if task.status == DepartmentTask.TaskStatus.AWAITING_CONFIRMATION:
+                    task.status = DepartmentTask.TaskStatus.CONFIRMED
+                task.save(update_fields=["assigned_to", "taken_by", "status", "updated_at"])
+                if previous != assignee:
+                    TaskReassignment.objects.create(
+                        task=task,
+                        previous_user=previous,
+                        new_user=assignee,
+                        reason="manual",
+                        note="Назначение менеджером",
+                        created_by=manager,
+                    )
+            return redirect(request.get_full_path())
+
         comment = (request.POST.get("comment") or "").strip()
         attachments = request.FILES.getlist("attachments")
         if not comment and not attachments:
@@ -831,38 +1098,38 @@ def manager_task_detail(request, task_id):
         "ноября",
         "декабря",
     ]
-    priority_labels = {"high": "Высокий", "mid": "Средний", "low": "Низкий"}
+    priority_labels = {"critical": "Критический", "high": "Высокий", "mid": "Средний", "low": "Низкий"}
     status_labels = {
-        DepartmentTask.TaskStatus.AWAITING_CONFIRMATION: "Ожидает подтверждения",
-        DepartmentTask.TaskStatus.CONFIRMED: "Подтверждено",
+        DepartmentTask.TaskStatus.AWAITING_CONFIRMATION: "Без исполнителя",
+        DepartmentTask.TaskStatus.CONFIRMED: "Назначена",
         DepartmentTask.TaskStatus.CONFLICT: "Конфликт",
-        DepartmentTask.TaskStatus.IN_PROGRESS: "В процессе",
+        DepartmentTask.TaskStatus.IN_PROGRESS: "В работе",
+        DepartmentTask.TaskStatus.ON_REVIEW: "На проверке",
         DepartmentTask.TaskStatus.COMPLETED: "Выполнено",
+        DepartmentTask.TaskStatus.RETURNED: "На доработке",
     }
     status_tones = {
         DepartmentTask.TaskStatus.AWAITING_CONFIRMATION: "muted",
         DepartmentTask.TaskStatus.CONFIRMED: "success",
         DepartmentTask.TaskStatus.CONFLICT: "danger",
         DepartmentTask.TaskStatus.IN_PROGRESS: "warning",
+        DepartmentTask.TaskStatus.ON_REVIEW: "info",
         DepartmentTask.TaskStatus.COMPLETED: "success",
+        DepartmentTask.TaskStatus.RETURNED: "warning",
     }
 
     slot_label = "—"
-    if task.start_time and task.end_time:
-        slot_label = f"{task.start_time:%H:%M}-{task.end_time:%H:%M}"
 
     due_label = "—"
     if task.due_time:
         due_label = f"{task.date.day} {month_names[task.date.month - 1]}, {task.due_time:%H:%M}"
-    elif task.end_time:
-        due_label = f"{task.date.day} {month_names[task.date.month - 1]}, {task.end_time:%H:%M}"
     else:
         due_label = f"{task.date.day} {month_names[task.date.month - 1]}"
 
     is_overdue = False
     now = timezone.localtime()
     if task.status != DepartmentTask.TaskStatus.COMPLETED:
-        due_time = task.due_time or task.end_time
+        due_time = task.due_time
         if task.date < now.date():
             is_overdue = True
         elif due_time and task.date == now.date() and due_time < now.time():
@@ -873,15 +1140,11 @@ def manager_task_detail(request, task_id):
         status_tone = "danger"
 
     task_type_label = "Сотрудник"
-    if task.task_type == "slot":
-        task_type_label = "Слот"
-    elif task.task_type == "department":
+    if task.task_type == "department":
         task_type_label = "Отдел"
 
     assignee_label = "—"
-    if task.task_type == "slot":
-        assignee_label = "Все в слоте"
-    elif task.task_type == "department":
+    if task.task_type == "department":
         assignee_label = "Все сотрудники"
     if task.assigned_to:
         assignee_label = task.assigned_to.get_full_name().strip() or task.assigned_to.username
@@ -908,6 +1171,69 @@ def manager_task_detail(request, task_id):
             }
         )
 
+    messages_count = TaskMessage.objects.filter(task=task).count()
+    active_task_counts = {}
+    employee_options = []
+    profile_qs = EmployeeProfile.objects.select_related("user").filter(
+        department=department,
+        user__role="employee",
+        user__is_active=True,
+    )
+    employee_ids = list(profile_qs.values_list("user_id", flat=True))
+    if employee_ids:
+        for row in DepartmentTask.objects.filter(
+            Q(assigned_to_id__in=employee_ids) | Q(taken_by_id__in=employee_ids),
+            status__in=[
+                DepartmentTask.TaskStatus.CONFIRMED,
+                DepartmentTask.TaskStatus.IN_PROGRESS,
+                DepartmentTask.TaskStatus.ON_REVIEW,
+            ],
+        ).values("assigned_to_id", "taken_by_id"):
+            uid = row["taken_by_id"] or row["assigned_to_id"]
+            if uid:
+                active_task_counts[uid] = active_task_counts.get(uid, 0) + 1
+    for profile in EmployeeProfile.objects.select_related("user").filter(
+        department=department,
+        user__role="employee",
+        user__is_active=True,
+    ).order_by("user__last_name", "user__first_name", "user__username"):
+        user = profile.user
+        task_count = active_task_counts.get(user.id, 0)
+        if task_count == 0:
+            load_label = "свободен"
+        elif task_count <= 2:
+            load_label = "нормальная загрузка"
+        elif task_count <= 4:
+            load_label = "высокая загрузка"
+        else:
+            load_label = "перегружен"
+        employee_options.append({
+            "id": user.id,
+            "name": user.get_full_name().strip() or user.username,
+            "load_label": load_label,
+            "tasks": task_count,
+        })
+
+    history = [
+        {
+            "label": f"Создана {timezone.localtime(task.created_at):%d.%m.%Y %H:%M}",
+            "detail": task.created_by.get_full_name().strip() if task.created_by else "Система",
+        },
+        {
+            "label": f"Обновлена {timezone.localtime(task.updated_at):%d.%m.%Y %H:%M}",
+            "detail": status_labels.get(task.status, task.status),
+        },
+    ]
+    for reassignment in TaskReassignment.objects.select_related("previous_user", "new_user").filter(task=task)[:5]:
+        prev_name = reassignment.previous_user.get_full_name().strip() if reassignment.previous_user else "Без исполнителя"
+        new_name = reassignment.new_user.get_full_name().strip() if reassignment.new_user else "Без исполнителя"
+        history.append(
+            {
+                "label": f"Смена исполнителя {timezone.localtime(reassignment.created_at):%d.%m.%Y %H:%M}",
+                "detail": f"{prev_name} → {new_name}",
+            }
+        )
+
     back_url = _resolve_back_url(request, reverse("manager-tasks"))
     return render(
         request,
@@ -925,6 +1251,15 @@ def manager_task_detail(request, task_id):
             "task_slot_label": slot_label,
             "assignee_label": assignee_label,
             "department_label": department.name,
+            "sprint_label": task.sprint.title if task.sprint else "Без спринта",
+            "messages_count": messages_count,
+            "employee_options": employee_options,
+            "status_options": [
+                {"value": value, "label": label}
+                for value, label in DepartmentTask.TaskStatus.choices
+            ],
+            "task_chat_url": f"{reverse('manager-chat')}?task_id={task.id}",
+            "history": history,
             "submissions": submissions_payload,
             "submission_error": submission_error,
             "back_url": back_url,
@@ -968,9 +1303,12 @@ def manager_task_edit(request, task_id):
             "employee": task.assigned_to_id or "",
             "date": task.date.isoformat(),
             "due_time": task.due_time.strftime("%H:%M") if task.due_time else "",
+            "sprint": task.sprint_id or "",
             "priority": task.priority,
+            "status": task.status,
             "title": task.title,
             "description": task.description,
+            "comment": "",
         }
         return render(
             request,
@@ -988,6 +1326,7 @@ def manager_task_edit(request, task_id):
                     request,
                     reverse("manager-task-detail", args=[task.id]),
                 ),
+                is_edit=True,
             ),
         )
 
@@ -999,9 +1338,13 @@ def manager_task_edit(request, task_id):
             "task_type": (payload.get("task_type") or "employee").strip().lower(),
             "employee": payload.get("assigned_to") or "",
             "date": payload.get("date") or base_date.isoformat(),
+            "due_time": payload.get("due_time") or "",
+            "sprint": payload.get("sprint") or "",
             "priority": (payload.get("priority") or "mid").strip().lower(),
+            "status": (payload.get("status") or task.status).strip(),
             "title": payload.get("title") or "",
             "description": payload.get("description") or "",
+            "comment": payload.get("comment") or "",
         }
         if initial["task_type"] not in {"employee", "department"}:
             initial["task_type"] = "employee"
@@ -1022,6 +1365,7 @@ def manager_task_edit(request, task_id):
                     request,
                     reverse("manager-task-detail", args=[task.id]),
                 ),
+                is_edit=True,
             ),
         )
 
@@ -1046,42 +1390,60 @@ def manager_task_edit(request, task_id):
             assigned_to_id = int(assigned_to_id)
         except (TypeError, ValueError):
             assigned_to_id = None
-        if not assigned_to_id:
-            return fail("Выберите сотрудника.")
-        assigned_to = (
-            get_user_model()
-            .objects.filter(id=assigned_to_id, role="employee", is_active=True)
-            .first()
-        )
-        if not assigned_to or not EmployeeProfile.objects.filter(
-            user=assigned_to, department=department
-        ).exists():
-            return fail("Сотрудник не найден.")
+        if assigned_to_id:
+            assigned_to = (
+                get_user_model()
+                .objects.filter(id=assigned_to_id, role="employee", is_active=True)
+                .first()
+            )
+            if not assigned_to or not EmployeeProfile.objects.filter(
+                user=assigned_to, department=department
+            ).exists():
+                return fail("Сотрудник не найден.")
 
     due_time = parse_time_value(payload.get("due_time"))
 
     priority = (payload.get("priority") or "mid").strip().lower()
-    if priority not in {"high", "mid", "low"}:
+    if priority not in {"critical", "high", "mid", "low"}:
         priority = "mid"
 
+    sprint = None
+    sprint_id = payload.get("sprint")
+    if sprint_id:
+        try:
+            sprint_id = int(sprint_id)
+        except (TypeError, ValueError):
+            sprint_id = None
+        if sprint_id:
+            sprint = Sprint.objects.filter(id=sprint_id, department=department).first()
+            if not sprint:
+                return fail("Спринт не найден.")
+
     description = (payload.get("description") or "").strip()
+    status_value = (payload.get("status") or task.status).strip()
+    if status_value not in {choice[0] for choice in DepartmentTask.TaskStatus.choices}:
+        status_value = task.status
 
     task.title = title
     task.description = description
     task.task_type = task_type
     task.assigned_to = assigned_to
+    task.sprint = sprint
     task.date = task_date
     task.due_time = due_time
     task.priority = priority
+    task.status = status_value
     task.save(
         update_fields=[
             "title",
             "description",
             "task_type",
             "assigned_to",
+            "sprint",
             "date",
             "due_time",
             "priority",
+            "status",
             "updated_at",
         ]
     )
@@ -1287,12 +1649,98 @@ def manager_employee_detail(request, user_id):
 
 @login_required
 def manager_chat(request):
-    return _render_manager_page(
+    _ensure_role(request, 'manager')
+    manager = request.user
+    department = _get_manager_department(manager)
+
+    status_labels = {
+        "awaiting_confirmation": "Новая",
+        "confirmed": "Взята",
+        "in_progress": "В работе",
+        "on_review": "На проверке",
+        "completed": "Выполнена",
+        "returned": "Возвращена",
+        "conflict": "Конфликт",
+    }
+    priority_labels = {
+        "critical": "Критическая",
+        "high": "Высокая",
+        "mid": "Средняя",
+        "low": "Низкая",
+    }
+
+    task_list = []
+    total_unread = 0
+    files_count = 0
+
+    if department:
+        qs = (
+            DepartmentTask.objects.filter(department=department)
+            .select_related('assigned_to', 'taken_by', 'sprint')
+            .annotate(
+                last_read_message_id=Subquery(
+                    TaskMessageReadState.objects.filter(task_id=OuterRef('pk'), user=manager)
+                    .values('last_read_message_id')[:1]
+                )
+            )
+            .annotate(
+                unread_count=Count(
+                    'messages',
+                    filter=(
+                        ~Q(messages__author_id=manager.id)
+                        & (
+                            Q(last_read_message_id__isnull=True)
+                            | Q(messages__id__gt=F('last_read_message_id'))
+                        )
+                    ),
+                ),
+                files_count=Count('messages', filter=Q(messages__attachment__isnull=False)),
+            )
+            .order_by('-updated_at', '-created_at')[:60]
+        )
+
+        for task in qs:
+            assignee = task.taken_by or task.assigned_to
+            assignee_name = assignee.get_full_name().strip() or assignee.username if assignee else "Команда отдела"
+            unread_count = task.unread_count or 0
+            task_files_count = task.files_count or 0
+            total_unread += unread_count
+            files_count += task_files_count
+            task_list.append({
+                'id': task.id,
+                'title': task.title,
+                'assignee_name': assignee_name,
+                'status_label': status_labels.get(task.status, task.status),
+                'priority_label': priority_labels.get(task.priority, task.priority),
+                'sprint_title': task.sprint.title if task.sprint else '',
+                'date_label': task.date.strftime('%d.%m.%Y'),
+                'unread_count': unread_count,
+                'files_count': task_files_count,
+                'messages_url': reverse('api-manager-task-messages', args=[task.id]),
+                'task_url': reverse('manager-task-detail', args=[task.id]),
+            })
+
+    selected_task_id = None
+    try:
+        selected_task_id = int(request.GET.get('task_id', ''))
+    except (ValueError, TypeError):
+        pass
+    if not selected_task_id and task_list:
+        selected_task_id = task_list[0]['id']
+
+    return render(
         request,
         'dashboard/manager/chat.html',
-        'chat',
-        'Чат с сотрудниками',
-        'Внутренние обсуждения и быстрые ответы',
+        {
+            'active_tab': 'chat',
+            'page_title': 'Чаты',
+            'page_subtitle': 'Коммуникация по задачам внутри отдела',
+            'department': department,
+            'task_list': task_list,
+            'selected_task_id': selected_task_id,
+            'total_unread': total_unread,
+            'files_count': files_count,
+        },
     )
 
 
@@ -1524,6 +1972,18 @@ def manager_sprint_detail(request, sprint_id):
                 except DepartmentTask.DoesNotExist:
                     messages.error(request, 'Задача не найдена.')
 
+        elif action == 'update_task_status':
+            task_id = request.POST.get('task_id')
+            status_value = request.POST.get('status')
+            if task_id and status_value in {choice[0] for choice in DepartmentTask.TaskStatus.choices}:
+                try:
+                    task = DepartmentTask.objects.get(id=task_id, sprint=sprint)
+                    task.status = status_value
+                    task.save(update_fields=['status', 'updated_at'])
+                    messages.success(request, 'Статус задачи обновлён.')
+                except DepartmentTask.DoesNotExist:
+                    messages.error(request, 'Задача не найдена.')
+
         elif action in ('set_active', 'set_completed', 'set_planning'):
             status_map = {'set_active': 'active', 'set_completed': 'completed', 'set_planning': 'planning'}
             sprint.status = status_map[action]
@@ -1661,6 +2121,10 @@ def manager_sprint_detail(request, sprint_id):
         'sprint_tasks': sprint_tasks,
         'unassigned_tasks': unassigned_tasks,
         'kanban_columns': kanban_columns,
+        'task_status_options': [
+            {'value': value, 'label': label}
+            for value, label in DepartmentTask.TaskStatus.choices
+        ],
         'team_load': team_load,
         'employee_options': employee_options,
         'available_tasks': available_tasks,
@@ -1675,12 +2139,13 @@ def manager_sprint_detail(request, sprint_id):
     })
 
 
-def _approve_leave_request(lr, manager):
+def _approve_leave_request(lr, manager, review_comment=""):
     """Approve a leave request and auto-create an EmployeeAbsence record."""
     lr.status = 'approved'
     lr.reviewed_by = manager
     lr.reviewed_at = timezone.now()
-    lr.save(update_fields=['status', 'reviewed_by', 'reviewed_at'])
+    lr.review_comment = review_comment
+    lr.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'review_comment'])
     EmployeeAbsence.objects.get_or_create(
         user_id=lr.user_id,
         absence_type=lr.request_type,
@@ -1712,7 +2177,8 @@ def manager_leave_requests(request):
     if request.method == 'POST' and department:
         lr_id = request.POST.get('lr_id')
         action = request.POST.get('action')
-        rejection_reason = request.POST.get('rejection_reason', '').strip()
+        review_comment = request.POST.get('review_comment', '').strip()
+        rejection_reason = request.POST.get('rejection_reason', '').strip() or review_comment
 
         if lr_id and action in ('approve', 'reject'):
             try:
@@ -1727,7 +2193,7 @@ def manager_leave_requests(request):
                     error = 'Заявка уже рассмотрена.'
                 else:
                     if action == 'approve':
-                        _approve_leave_request(lr, manager)
+                        _approve_leave_request(lr, manager, review_comment)
                         if _conflicting_tasks_for_leave(lr).exists():
                             success = 'Заявка одобрена. У сотрудника есть задачи на период отсутствия — требуется замещение.'
                             warning_url = reverse('manager-leave-request-detail', args=[lr.id])
@@ -1737,8 +2203,9 @@ def manager_leave_requests(request):
                         lr.status = 'rejected'
                         lr.reviewed_by = manager
                         lr.reviewed_at = timezone.now()
+                        lr.review_comment = review_comment
                         lr.rejection_reason = rejection_reason
-                        lr.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'rejection_reason'])
+                        lr.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'review_comment', 'rejection_reason'])
                         success = 'Заявка отклонена.'
             except LeaveRequest.DoesNotExist:
                 error = 'Заявка не найдена.'
@@ -1779,7 +2246,8 @@ def manager_leave_requests(request):
 
         for lr in qs:
             employee_name = lr.user.get_full_name().strip() or lr.user.username
-            has_conflict = lr.status == 'approved' and _conflicting_tasks_for_leave(lr).exists()
+            period_tasks_count = _conflicting_tasks_for_leave(lr).count()
+            has_conflict = lr.status == 'approved' and period_tasks_count > 0
             has_substitution = lr.status == 'approved' and Substitution.objects.filter(
                 absent_user_id=lr.user_id,
                 start_date__lte=lr.end_date,
@@ -1793,13 +2261,16 @@ def manager_leave_requests(request):
                 'start_display': lr.start_date.strftime('%d.%m.%Y'),
                 'end_display': lr.end_date.strftime('%d.%m.%Y'),
                 'comment': lr.comment or '',
+                'review_comment': lr.review_comment or '',
                 'status': lr.status,
                 'status_label': status_labels.get(lr.status, lr.status),
                 'status_tone': status_tones.get(lr.status, ''),
                 'rejection_reason': lr.rejection_reason or '',
                 'has_attachment': bool(lr.attachment),
                 'attachment_url': lr.attachment.url if lr.attachment else '',
+                'attachment_name': Path(lr.attachment.name).name if lr.attachment else '',
                 'has_conflict': has_conflict,
+                'period_tasks_count': period_tasks_count,
                 'has_substitution': has_substitution,
             })
 
@@ -1838,12 +2309,13 @@ def manager_leave_request_detail(request, lr_id):
 
     if request.method == 'POST':
         action = request.POST.get('action')
-        rejection_reason = request.POST.get('rejection_reason', '').strip()
+        review_comment = request.POST.get('review_comment', '').strip()
+        rejection_reason = request.POST.get('rejection_reason', '').strip() or review_comment
         if action == 'approve':
             if lr.status != 'pending':
                 error = 'Заявка уже рассмотрена.'
             else:
-                _approve_leave_request(lr, manager)
+                _approve_leave_request(lr, manager, review_comment)
                 if _conflicting_tasks_for_leave(lr).exists():
                     success = 'Заявка одобрена. У сотрудника есть задачи на период отсутствия — требуется замещение.'
                 else:
@@ -1855,8 +2327,9 @@ def manager_leave_request_detail(request, lr_id):
                 lr.status = 'rejected'
                 lr.reviewed_by = manager
                 lr.reviewed_at = timezone.now()
+                lr.review_comment = review_comment
                 lr.rejection_reason = rejection_reason
-                lr.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'rejection_reason'])
+                lr.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'review_comment', 'rejection_reason'])
                 success = 'Заявка отклонена.'
 
     type_labels = {'vacation': 'Отпуск', 'sick': 'Больничный'}
@@ -1878,6 +2351,8 @@ def manager_leave_request_detail(request, lr_id):
     profile = getattr(lr.user, 'profile', None)
     employee_position = (profile.position if profile else '') or '—'
     employee_phone = (profile.corporate_phone or profile.personal_phone) if profile else ''
+    employee_email = lr.user.email or ''
+    employee_department = department.name if department else '—'
 
     period_tasks = []
     for task in _conflicting_tasks_for_leave(lr).order_by('date', 'priority'):
@@ -1919,6 +2394,8 @@ def manager_leave_request_detail(request, lr_id):
         'employee_name': employee_name,
         'employee_position': employee_position,
         'employee_phone': employee_phone,
+        'employee_email': employee_email,
+        'employee_department': employee_department,
         'type_label': type_labels.get(lr.request_type, lr.request_type),
         'status_label': status_labels.get(lr.status, lr.status),
         'status_tone': status_tones.get(lr.status, ''),
@@ -1928,6 +2405,7 @@ def manager_leave_request_detail(request, lr_id):
         'period_tasks': period_tasks,
         'current_tasks': current_tasks,
         'has_substitution': has_substitution,
+        'substitution_url': f"{reverse('manager-substitutions')}?absent={lr.user_id}&start={lr.start_date:%Y-%m-%d}&end={lr.end_date:%Y-%m-%d}",
         'error': error,
         'success': success,
         'department': department,
@@ -2030,10 +2508,12 @@ def manager_substitutions(request):
                                     date__gte=start, date__lte=end,
                                 ).exclude(status__in=['completed', 'returned'])
                                 for t in tasks:
-                                    prev = t.taken_by_id
+                                    prev = t.taken_by_id or t.assigned_to_id
                                     t.taken_by_id = sub_id
                                     t.assigned_to_id = sub_id
-                                    t.save(update_fields=['taken_by', 'assigned_to'])
+                                    if t.status == DepartmentTask.TaskStatus.AWAITING_CONFIRMATION:
+                                        t.status = DepartmentTask.TaskStatus.CONFIRMED
+                                    t.save(update_fields=['taken_by', 'assigned_to', 'status', 'updated_at'])
                                     if prev != sub_id:
                                         TaskReassignment.objects.create(
                                             task=t,
@@ -2043,6 +2523,11 @@ def manager_substitutions(request):
                                             note='Замещение всех задач периода',
                                             substitution=sub_obj,
                                             created_by=manager,
+                                        )
+                                        TaskMessage.objects.create(
+                                            task=t,
+                                            author=manager,
+                                            text='Вы назначены исполнителем задачи в рамках замещения.',
                                         )
                             success = 'Замещение создано.'
                 except (ValueError, TypeError):
@@ -2072,12 +2557,12 @@ def manager_substitutions(request):
                     if new_user_id_int not in dept_ids:
                         error = 'Сотрудник не из вашего отдела.'
                     else:
-                        previous = task.taken_by_id
+                        previous = task.taken_by_id or task.assigned_to_id
                         task.taken_by_id = new_user_id_int
                         task.assigned_to_id = new_user_id_int
                         if task.status == 'awaiting_confirmation':
                             task.status = 'confirmed'
-                        task.save(update_fields=['taken_by', 'assigned_to', 'status'])
+                        task.save(update_fields=['taken_by', 'assigned_to', 'status', 'updated_at'])
                         if previous != new_user_id_int:
                             TaskReassignment.objects.create(
                                 task=task,
@@ -2086,6 +2571,11 @@ def manager_substitutions(request):
                                 reason=reason if reason in ('vacation', 'sick', 'substitution', 'manual') else 'manual',
                                 note=note,
                                 created_by=manager,
+                            )
+                            TaskMessage.objects.create(
+                                task=task,
+                                author=manager,
+                                text='Вы назначены исполнителем задачи в рамках замещения.',
                             )
                         success = 'Задача переназначена.'
                 except (DepartmentTask.DoesNotExist, ValueError, TypeError):
@@ -2096,10 +2586,11 @@ def manager_substitutions(request):
             if task_id:
                 try:
                     task = DepartmentTask.objects.get(id=task_id, department=department)
-                    previous = task.taken_by_id
+                    previous = task.taken_by_id or task.assigned_to_id
                     task.taken_by = None
                     task.assigned_to = None
-                    task.save(update_fields=['taken_by', 'assigned_to'])
+                    task.status = DepartmentTask.TaskStatus.AWAITING_CONFIRMATION
+                    task.save(update_fields=['taken_by', 'assigned_to', 'status', 'updated_at'])
                     if previous:
                         TaskReassignment.objects.create(
                             task=task,
@@ -2113,6 +2604,34 @@ def manager_substitutions(request):
                 except DepartmentTask.DoesNotExist:
                     error = 'Задача не найдена.'
 
+        elif action == 'move_deadline':
+            task_id = request.POST.get('task_id', '').strip()
+            new_date = request.POST.get('date', '').strip()
+            due_time_raw = request.POST.get('due_time', '').strip()
+            if not task_id or not new_date:
+                error = 'Укажите задачу и новую дату.'
+            else:
+                try:
+                    task = DepartmentTask.objects.get(id=task_id, department=department)
+                    task.date = date.fromisoformat(new_date)
+                    task.due_time = None
+                    if due_time_raw:
+                        hh, mm = due_time_raw.split(':')[:2]
+                        task.due_time = time(int(hh), int(mm))
+                    current_user = task.taken_by or task.assigned_to
+                    task.save(update_fields=['date', 'due_time', 'updated_at'])
+                    TaskReassignment.objects.create(
+                        task=task,
+                        previous_user=current_user,
+                        new_user=current_user,
+                        reason='manual',
+                        note='Перенос дедлайна при обработке замещения',
+                        created_by=manager,
+                    )
+                    success = 'Дедлайн задачи перенесён.'
+                except (DepartmentTask.DoesNotExist, ValueError, TypeError):
+                    error = 'Не удалось перенести дедлайн.'
+
     today = timezone.localdate()
     employees = []
     substitutions_data = []
@@ -2124,10 +2643,69 @@ def manager_substitutions(request):
     recommendations = []
     history = []
     employee_load_map = {}
+    time_options = [f'{hour:02d}:{minute:02d}' for hour in range(24) for minute in (0, 30)]
 
     if department:
         employee_load_map, employees = _build_employee_load_map(department, today)
         user_ids = list(employee_load_map.keys())
+
+        priority_labels = {'critical': 'Критический', 'high': 'Высокий', 'mid': 'Средний', 'low': 'Низкий'}
+        task_status_labels = {
+            'awaiting_confirmation': 'Без исполнителя',
+            'confirmed': 'Назначена',
+            'in_progress': 'В работе',
+            'on_review': 'На проверке',
+            'completed': 'Выполнена',
+            'returned': 'На доработку',
+            'conflict': 'Конфликт',
+        }
+        task_status_tones = {
+            'awaiting_confirmation': 'muted',
+            'confirmed': 'success',
+            'in_progress': 'warning',
+            'on_review': 'info',
+            'completed': 'success',
+            'returned': 'warning',
+            'conflict': 'danger',
+        }
+
+        def task_payload(task):
+            assignee = task.taken_by or task.assigned_to
+            return {
+                'id': task.id,
+                'title': task.title,
+                'date': task.date.strftime('%d.%m.%Y'),
+                'date_iso': task.date.isoformat(),
+                'due_time': task.due_time.strftime('%H:%M') if task.due_time else '',
+                'priority': task.priority,
+                'priority_label': priority_labels.get(task.priority, task.priority),
+                'status': task.status,
+                'status_label': task_status_labels.get(task.status, task.status),
+                'status_tone': task_status_tones.get(task.status, 'muted'),
+                'assignee_name': (assignee.get_full_name().strip() or assignee.username) if assignee else 'Без исполнителя',
+            }
+
+        def candidate_payload(absent_id=None):
+            absent_pos = (employee_load_map.get(absent_id) or {}).get('position', '')
+            candidates = []
+            for emp in employees:
+                if absent_id and emp['id'] == absent_id:
+                    continue
+                same_position = bool(absent_pos and emp['position'].lower() == absent_pos.lower())
+                load_score = max(0, 100 - emp['tasks'] * 15)
+                availability_bonus = 25 if not emp['absent'] else -60
+                position_bonus = 15 if same_position else 0
+                score = load_score + availability_bonus + position_bonus
+                candidates.append({
+                    **emp,
+                    'score': score,
+                    'same_position': same_position,
+                    'recommended': not emp['absent'] and score >= 85,
+                    'availability_label': 'Доступен' if not emp['absent'] else 'Отсутствует',
+                    'skill_label': 'Совпадает должность' if same_position else 'Навыки не указаны',
+                })
+            candidates.sort(key=lambda r: (-r['score'], r['tasks'], r['name']))
+            return candidates
 
         # ── Existing substitutions ─────────────────────────────────────
         for sub in Substitution.objects.filter(absent_user_id__in=user_ids).select_related(
@@ -2166,7 +2744,7 @@ def manager_substitutions(request):
                 department=department,
                 date__gte=lr.start_date,
                 date__lte=lr.end_date,
-            ).exclude(status__in=['completed', 'returned'])
+            ).exclude(status__in=['completed', 'returned']).select_related('taken_by', 'assigned_to').order_by('date', 'priority')
             tasks_count = tasks_qs.count()
             reassigned_count = tasks_qs.exclude(taken_by_id=lr.user_id).count()
 
@@ -2194,6 +2772,9 @@ def manager_substitutions(request):
                 'end_iso': lr.end_date.isoformat(),
                 'tasks_count': tasks_count,
                 'reassigned_count': reassigned_count,
+                'tasks': [task_payload(task) for task in tasks_qs],
+                'candidates': candidate_payload(lr.user_id),
+                'recommendation': (candidate_payload(lr.user_id) or [None])[0],
                 'status_code': status_code,
                 'status_label': status_label,
             })
@@ -2202,8 +2783,9 @@ def manager_substitutions(request):
         no_assignee = DepartmentTask.objects.filter(
             department=department,
             taken_by__isnull=True,
+            assigned_to__isnull=True,
             date__gte=today,
-        ).exclude(status__in=['completed', 'returned'])
+        ).exclude(status__in=['completed', 'returned']).select_related('taken_by', 'assigned_to').order_by('date', 'priority')
         no_assignee_count = no_assignee.count()
         if no_assignee_count:
             situations.append({
@@ -2215,6 +2797,9 @@ def manager_substitutions(request):
                 'end': '—',
                 'tasks_count': no_assignee_count,
                 'reassigned_count': 0,
+                'tasks': [task_payload(task) for task in no_assignee],
+                'candidates': candidate_payload(),
+                'recommendation': (candidate_payload() or [None])[0],
                 'status_code': 'needed',
                 'status_label': 'Нужен исполнитель',
                 'is_no_assignee': True,
@@ -2237,48 +2822,17 @@ def manager_substitutions(request):
             try:
                 start_d = date.fromisoformat(selected_start)
                 end_d = date.fromisoformat(selected_end)
-                priority_labels = {'high': 'Высокий', 'mid': 'Средний', 'low': 'Низкий'}
-                task_status_labels = {
-                    'awaiting_confirmation': 'Новая', 'confirmed': 'Взята',
-                    'in_progress': 'В работе', 'on_review': 'На проверке',
-                }
-                task_status_tones = {
-                    'awaiting_confirmation': 'neutral', 'confirmed': 'info',
-                    'in_progress': 'warning', 'on_review': 'warning',
-                }
                 for t in DepartmentTask.objects.filter(
                     Q(taken_by_id=selected_absent_id) | Q(assigned_to_id=selected_absent_id),
                     department=department,
                     date__gte=start_d, date__lte=end_d,
-                ).exclude(status__in=['completed', 'returned']).select_related('taken_by').order_by('date'):
-                    affected_tasks.append({
-                        'id': t.id,
-                        'title': t.title,
-                        'date': t.date.strftime('%d.%m.%Y'),
-                        'priority': t.priority,
-                        'priority_label': priority_labels.get(t.priority, t.priority),
-                        'status_label': task_status_labels.get(t.status, t.status),
-                        'status_tone': task_status_tones.get(t.status, ''),
-                        'taken_id': t.taken_by_id,
-                    })
+                ).exclude(status__in=['completed', 'returned']).select_related('taken_by', 'assigned_to').order_by('date'):
+                    affected_tasks.append(task_payload(t))
             except (ValueError, TypeError):
                 pass
 
             # ── Recommendations ────────────────────────────────────────
-            absent_pos = (employee_load_map.get(selected_absent_id) or {}).get('position', '')
-            for emp in employees:
-                if emp['id'] == selected_absent_id or emp['absent']:
-                    continue
-                score = 100
-                score -= emp['tasks'] * 15
-                same_position = absent_pos and emp['position'].lower() == absent_pos.lower()
-                if same_position:
-                    score += 20
-                emp_data = dict(emp)
-                emp_data['score'] = score
-                emp_data['same_position'] = same_position
-                recommendations.append(emp_data)
-            recommendations.sort(key=lambda r: -r['score'])
+            recommendations = candidate_payload(selected_absent_id)
 
         # ── Recent reassignment history ────────────────────────────────
         for r in TaskReassignment.objects.filter(
@@ -2310,6 +2864,7 @@ def manager_substitutions(request):
         'affected_tasks': affected_tasks,
         'recommendations': recommendations,
         'history': history,
+        'time_options': time_options,
         'error': error,
         'success': success,
         'department': department,

@@ -16,7 +16,8 @@
     <div class="hero-meta">
       <div class="meta-chip">Всего задач: {{ task_stats.total }}</div>
       <div class="meta-chip">В работе: {{ task_stats.in_progress }}</div>
-      <div class="meta-chip">Ожидают: {{ task_stats.no_assignee }}</div>
+      <div class="meta-chip">Новые: {{ task_stats.new }}</div>
+      <div class="meta-chip">Без исполнителя: {{ task_stats.no_assignee }}</div>
       {% if task_stats.overdue %}<div class="meta-chip mgr-chip--alert">Просрочено: {{ task_stats.overdue }}</div>{% endif %}
     </div>
   </div>
@@ -43,30 +44,34 @@
         <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'manager-tasks' %}">Все задачи</a>
       </div>
       <div class="mgr-stat-grid">
-        <div class="mgr-stat-card mgr-stat-card--total">
+        <a class="mgr-stat-card mgr-stat-card--total" href="{% url 'manager-tasks' %}">
           <div class="mgr-stat-value">{{ task_stats.total }}</div>
           <div class="mgr-stat-label">Всего</div>
-        </div>
-        <div class="mgr-stat-card mgr-stat-card--progress">
+        </a>
+        <a class="mgr-stat-card mgr-stat-card--pending" href="{% url 'manager-tasks' %}?status=awaiting_confirmation">
+          <div class="mgr-stat-value">{{ task_stats.new }}</div>
+          <div class="mgr-stat-label">Новые</div>
+        </a>
+        <a class="mgr-stat-card mgr-stat-card--progress" href="{% url 'manager-tasks' %}?status=active">
           <div class="mgr-stat-value">{{ task_stats.in_progress }}</div>
           <div class="mgr-stat-label">В работе</div>
-        </div>
-        <div class="mgr-stat-card mgr-stat-card--pending">
-          <div class="mgr-stat-value">{{ task_stats.no_assignee }}</div>
-          <div class="mgr-stat-label">Ожидают</div>
-        </div>
-        <div class="mgr-stat-card mgr-stat-card--review">
+        </a>
+        <a class="mgr-stat-card mgr-stat-card--review" href="{% url 'manager-tasks' %}?status=on_review">
           <div class="mgr-stat-value">{{ task_stats.on_review }}</div>
           <div class="mgr-stat-label">На проверке</div>
-        </div>
-        <div class="mgr-stat-card mgr-stat-card--done">
+        </a>
+        <a class="mgr-stat-card mgr-stat-card--done" href="{% url 'manager-tasks' %}?status=completed">
           <div class="mgr-stat-value">{{ task_stats.completed }}</div>
           <div class="mgr-stat-label">Выполнены</div>
-        </div>
-        <div class="mgr-stat-card mgr-stat-card--overdue">
+        </a>
+        <a class="mgr-stat-card mgr-stat-card--overdue" href="{% url 'manager-tasks' %}?status=overdue">
           <div class="mgr-stat-value">{{ task_stats.overdue }}</div>
           <div class="mgr-stat-label">Просрочены</div>
-        </div>
+        </a>
+        <a class="mgr-stat-card mgr-stat-card--pending" href="{% url 'manager-tasks' %}?status=unassigned">
+          <div class="mgr-stat-value">{{ task_stats.no_assignee }}</div>
+          <div class="mgr-stat-label">Без исполнителя</div>
+        </a>
       </div>
     </section>
 
@@ -126,7 +131,7 @@
       {% if team_load %}
         <div class="mgr-team-list">
           {% for emp in team_load %}
-            <div class="mgr-team-row">
+            <a class="mgr-team-row" href="{{ emp.url }}">
               <div class="mgr-team-identity">
                 <span class="mgr-load-dot mgr-load-dot--{{ emp.load_code }}" aria-hidden="true"></span>
                 <div>
@@ -143,7 +148,7 @@
                   <span class="subtle" style="font-size: 0.72rem; min-width: 2.8rem; text-align: right;">{{ emp.tasks }} зад.</span>
                 </div>
               </div>
-            </div>
+            </a>
           {% endfor %}
         </div>
       {% else %}
@@ -160,7 +165,7 @@
           <h2>Отсутствия</h2>
           <p class="subtle">Отпуска и больничные.</p>
         </div>
-        <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'manager-substitutions' %}">Замещения</a>
+        <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'manager-leave-requests' %}">Открыть заявки</a>
       </div>
 
       {% if absences.current %}

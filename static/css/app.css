@@ -235,7 +235,7 @@ a {
   right: 0;
   bottom: -1px;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(42, 122, 110, 0.35), transparent);
+  background: rgba(42, 122, 110, 0.25);
   pointer-events: none;
 }
 
@@ -943,6 +943,14 @@ a {
 
 .dashboard-hero h1 {
   font-size: 28px;
+  margin: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.hero-header > div:first-child {
+  min-width: 0;
+  flex: 1 1 280px;
 }
 
 .hero-header {
@@ -972,6 +980,9 @@ a {
   background: var(--surface-2);
   font-size: 12px;
   color: var(--muted);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-width: 100%;
 }
 
 .stats-grid {
@@ -1610,6 +1621,12 @@ body.modal-open {
   font-size: 12px;
 }
 
+.btn-xs {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 10px;
+}
+
 .status-pill {
   padding: 6px 10px;
   border-radius: 999px;
@@ -2193,7 +2210,7 @@ body.modal-open {
 .chart-bars span {
   display: block;
   border-radius: 8px;
-  background: linear-gradient(180deg, rgba(42, 122, 110, 0.8), rgba(42, 122, 110, 0.2));
+  background: rgba(42, 122, 110, 0.55);
 }
 
 .activity-legend {
@@ -2294,15 +2311,15 @@ body.modal-open {
 }
 
 .activity-bar.created {
-  background: linear-gradient(180deg, rgba(56, 189, 248, 0.92), rgba(56, 189, 248, 0.24));
+  background: rgba(56, 189, 248, 0.7);
 }
 
 .activity-bar.done {
-  background: linear-gradient(180deg, rgba(42, 122, 110, 0.92), rgba(42, 122, 110, 0.24));
+  background: rgba(42, 122, 110, 0.7);
 }
 
 .activity-bar.requests {
-  background: linear-gradient(180deg, rgba(232, 147, 35, 0.9), rgba(232, 147, 35, 0.24));
+  background: rgba(232, 147, 35, 0.7);
 }
 
 .activity-day-meta {
@@ -2635,15 +2652,15 @@ body.modal-open {
 }
 
 .resource-fill.success {
-  background: linear-gradient(90deg, rgba(42, 122, 110, 0.95), rgba(125, 168, 232, 0.95));
+  background: rgba(42, 122, 110, 0.85);
 }
 
 .resource-fill.warning {
-  background: linear-gradient(90deg, rgba(232, 147, 35, 0.95), rgba(245, 187, 71, 0.95));
+  background: rgba(232, 147, 35, 0.85);
 }
 
 .resource-fill.danger {
-  background: linear-gradient(90deg, rgba(217, 75, 75, 0.95), rgba(235, 115, 115, 0.95));
+  background: rgba(217, 75, 75, 0.85);
 }
 
 .resource-fill.muted {
@@ -2723,7 +2740,7 @@ body.modal-open {
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(42, 122, 110, 0.92), rgba(125, 168, 232, 0.92));
+  background: rgba(42, 122, 110, 0.85);
 }
 
 .load-chart-meta {
@@ -3425,7 +3442,7 @@ body.modal-open {
   display: grid;
   gap: 20px;
   padding: 28px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.08));
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .profile-topbar {

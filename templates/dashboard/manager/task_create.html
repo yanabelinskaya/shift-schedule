@@ -27,7 +27,7 @@
             <p class="subtle">{{ form_subtitle }}</p>
           </div>
         </div>
-        <form class="task-form" method="post">
+        <form class="task-form" method="post" enctype="multipart/form-data">
           {% csrf_token %}
           <label class="task-title-field">
             Название
@@ -43,8 +43,7 @@
               Тип задачи
               <div class="custom-select" data-custom-select>
                 <select name="task_type" data-task-type>
-                  <option value="employee" {% if initial.task_type == 'employee' %}selected{% endif %}>Сотруднику</option>
-                  <option value="slot" {% if initial.task_type == 'slot' %}selected{% endif %}>Для слота</option>
+                  <option value="employee" {% if initial.task_type == 'employee' %}selected{% endif %}>Задача команды</option>
                   <option value="department" {% if initial.task_type == 'department' %}selected{% endif %}>Для отдела</option>
                 </select>
                 <button class="custom-select-trigger" type="button" data-select-trigger>
@@ -62,9 +61,29 @@
               Сотрудник
               <div class="custom-select" data-custom-select>
                 <select name="assigned_to" data-task-employee>
-                  <option value="">Выберите сотрудника</option>
+                  <option value="">Без исполнителя</option>
                   {% for employee in employees %}
                     <option value="{{ employee.id }}" {% if employee.id|stringformat:'s' == initial.employee|stringformat:'s' %}selected{% endif %}>{{ employee.name }}</option>
+                  {% endfor %}
+                </select>
+                <button class="custom-select-trigger" type="button" data-select-trigger>
+                  <span data-select-label></span>
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="M5 7l5 6 5-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </button>
+                <div class="custom-select-menu" data-select-menu>
+                  <div class="custom-select-options" data-select-options></div>
+                </div>
+              </div>
+            </label>
+            <label>
+              Спринт
+              <div class="custom-select" data-custom-select>
+                <select name="sprint">
+                  <option value="">Без спринта</option>
+                  {% for sprint in sprints %}
+                    <option value="{{ sprint.id }}" {% if sprint.id|stringformat:'s' == initial.sprint|stringformat:'s' %}selected{% endif %}>{{ sprint.title }}</option>
                   {% endfor %}
                 </select>
                 <button class="custom-select-trigger" type="button" data-select-trigger>
@@ -101,6 +120,7 @@
               Приоритет
               <div class="custom-select" data-custom-select>
                 <select name="priority" data-task-priority>
+                  <option value="critical" {% if initial.priority == 'critical' %}selected{% endif %}>Критический</option>
                   <option value="high" {% if initial.priority == 'high' %}selected{% endif %}>Высокий</option>
                   <option value="mid" {% if initial.priority == 'mid' %}selected{% endif %}>Средний</option>
                   <option value="low" {% if initial.priority == 'low' %}selected{% endif %}>Низкий</option>
@@ -116,14 +136,33 @@
                 </div>
               </div>
             </label>
-            <div class="task-time-row">
+            <label>
+              Время дедлайна
+              <div class="custom-select" data-custom-select>
+                <select name="due_time" data-task-due-time>
+                  <option value="">До конца дня</option>
+                  {% for option in time_options %}
+                    <option value="{{ option }}" {% if option == initial.due_time %}selected{% endif %}>{{ option }}</option>
+                  {% endfor %}
+                </select>
+                <button class="custom-select-trigger" type="button" data-select-trigger>
+                  <span data-select-label></span>
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="M5 7l5 6 5-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </button>
+                <div class="custom-select-menu" data-select-menu>
+                  <div class="custom-select-options" data-select-options></div>
+                </div>
+              </div>
+            </label>
+            {% if is_edit %}
               <label>
-                Начало
+                Статус
                 <div class="custom-select" data-custom-select>
-                  <select name="start_time" data-task-start>
-                    <option value="">—</option>
-                    {% for option in time_options %}
-                      <option value="{{ option }}" {% if option == initial.start_time %}selected{% endif %}>{{ option }}</option>
+                  <select name="status">
+                    {% for option in status_options %}
+                      <option value="{{ option.value }}" {% if option.value == initial.status %}selected{% endif %}>{{ option.label }}</option>
                     {% endfor %}
                   </select>
                   <button class="custom-select-trigger" type="button" data-select-trigger>
@@ -137,27 +176,18 @@
                   </div>
                 </div>
               </label>
-              <label>
-                Конец
-                <div class="custom-select" data-custom-select>
-                  <select name="end_time" data-task-end>
-                    <option value="">—</option>
-                    {% for option in time_options %}
-                      <option value="{{ option }}" {% if option == initial.end_time %}selected{% endif %}>{{ option }}</option>
-                    {% endfor %}
-                  </select>
-                  <button class="custom-select-trigger" type="button" data-select-trigger>
-                    <span data-select-label></span>
-                    <svg viewBox="0 0 20 20" aria-hidden="true">
-                      <path d="M5 7l5 6 5-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
-                    </svg>
-                  </button>
-                  <div class="custom-select-menu" data-select-menu>
-                    <div class="custom-select-options" data-select-options></div>
-                  </div>
-                </div>
-              </label>
-            </div>
+            {% endif %}
+          </div>
+
+          <div class="task-create-grid task-create-grid-secondary">
+            <label>
+              Комментарий
+              <textarea class="control-input" rows="3" name="comment" placeholder="Инструкции, контекст или первый комментарий в задаче">{{ initial.comment }}</textarea>
+            </label>
+            <label class="task-file-field">
+              Файлы / документы
+              <input class="control-input" type="file" name="attachments" multiple />
+            </label>
           </div>
 
           {% if error_message %}

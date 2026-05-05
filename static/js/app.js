@@ -425,11 +425,13 @@
       }
 
       panel.append(grid);
-      prev.addEventListener("click", () => {
+      prev.addEventListener("click", (event) => {
+        event.stopPropagation();
         state.viewDate = new Date(year, month - 1, 1);
         renderCalendar(panel, state);
       });
-      next.addEventListener("click", () => {
+      next.addEventListener("click", (event) => {
+        event.stopPropagation();
         state.viewDate = new Date(year, month + 1, 1);
         renderCalendar(panel, state);
       });
@@ -488,6 +490,9 @@
           input.value = formatCustomDateDisplay(parsed);
           isoInput.value = formatCustomDateIso(parsed);
         }
+      });
+      panel.addEventListener("click", (event) => {
+        event.stopPropagation();
       });
     });
 
@@ -5909,7 +5914,7 @@
 
   // ── SPA navigation for employee shell ───────────────────────────────
   const initEmployeeChat = () => {
-    const root = document.querySelector("[data-employee-chat]");
+    const root = document.querySelector("[data-employee-chat], [data-manager-chat]");
     if (!root) return;
 
     const taskItems = Array.from(root.querySelectorAll("[data-chat-task-item]"));

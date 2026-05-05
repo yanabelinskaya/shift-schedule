@@ -1,49 +1,57 @@
-<article class="sprint-card">
-  <header class="sprint-card-head">
-    <div class="sprint-card-title">
-      <h3>{{ sprint.title }}</h3>
+<article class="sprint-board-card{% if sprint.status == 'active' %} is-active{% elif sprint.status == 'completed' %} is-completed{% endif %}">
+  <div class="sprint-board-card-top">
+    <div>
       <span class="status-pill {{ sprint.status_tone }}">{{ sprint.status_label }}</span>
+      <h3>{{ sprint.title }}</h3>
+      <p>{{ sprint.period }}</p>
     </div>
-    <p class="subtle sprint-card-period">{{ sprint.period }}</p>
-  </header>
+    <a class="sprint-card-open" href="{% url 'manager-sprint-detail' sprint.id %}" aria-label="Открыть спринт {{ sprint.title }}">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M7 17 17 7M9 7h8v8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </a>
+  </div>
+
   {% if sprint.goal %}
-    <p class="sprint-card-goal">{{ sprint.goal|truncatechars:140 }}</p>
+    <p class="sprint-board-goal">{{ sprint.goal|truncatechars:150 }}</p>
+  {% else %}
+    <p class="sprint-board-goal is-muted">Цель спринта ещё не заполнена.</p>
   {% endif %}
-  <div class="sprint-card-stats">
-    <div class="sprint-stat">
-      <span class="sprint-stat-label">Задач</span>
-      <span class="sprint-stat-value">{{ sprint.task_count }}</span>
+
+  <div class="sprint-board-stats">
+    <div>
+      <span>Задач</span>
+      <strong>{{ sprint.task_count }}</strong>
     </div>
-    <div class="sprint-stat">
-      <span class="sprint-stat-label">Выполнено</span>
-      <span class="sprint-stat-value">{{ sprint.done_count }}</span>
+    <div>
+      <span>Готово</span>
+      <strong>{{ sprint.done_count }}</strong>
     </div>
-    <div class="sprint-stat">
-      <span class="sprint-stat-label">Прогресс</span>
-      <span class="sprint-stat-value">{{ sprint.progress }}%</span>
+    <div>
+      <span>Прогресс</span>
+      <strong>{{ sprint.progress }}%</strong>
     </div>
   </div>
+
   <div class="sprint-card-track">
-    <div class="sprint-progress">
-      <div class="sprint-progress-bar" style="width: {{ sprint.progress }}%;"></div>
-    </div>
     <div class="sprint-track-labels">
       <span>Выполнение</span>
       <strong>{{ sprint.progress }}%</strong>
     </div>
+    <div class="sprint-progress">
+      <div class="sprint-progress-bar" style="width: {{ sprint.progress }}%;"></div>
+    </div>
   </div>
+
   {% if sprint.status == 'active' %}
     <div class="sprint-card-track">
+      <div class="sprint-track-labels">
+        <span>Ход периода</span>
+        <strong>{{ sprint.time_progress }}%</strong>
+      </div>
       <div class="sprint-progress sprint-progress-time">
         <div class="sprint-progress-bar is-time" style="width: {{ sprint.time_progress }}%;"></div>
       </div>
-      <div class="sprint-track-labels">
-        <span>Время спринта</span>
-        <strong>{{ sprint.time_progress }}%</strong>
-      </div>
     </div>
   {% endif %}
-  <div class="sprint-card-actions">
-    <a class="btn btn-ghost btn-inline btn-xs" href="{% url 'manager-sprint-detail' sprint.id %}">Открыть</a>
-  </div>
 </article>

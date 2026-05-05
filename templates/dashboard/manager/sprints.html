@@ -1,108 +1,141 @@
 {% extends 'dashboard/manager.html' %}
 
 {% block content %}
-  <div class="card dashboard-hero fade-up">
-    <div class="hero-header">
-      <div>
-        <h1>{{ page_title }}</h1>
-        <p class="subtle">{{ page_subtitle }} · планирование задач на конкретный период</p>
-      </div>
-      <div class="hero-actions">
-        <a class="btn btn-primary btn-inline" href="{% url 'manager-sprint-create' %}">Создать спринт</a>
-      </div>
-    </div>
-    {% if department %}
-      <div class="sprint-overview">
-        <div class="sprint-overview-item is-active">
-          <span>Активные</span>
-          <strong>{{ active_sprints|length }}</strong>
+  <div class="sprint-page">
+    <section class="card sprint-hero fade-up">
+      <div class="sprint-hero-main">
+        <div>
+          <div class="sprint-eyebrow">Планирование отдела</div>
+          <h1>{{ page_title }}</h1>
+          <p>{{ page_subtitle }} · спринты, задачи, загрузка команды и прогресс в одном месте.</p>
         </div>
-        <div class="sprint-overview-item">
-          <span>Будущие</span>
-          <strong>{{ upcoming_sprints|length }}</strong>
-        </div>
-        <div class="sprint-overview-item">
-          <span>Завершённые</span>
-          <strong>{{ completed_sprints|length }}</strong>
-        </div>
-        <div class="sprint-overview-item">
-          <span>Всего</span>
-          <strong>{{ sprints_total }}</strong>
+        <div class="sprint-hero-actions">
+          <a class="btn btn-primary btn-inline" href="{% url 'manager-sprint-create' %}">Создать спринт</a>
+          <a class="btn btn-ghost btn-inline" href="{% url 'manager-task-create' %}?next={{ request.get_full_path|urlencode }}">Создать задачу</a>
         </div>
       </div>
+
+      {% if department %}
+        <div class="sprint-metric-grid">
+          <div class="sprint-metric is-active">
+            <span>Активные</span>
+            <strong>{{ active_sprints|length }}</strong>
+          </div>
+          <div class="sprint-metric">
+            <span>Будущие</span>
+            <strong>{{ upcoming_sprints|length }}</strong>
+          </div>
+          <div class="sprint-metric">
+            <span>Завершённые</span>
+            <strong>{{ completed_sprints|length }}</strong>
+          </div>
+          <div class="sprint-metric">
+            <span>Всего</span>
+            <strong>{{ sprints_total }}</strong>
+          </div>
+        </div>
+      {% endif %}
+    </section>
+
+    {% if not department %}
+      <section class="card sprint-empty-state fade-up">
+        <div class="sprint-empty-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11A2.5 2.5 0 0 1 17.5 20h-11A2.5 2.5 0 0 1 4 17.5v-11Z" fill="none" stroke="currentColor" stroke-width="1.8"/>
+            <path d="M8 9h8M8 13h5M8 17h3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div>
+          <div class="sprint-empty-badge">Отдел не назначен</div>
+          <h2>Нельзя планировать спринты без отдела</h2>
+          <p class="subtle">Администратор должен назначить вам отдел. После этого здесь появятся задачи и планирование спринтов.</p>
+        </div>
+      </section>
+    {% elif sprints_total == 0 %}
+      <section class="card sprint-empty-state sprint-empty-state--wide fade-up">
+        <div class="sprint-empty-visual" aria-hidden="true">
+          <div class="sprint-empty-board">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </div>
+        <div class="sprint-empty-content">
+          <div class="sprint-empty-badge">Спринтов пока нет</div>
+          <h2>Соберите первый спринт для команды</h2>
+          <p class="subtle">Задайте период, сформулируйте цель и добавьте задачи. После запуска менеджер увидит прогресс, неназначенные задачи и загрузку сотрудников.</p>
+          <div class="sprint-empty-actions">
+            <a class="btn btn-primary btn-inline" href="{% url 'manager-sprint-create' %}">Создать первый спринт</a>
+            <a class="btn btn-ghost btn-inline" href="{% url 'manager-task-create' %}?next={{ request.get_full_path|urlencode }}">Создать задачу</a>
+          </div>
+          <div class="sprint-empty-steps">
+            <div>
+              <strong>1</strong>
+              <span>Период и цель</span>
+            </div>
+            <div>
+              <strong>2</strong>
+              <span>Задачи отдела</span>
+            </div>
+            <div>
+              <strong>3</strong>
+              <span>Исполнители и прогресс</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    {% else %}
+      {% if active_sprints %}
+        <section class="sprint-lane sprint-lane--active fade-up">
+          <div class="sprint-lane-header">
+            <div class="sprint-lane-heading">
+              <span class="sprint-lane-eyebrow">Главный фокус</span>
+              <h2>Активный спринт</h2>
+              <p class="subtle">Что команда выполняет прямо сейчас.</p>
+            </div>
+            <span class="info-chip">{{ active_sprints|length }}</span>
+          </div>
+          <div class="sprint-card-grid sprint-card-grid--active">
+            {% for sprint in active_sprints %}
+              {% include 'dashboard/manager/_sprint_card.html' with sprint=sprint %}
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
+
+      {% if upcoming_sprints %}
+        <section class="sprint-lane fade-up">
+          <div class="sprint-lane-header">
+            <div>
+              <h2>Будущие спринты</h2>
+              <p class="subtle">Планы, которые ещё можно спокойно доукомплектовать.</p>
+            </div>
+            <span class="info-chip">{{ upcoming_sprints|length }}</span>
+          </div>
+          <div class="sprint-card-grid">
+            {% for sprint in upcoming_sprints %}
+              {% include 'dashboard/manager/_sprint_card.html' with sprint=sprint %}
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
+
+      {% if completed_sprints %}
+        <section class="sprint-lane fade-up">
+          <div class="sprint-lane-header">
+            <div>
+              <h2>Завершённые спринты</h2>
+              <p class="subtle">Архив результатов и закрытых периодов.</p>
+            </div>
+            <span class="info-chip">{{ completed_sprints|length }}</span>
+          </div>
+          <div class="sprint-card-grid">
+            {% for sprint in completed_sprints %}
+              {% include 'dashboard/manager/_sprint_card.html' with sprint=sprint %}
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
     {% endif %}
   </div>
-
-  {% if not department %}
-    <section class="card section-block fade-up" style="margin-top: 1rem;">
-      <div class="task-empty-hero">
-        <h2>Отдел не назначен</h2>
-        <p class="subtle">Обратитесь к администратору.</p>
-      </div>
-    </section>
-  {% elif sprints_total == 0 %}
-    <section class="card section-block fade-up" style="margin-top: 1rem;">
-      <div class="task-empty-hero">
-        <div class="task-empty-badge">Спринтов нет</div>
-        <h2>Создайте первый спринт</h2>
-        <p class="subtle">Добавьте спринт, задайте даты и распределите задачи по нему.</p>
-        <div class="task-empty-points">
-          <div class="task-empty-point">Создайте спринт с датами.</div>
-          <div class="task-empty-point">Добавьте задачи в спринт.</div>
-          <div class="task-empty-point">Запустите спринт — сотрудники увидят задачи и смогут их взять.</div>
-        </div>
-      </div>
-    </section>
-  {% else %}
-    {% if active_sprints %}
-      <section class="card section-block sprint-section sprint-section-active fade-up">
-        <div class="section-header">
-          <div>
-            <h2>Активный спринт</h2>
-            <p class="subtle">Идёт прямо сейчас — отслеживайте прогресс.</p>
-          </div>
-          <span class="info-chip">{{ active_sprints|length }}</span>
-        </div>
-        <div class="sprint-grid">
-          {% for sprint in active_sprints %}
-            {% include 'dashboard/manager/_sprint_card.html' with sprint=sprint %}
-          {% endfor %}
-        </div>
-      </section>
-    {% endif %}
-
-    {% if upcoming_sprints %}
-      <section class="card section-block sprint-section fade-up">
-        <div class="section-header">
-          <div>
-            <h2>Будущие спринты</h2>
-            <p class="subtle">В планировании — добавьте задачи и запустите вовремя.</p>
-          </div>
-          <span class="info-chip">{{ upcoming_sprints|length }}</span>
-        </div>
-        <div class="sprint-grid">
-          {% for sprint in upcoming_sprints %}
-            {% include 'dashboard/manager/_sprint_card.html' with sprint=sprint %}
-          {% endfor %}
-        </div>
-      </section>
-    {% endif %}
-
-    {% if completed_sprints %}
-      <section class="card section-block sprint-section fade-up">
-        <div class="section-header">
-          <div>
-            <h2>Завершённые спринты</h2>
-            <p class="subtle">Архив — чтобы посмотреть итоги.</p>
-          </div>
-          <span class="info-chip">{{ completed_sprints|length }}</span>
-        </div>
-        <div class="sprint-grid">
-          {% for sprint in completed_sprints %}
-            {% include 'dashboard/manager/_sprint_card.html' with sprint=sprint %}
-          {% endfor %}
-        </div>
-      </section>
-    {% endif %}
-  {% endif %}
 {% endblock %}

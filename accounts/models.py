@@ -355,6 +355,7 @@ class DepartmentTask(models.Model):
         ("department", "Для отдела"),
     ]
     PRIORITY_CHOICES = [
+        ("critical", "Критический"),
         ("high", "Высокий"),
         ("mid", "Средний"),
         ("low", "Низкий"),
@@ -523,6 +524,7 @@ class LeaveRequest(models.Model):
         related_name="reviewed_leave_requests",
     )
     reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_comment = models.TextField(blank=True)
     rejection_reason = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

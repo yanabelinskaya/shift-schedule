@@ -29,6 +29,10 @@
     <form class="filter-bar" data-task-filters>
       <input type="hidden" name="week" value="{{ week_offset }}" />
       <div class="request-filters">
+        <div class="filter-field filter-field-search">
+          <span class="filter-label">Поиск</span>
+          <input class="control-input" type="search" name="q" value="{{ filters.q }}" placeholder="Название задачи" />
+        </div>
         <div class="filter-field">
           <span class="filter-label">Сотрудник</span>
           <div class="custom-select" data-custom-select>
@@ -54,11 +58,16 @@
           <div class="custom-select" data-custom-select>
             <select name="status">
               <option value="all" {% if filters.status == 'all' %}selected{% endif %}>Все статусы</option>
-              <option value="awaiting_confirmation" {% if filters.status == 'awaiting_confirmation' %}selected{% endif %}>Ожидает подтверждения</option>
-              <option value="confirmed" {% if filters.status == 'confirmed' %}selected{% endif %}>Подтверждено</option>
-              <option value="conflict" {% if filters.status == 'conflict' %}selected{% endif %}>Конфликт</option>
-              <option value="in_progress" {% if filters.status == 'in_progress' %}selected{% endif %}>В процессе</option>
+              <option value="unassigned" {% if filters.status == 'unassigned' %}selected{% endif %}>Без исполнителя</option>
+              <option value="awaiting_confirmation" {% if filters.status == 'awaiting_confirmation' %}selected{% endif %}>Новые</option>
+              <option value="active" {% if filters.status == 'active' %}selected{% endif %}>В работе</option>
+              <option value="in_progress" {% if filters.status == 'in_progress' %}selected{% endif %}>Только в работе</option>
+              <option value="on_review" {% if filters.status == 'on_review' %}selected{% endif %}>На проверке</option>
               <option value="completed" {% if filters.status == 'completed' %}selected{% endif %}>Выполнено</option>
+              <option value="overdue" {% if filters.status == 'overdue' %}selected{% endif %}>Просроченные</option>
+              <option value="returned" {% if filters.status == 'returned' %}selected{% endif %}>На доработке</option>
+              <option value="confirmed" {% if filters.status == 'confirmed' %}selected{% endif %}>Назначенные</option>
+              <option value="conflict" {% if filters.status == 'conflict' %}selected{% endif %}>Конфликт</option>
             </select>
             <button class="custom-select-trigger" type="button" data-select-trigger>
               <span data-select-label></span>
@@ -76,9 +85,30 @@
           <div class="custom-select" data-custom-select>
             <select name="priority">
               <option value="all" {% if filters.priority == 'all' %}selected{% endif %}>Любой</option>
+              <option value="critical" {% if filters.priority == 'critical' %}selected{% endif %}>Критический</option>
               <option value="high" {% if filters.priority == 'high' %}selected{% endif %}>Высокий</option>
               <option value="mid" {% if filters.priority == 'mid' %}selected{% endif %}>Средний</option>
               <option value="low" {% if filters.priority == 'low' %}selected{% endif %}>Низкий</option>
+            </select>
+            <button class="custom-select-trigger" type="button" data-select-trigger>
+              <span data-select-label></span>
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M5 7l5 6 5-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+            <div class="custom-select-menu" data-select-menu>
+              <div class="custom-select-options" data-select-options></div>
+            </div>
+          </div>
+        </div>
+        <div class="filter-field">
+          <span class="filter-label">Спринт</span>
+          <div class="custom-select" data-custom-select>
+            <select name="sprint">
+              <option value="all" {% if filters.sprint == 'all' %}selected{% endif %}>Все спринты</option>
+              {% for sprint in sprints %}
+                <option value="{{ sprint.id }}" {% if sprint.id == filters.sprint %}selected{% endif %}>{{ sprint.title }}</option>
+              {% endfor %}
             </select>
             <button class="custom-select-trigger" type="button" data-select-trigger>
               <span data-select-label></span>
@@ -99,11 +129,94 @@
       </div>
     </form>
 
+    <section class="card section-block task-board-section">
+      <div class="section-header">
+        <div>
+          <h2>Задачи команды</h2>
+          <p class="subtle">Все задачи отдела с исполнителями, спринтами, файлами и активностью в чате.</p>
+        </div>
+        <span class="info-chip">{{ tasks|length }}</span>
+      </div>
+      {% if tasks %}
+        <div class="manager-task-card-grid">
+          {% for task in tasks %}
+            <article class="manager-task-card{% if task.is_overdue %} is-overdue{% endif %}">
+              <div class="manager-task-card-top">
+                <span class="status-pill {{ task.status_tone }}">{{ task.status_label }}</span>
+                <span class="task-priority-badge is-{{ task.priority }}">
+                  <span class="priority-dot is-{{ task.priority }}"></span>
+                  {{ task.priority_label }}
+                </span>
+              </div>
+              <div class="manager-task-card-main">
+                <h3><a href="{% url 'manager-task-detail' task.id %}?next={{ request.get_full_path|urlencode }}">{{ task.title }}</a></h3>
+                <p>{{ task.short_description|default:"Описание не добавлено." }}</p>
+              </div>
+              <div class="manager-task-card-meta">
+                <div>
+                  <span>Дедлайн</span>
+                  <strong>{{ task.due_label }}</strong>
+                </div>
+                <div>
+                  <span>Исполнитель</span>
+                  <strong>{{ task.assignee }}</strong>
+                </div>
+                <div>
+                  <span>Спринт</span>
+                  <strong>{{ task.sprint_title }}</strong>
+                </div>
+              </div>
+              <div class="manager-task-card-footer">
+                <div class="task-card-signals">
+                  <span title="Сообщения">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8A2.5 2.5 0 0 1 17.5 16H10l-4.5 4v-4H6.5A2.5 2.5 0 0 1 4 13.5v-8Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+                      <path d="M8 8.5h8M8 11.5h5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+                    </svg>
+                    {{ task.messages_count }}
+                  </span>
+                  <span title="Файлы">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M8 12.5l5.8-5.8a3 3 0 0 1 4.2 4.2l-7.2 7.2a4 4 0 0 1-5.7-5.7l7.1-7.1" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    {{ task.files_count }}
+                  </span>
+                </div>
+                <div class="task-row-actions">
+                  <a class="icon-action" href="{% url 'manager-task-detail' task.id %}?next={{ request.get_full_path|urlencode }}" title="Открыть">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M4 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                      <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.6" />
+                    </svg>
+                  </a>
+                  <a class="icon-action" href="{% url 'manager-task-edit' task.id %}?next={{ request.get_full_path|urlencode }}" title="Редактировать">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M4 20h4l10-10-4-4L4 16v4zM14 6l4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                  </a>
+                  <button class="icon-action danger" type="button" data-task-delete data-delete-url="{% url 'api-manager-task-detail' task.id %}" title="Удалить">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M5 7h14M9 7V5h6v2M9 10v7M15 10v7M7 7l1 12h8l1-12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty-state">
+          <h3>Задач не найдено</h3>
+          <p class="subtle">Измените фильтры или создайте новую задачу для команды.</p>
+        </div>
+      {% endif %}
+    </section>
+
     <section class="card section-block">
       <div class="section-header">
         <div>
           <h2>План недели</h2>
-          <p class="subtle">Слоты, задачи и быстрые назначения по сотрудникам.</p>
+          <p class="subtle">Кто отсутствует на этой неделе — больничные и отпуска по дням.</p>
         </div>
         <div
           class="week-picker"
@@ -200,8 +313,8 @@
         </div>
       {% else %}
         <div class="empty-state">
-          <h3>Нет сотрудников</h3>
-          <p class="subtle">Назначьте сотрудников на отдел, чтобы планировать задачи.</p>
+          <h3>На этой неделе все на месте</h3>
+          <p class="subtle">Здесь появятся отпуска и больничные, когда они будут оформлены.</p>
         </div>
       {% endif %}
     </section>

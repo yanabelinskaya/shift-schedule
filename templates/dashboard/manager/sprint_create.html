@@ -1,43 +1,57 @@
 {% extends 'dashboard/manager.html' %}
 
 {% block content %}
-  <div class="card dashboard-hero fade-up">
-    <div class="hero-header">
-      <div>
-        <h1>{{ page_title }}</h1>
-        <p class="subtle">{{ page_subtitle }}</p>
+  <div class="sprint-page">
+    <section class="card sprint-hero sprint-create-hero fade-up">
+      <div class="sprint-hero-main">
+        <div>
+          <div class="sprint-eyebrow">Новый период работы</div>
+          <h1>{{ page_title }}</h1>
+          <p>Создайте понятный фокус для команды: цель, даты и набор задач, которые нужно довести до результата.</p>
+        </div>
+        <div class="sprint-hero-actions">
+          <a class="btn btn-ghost btn-inline" href="{% url 'manager-sprints' %}">Назад к спринтам</a>
+        </div>
       </div>
-      <div class="hero-actions">
-        <a class="btn btn-ghost btn-inline" href="{% url 'manager-sprints' %}">Назад к спринтам</a>
-      </div>
-    </div>
-  </div>
-
-  {% if not department %}
-    <section class="card section-block fade-up" style="margin-top: 1rem;">
-      <div class="form-message is-error">Отдел не назначен. Обратитесь к администратору.</div>
     </section>
-  {% else %}
-    <form method="post" class="form-stack">
-      {% csrf_token %}
-      <div class="sprint-create-layout">
 
-        <section class="card section-block sprint-form-card fade-up">
+    {% if not department %}
+      <section class="card sprint-empty-state fade-up">
+        <div class="sprint-empty-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11A2.5 2.5 0 0 1 17.5 20h-11A2.5 2.5 0 0 1 4 17.5v-11Z" fill="none" stroke="currentColor" stroke-width="1.8"/>
+            <path d="M8 9h8M8 13h5M8 17h3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div>
+          <div class="sprint-empty-badge">Отдел не назначен</div>
+          <h2>Создание спринта недоступно</h2>
+          <p class="subtle">Администратор должен назначить вам отдел, чтобы вы могли планировать задачи команды.</p>
+        </div>
+      </section>
+    {% else %}
+      <form method="post" class="sprint-create-shell">
+        {% csrf_token %}
+
+        <section class="card sprint-create-panel fade-up">
+          <div class="sprint-panel-header">
+            <div class="sprint-panel-step">1</div>
+            <div>
+              <h2>Основа спринта</h2>
+              <p class="subtle">Название, цель и границы периода.</p>
+            </div>
+          </div>
+
           {% if error %}
-            <div class="form-message is-error" style="margin-bottom: 1rem;">{{ error }}</div>
+            <div class="form-message is-error">{{ error }}</div>
           {% endif %}
 
-          <div class="form-group">
-            <label class="form-label" for="title">Название спринта</label>
-            <input class="control-input" type="text" id="title" name="title" value="{{ initial.title }}" placeholder="Спринт 1, Май 2026..." required autofocus>
-          </div>
+          <div class="sprint-form-grid">
+            <div class="form-group sprint-title-field">
+              <label class="form-label" for="title">Название спринта</label>
+              <input class="control-input" type="text" id="title" name="title" value="{{ initial.title }}" placeholder="Например: Майский релиз" required autofocus>
+            </div>
 
-          <div class="form-group">
-            <label class="form-label" for="goal">Цель спринта</label>
-            <textarea class="control-input" id="goal" name="goal" rows="4" placeholder="Например: доработать модуль задач и закрыть критичные замечания">{{ initial.goal }}</textarea>
-          </div>
-
-          <div class="sprint-date-grid">
             <div class="form-group">
               <label class="form-label" for="start_date">Дата начала</label>
               <div class="custom-date sprint-date-picker" data-date-picker>
@@ -51,6 +65,7 @@
                 <span class="date-panel" data-date-panel hidden></span>
               </div>
             </div>
+
             <div class="form-group">
               <label class="form-label" for="end_date">Дата окончания</label>
               <div class="custom-date sprint-date-picker" data-date-picker>
@@ -64,49 +79,57 @@
                 <span class="date-panel" data-date-panel hidden></span>
               </div>
             </div>
-          </div>
 
-          <div class="form-actions">
-            <button class="btn btn-primary btn-inline" type="submit">Создать спринт</button>
-            <a class="btn btn-ghost btn-inline" href="{% url 'manager-sprints' %}">Отмена</a>
+            <div class="form-group sprint-goal-field">
+              <label class="form-label" for="goal">Цель спринта</label>
+              <textarea class="control-input" id="goal" name="goal" rows="5" placeholder="Например: закрыть критичные задачи по модулю смен и подготовить релиз">{{ initial.goal }}</textarea>
+            </div>
           </div>
         </section>
 
-        <section class="card section-block sprint-picker-card fade-up">
-          <div class="section-header">
+        <section class="card sprint-create-panel fade-up">
+          <div class="sprint-panel-header">
+            <div class="sprint-panel-step">2</div>
             <div>
-              <h2>Задачи в спринт</h2>
-              <p class="subtle">Отметьте задачи, которые сразу попадут в спринт.</p>
+              <h2>Задачи</h2>
+              <p class="subtle">Можно добавить сейчас или позже со страницы спринта.</p>
             </div>
             <span class="info-chip">{{ available_tasks|length }}</span>
           </div>
 
           {% if available_tasks %}
-            <div class="sprint-task-picker">
+            <div class="sprint-task-picker sprint-task-picker--large">
               {% for task in available_tasks %}
-                <label class="task-list-item sprint-task-option">
+                <label class="sprint-task-select-card">
                   <input type="checkbox" name="task_ids" value="{{ task.id }}" {% if task.id in initial.task_ids %}checked{% endif %}>
-                  <div class="task-list-main">
-                    <div class="task-card-title">
-                      <span class="priority-dot is-{{ task.priority }}" aria-hidden="true"></span>
-                      <h3>{{ task.title }}</h3>
-                    </div>
-                    <div class="task-list-meta">
-                      <span class="subtle">{{ task.priority_label }}</span>
-                      {% if task.taken_name %}<span class="info-chip">{{ task.taken_name }}</span>{% endif %}
-                    </div>
-                  </div>
+                  <span class="sprint-checkmark" aria-hidden="true"></span>
+                  <span class="priority-dot is-{{ task.priority }}" aria-hidden="true"></span>
+                  <span class="sprint-task-select-body">
+                    <strong>{{ task.title }}</strong>
+                    <span>
+                      {{ task.priority_label }}
+                      {% if task.taken_name %} · {{ task.taken_name }}{% else %} · без исполнителя{% endif %}
+                    </span>
+                  </span>
                 </label>
               {% endfor %}
             </div>
           {% else %}
-            <div class="task-empty" style="padding: 1rem; text-align: center;">
-              <p class="subtle">Нет свободных задач — добавите их позже.</p>
+            <div class="sprint-mini-empty">
+              <strong>Свободных задач нет</strong>
+              <span>Создайте спринт сейчас, а задачи добавите позже.</span>
+              <a class="btn btn-ghost btn-inline btn-sm" href="{% url 'manager-task-create' %}?next={{ request.get_full_path|urlencode }}">Создать задачу</a>
             </div>
           {% endif %}
         </section>
 
-      </div>
-    </form>
-  {% endif %}
+        <section class="card sprint-create-summary fade-up">
+          <div class="sprint-create-actions">
+            <button class="btn btn-primary btn-inline" type="submit">Создать спринт</button>
+            <a class="btn btn-ghost btn-inline" href="{% url 'manager-sprints' %}">Отмена</a>
+          </div>
+        </section>
+      </form>
+    {% endif %}
+  </div>
 {% endblock %}
