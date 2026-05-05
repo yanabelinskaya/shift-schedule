@@ -22,7 +22,6 @@
   <div class="tab-bar">
     <a class="tab-pill{% if active_tab == 'users' %} active{% endif %}" href="{% url 'admin-users' %}">Пользователи</a>
     <a class="tab-pill{% if active_tab == 'departments' %} active{% endif %}" href="{% url 'admin-departments' %}">Отделы</a>
-    <a class="tab-pill{% if active_tab == 'settings' %} active{% endif %}" href="{% url 'admin-settings' %}">Глобальные настройки</a>
     <a class="tab-pill{% if active_tab == 'reports' %} active{% endif %}" href="{% url 'admin-reports' %}">Отчеты компании</a>
     <a class="tab-pill{% if active_tab == 'payroll' %} active{% endif %}" href="{% url 'admin-payroll' %}">Отчеты</a>
     <a class="tab-pill{% if active_tab == 'system' %} active{% endif %}" href="{% url 'admin-system' %}">Система</a>
