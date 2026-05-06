@@ -18,6 +18,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.templatetags.static import static as static_url
+from django.http import HttpResponse
 from django.urls import include, path
 from django.views.generic.base import RedirectView
 from accounts.web_views import login_view
@@ -25,6 +26,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, Spec
 from rest_framework.permissions import IsAuthenticated
 
 urlpatterns = [
+    path('healthz', lambda request: HttpResponse('ok', content_type='text/plain'), name='healthz'),
     path('', login_view, name='login'),
     path('login/', login_view, name='login-alt'),
     path('favicon.ico', RedirectView.as_view(url=static_url('favicon.ico'), permanent=True), name='favicon'),

@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 import os
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -49,6 +50,34 @@ def _get_bool(name: str, default: bool = False) -> bool:
 def _get_csv_list(name: str) -> list[str]:
     raw = os.getenv(name, "")
     return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _get_database_config() -> dict[str, object]:
+    database_url = os.getenv("DATABASE_URL", "").strip()
+    if database_url:
+        parsed = urlparse(database_url)
+        if parsed.scheme not in {"postgres", "postgresql"}:
+            raise ImproperlyConfigured("DATABASE_URL must use postgres:// or postgresql://.")
+        return {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": unquote(parsed.path.lstrip("/")),
+            "USER": unquote(parsed.username or ""),
+            "PASSWORD": unquote(parsed.password or ""),
+            "HOST": parsed.hostname or "",
+            "PORT": str(parsed.port or 5432),
+            "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
+            "CONN_HEALTH_CHECKS": _get_bool("DB_CONN_HEALTH_CHECKS", True),
+        }
+    return {
+        "ENGINE": os.getenv("DB_ENGINE", "django.db.backends.postgresql"),
+        "NAME": os.getenv("DB_NAME", "shift_schedule"),
+        "USER": os.getenv("DB_USER", "postgres"),
+        "PASSWORD": os.getenv("DB_PASSWORD", ""),
+        "HOST": os.getenv("DB_HOST", "localhost"),
+        "PORT": os.getenv("DB_PORT", "5432"),
+        "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
+        "CONN_HEALTH_CHECKS": _get_bool("DB_CONN_HEALTH_CHECKS", True),
+    }
 
 
 # Quick-start development settings - unsuitable for production
@@ -125,16 +154,7 @@ WSGI_APPLICATION = 'schedule_api.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
-        'NAME': os.getenv('DB_NAME', 'shift_schedule'),
-        'USER': os.getenv('DB_USER', 'postgres'),
-        'PASSWORD': os.getenv('DB_PASSWORD', ''),
-        'HOST': os.getenv('DB_HOST', 'localhost'),
-        'PORT': os.getenv('DB_PORT', '5432'),
-        'CONN_MAX_AGE': int(os.getenv('DB_CONN_MAX_AGE', '60')),
-        'CONN_HEALTH_CHECKS': _get_bool('DB_CONN_HEALTH_CHECKS', True),
-    }
+    'default': _get_database_config(),
 }
 
 AUTH_USER_MODEL = 'accounts.User'

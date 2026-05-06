@@ -182,7 +182,7 @@ class AvailabilityEntrySerializer(serializers.Serializer):
 
 
 class BaseAvailabilityRuleSerializer(serializers.ModelSerializer):
-    user_id = serializers.IntegerField(source="user_id", read_only=True)
+    user_id = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = EmployeeBaseAvailability
@@ -190,7 +190,7 @@ class BaseAvailabilityRuleSerializer(serializers.ModelSerializer):
 
 
 class AvailabilityOverrideSerializer(serializers.ModelSerializer):
-    user_id = serializers.IntegerField(source="user_id", read_only=True)
+    user_id = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = EmployeeAvailabilityOverride
@@ -208,7 +208,7 @@ class AvailabilityOverrideSerializer(serializers.ModelSerializer):
 
 
 class PlannedLoadSerializer(serializers.ModelSerializer):
-    user_id = serializers.IntegerField(source="user_id", read_only=True)
+    user_id = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = EmployeePlannedLoad
