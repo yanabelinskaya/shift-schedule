@@ -1,0 +1,1788 @@
+[
+{
+  "model": "accounts.user",
+  "pk": 1,
+  "fields": {
+    "password": "pbkdf2_sha256$1000000$Wc6ouLLn8jjrEEbmJdwkHB$p33KfQ5ZKRK6KB4/y0gsus5X9e7RkKUdnb2L97vLiNI=",
+    "last_login": "2026-05-05T07:40:52.818Z",
+    "is_superuser": true,
+    "username": "admin",
+    "first_name": "",
+    "last_name": "",
+    "email": "",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2026-01-20T10:14:05.187Z",
+    "role": "admin",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "accounts.user",
+  "pk": 14,
+  "fields": {
+    "password": "pbkdf2_sha256$1000000$JDOL7BvyG0pYtzGhUcUgxh$FhcVbc+Zzdjb45ARXVDo3oXVjoJIebylqJKP9K1qANs=",
+    "last_login": "2026-05-02T22:05:34.842Z",
+    "is_superuser": false,
+    "username": "belikbelka2007",
+    "first_name": "Яна",
+    "last_name": "Белинская",
+    "email": "belikbelka2007@gmail.com",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-01-27T10:44:38.511Z",
+    "role": "employee",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "accounts.user",
+  "pk": 15,
+  "fields": {
+    "password": "pbkdf2_sha256$1000000$sTq69E3sOdZoeBdLucFv6t$/u8BwUTmunnT38eaXFRr7VxZ532HiQ7Xq5cKnyuUPL8=",
+    "last_login": "2026-02-05T10:55:23.529Z",
+    "is_superuser": false,
+    "username": "vikusik20000",
+    "first_name": "Виктория",
+    "last_name": "Белинская",
+    "email": "vikusik200004@icloud.com",
+    "is_staff": false,
+    "is_active": false,
+    "date_joined": "2026-01-27T10:51:42.793Z",
+    "role": "employee",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "accounts.user",
+  "pk": 16,
+  "fields": {
+    "password": "pbkdf2_sha256$1000000$sNzxp7tItEieE22V4XKB6S$kzpLUefseivCtsUYMzedxj+unFGNN7qqfrIN7kosN+M=",
+    "last_login": "2026-05-05T19:30:13.012Z",
+    "is_superuser": false,
+    "username": "maria_samoylova",
+    "first_name": "Мария",
+    "last_name": "Самойлова",
+    "email": "isip_ya.v.belinskaya@mpt.ru",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-01-31T09:32:31.771Z",
+    "role": "manager",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "accounts.user",
+  "pk": 17,
+  "fields": {
+    "password": "pbkdf2_sha256$1000000$3IicWv3hxZ0TAyT5HYnXig$afcNh2RBeYcKT2/m41bAMljqfo6gQL2+CKiSPMboSm4=",
+    "last_login": "2026-02-05T11:01:43.946Z",
+    "is_superuser": false,
+    "username": "goryn_liza",
+    "first_name": "Елизавета",
+    "last_name": "Горынина",
+    "email": "lizagorynina@yandex.ru",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-02-04T10:58:03.444Z",
+    "role": "employee",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "accounts.user",
+  "pk": 18,
+  "fields": {
+    "password": "pbkdf2_sha256$1000000$AWJrxPWQn8sNyQCrb23ilR$hkgqCWSklnKq14VY0SSv7WEMmQXHOXagKCo5QXVR/kU=",
+    "last_login": "2026-04-23T07:16:17.834Z",
+    "is_superuser": false,
+    "username": "boykov_boris",
+    "first_name": "Борис",
+    "last_name": "Бойков",
+    "email": "boykov_boris@conector.ru",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-02-04T10:59:25.192Z",
+    "role": "employee",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "accounts.user",
+  "pk": 19,
+  "fields": {
+    "password": "pbkdf2_sha256$1000000$KB29jrb92SeleGzURSLxRH$fuS2hw8+dJQTK5AdnN/VllJE5ikZ2GRqJbiNfwmSXV8=",
+    "last_login": null,
+    "is_superuser": false,
+    "username": "miroshnichenko",
+    "first_name": "Софья",
+    "last_name": "Мирошниченко",
+    "email": "miroshnichenko@gmail.com",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-04-16T16:54:35.958Z",
+    "role": "employee",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "accounts.department",
+  "pk": 1,
+  "fields": {
+    "name": "Бекенд",
+    "manager": null,
+    "is_archived": false
+  }
+},
+{
+  "model": "accounts.department",
+  "pk": 2,
+  "fields": {
+    "name": "Фронтэнд",
+    "manager": 16,
+    "is_archived": false
+  }
+},
+{
+  "model": "accounts.department",
+  "pk": 3,
+  "fields": {
+    "name": "Дизайн",
+    "manager": null,
+    "is_archived": false
+  }
+},
+{
+  "model": "accounts.department",
+  "pk": 4,
+  "fields": {
+    "name": "1с",
+    "manager": null,
+    "is_archived": false
+  }
+},
+{
+  "model": "accounts.department",
+  "pk": 5,
+  "fields": {
+    "name": "Безопасность/ кибербезопасность",
+    "manager": null,
+    "is_archived": false
+  }
+},
+{
+  "model": "accounts.department",
+  "pk": 6,
+  "fields": {
+    "name": "Windows",
+    "manager": null,
+    "is_archived": true
+  }
+},
+{
+  "model": "accounts.departmentposition",
+  "pk": 1,
+  "fields": {
+    "department": 6,
+    "title": "Разработчик"
+  }
+},
+{
+  "model": "accounts.departmentposition",
+  "pk": 2,
+  "fields": {
+    "department": 6,
+    "title": "Аналитик"
+  }
+},
+{
+  "model": "accounts.departmentposition",
+  "pk": 3,
+  "fields": {
+    "department": 2,
+    "title": "Frontend Architect"
+  }
+},
+{
+  "model": "accounts.departmentposition",
+  "pk": 4,
+  "fields": {
+    "department": 2,
+    "title": "Frontend Team Lead"
+  }
+},
+{
+  "model": "accounts.departmentposition",
+  "pk": 5,
+  "fields": {
+    "department": 2,
+    "title": "Junior Frontend Developer"
+  }
+},
+{
+  "model": "accounts.departmentposition",
+  "pk": 6,
+  "fields": {
+    "department": 2,
+    "title": "Middle Frontend Developer"
+  }
+},
+{
+  "model": "accounts.departmentposition",
+  "pk": 7,
+  "fields": {
+    "department": 2,
+    "title": "Senior Frontend Developer"
+  }
+},
+{
+  "model": "accounts.departmentposition",
+  "pk": 8,
+  "fields": {
+    "department": 2,
+    "title": "Верстальщик"
+  }
+},
+{
+  "model": "accounts.departmentposition",
+  "pk": 9,
+  "fields": {
+    "department": 3,
+    "title": "Дизайнер"
+  }
+},
+{
+  "model": "accounts.employeeprofile",
+  "pk": 1,
+  "fields": {
+    "user": 1,
+    "avatar": "",
+    "middle_name": "",
+    "corporate_phone": "",
+    "position": "",
+    "department": null,
+    "monthly_salary": null,
+    "personal_phone": "",
+    "address": "",
+    "passport_series": "",
+    "passport_number": "",
+    "passport_issued_by": "",
+    "passport_issue_date": null,
+    "snils": "",
+    "inn": "",
+    "salary_reason": "",
+    "department_change_reason": ""
+  }
+},
+{
+  "model": "accounts.employeeprofile",
+  "pk": 14,
+  "fields": {
+    "user": 14,
+    "avatar": "",
+    "middle_name": "Валентиновна",
+    "corporate_phone": "+7 (999) 009-09-23",
+    "position": "Middle Frontend Developer",
+    "department": 2,
+    "monthly_salary": "50000.00",
+    "personal_phone": "+7 (989) 895-67-85",
+    "address": "",
+    "passport_series": "",
+    "passport_number": "",
+    "passport_issued_by": "",
+    "passport_issue_date": null,
+    "snils": "",
+    "inn": "",
+    "salary_reason": "стаж",
+    "department_change_reason": ""
+  }
+},
+{
+  "model": "accounts.employeeprofile",
+  "pk": 15,
+  "fields": {
+    "user": 15,
+    "avatar": "",
+    "middle_name": "Валентиновна",
+    "corporate_phone": "+7 (908) 765-43-93",
+    "position": "Дизайнер",
+    "department": 3,
+    "monthly_salary": "60000.00",
+    "personal_phone": "+7 (989) 895-67-85",
+    "address": "Моховая улиица 9",
+    "passport_series": "3498",
+    "passport_number": "567878",
+    "passport_issued_by": "",
+    "passport_issue_date": "2022-01-08",
+    "snils": "345-678-909 87",
+    "inn": "456789990887",
+    "salary_reason": "стаж",
+    "department_change_reason": ""
+  }
+},
+{
+  "model": "accounts.employeeprofile",
+  "pk": 16,
+  "fields": {
+    "user": 16,
+    "avatar": "",
+    "middle_name": "Николаевна",
+    "corporate_phone": "+7 (936) 605-12-78",
+    "position": "",
+    "department": 2,
+    "monthly_salary": "81000.00",
+    "personal_phone": "",
+    "address": "",
+    "passport_series": "",
+    "passport_number": "",
+    "passport_issued_by": "",
+    "passport_issue_date": null,
+    "snils": "",
+    "inn": "",
+    "salary_reason": "стаж",
+    "department_change_reason": ""
+  }
+},
+{
+  "model": "accounts.employeeprofile",
+  "pk": 17,
+  "fields": {
+    "user": 17,
+    "avatar": "",
+    "middle_name": "Павловна",
+    "corporate_phone": "+7 (902) 649-02-93",
+    "position": "Junior Frontend Developer",
+    "department": 2,
+    "monthly_salary": "80000.00",
+    "personal_phone": "",
+    "address": "",
+    "passport_series": "",
+    "passport_number": "",
+    "passport_issued_by": "",
+    "passport_issue_date": null,
+    "snils": "",
+    "inn": "",
+    "salary_reason": "стаж",
+    "department_change_reason": ""
+  }
+},
+{
+  "model": "accounts.employeeprofile",
+  "pk": 18,
+  "fields": {
+    "user": 18,
+    "avatar": "",
+    "middle_name": "Сергеевич",
+    "corporate_phone": "+7 (903) 658-99-23",
+    "position": "Frontend Architect",
+    "department": 2,
+    "monthly_salary": "75000.00",
+    "personal_phone": "",
+    "address": "",
+    "passport_series": "",
+    "passport_number": "",
+    "passport_issued_by": "",
+    "passport_issue_date": null,
+    "snils": "",
+    "inn": "",
+    "salary_reason": "стаж",
+    "department_change_reason": ""
+  }
+},
+{
+  "model": "accounts.employeeprofile",
+  "pk": 19,
+  "fields": {
+    "user": 19,
+    "avatar": "",
+    "middle_name": "Андреевна",
+    "corporate_phone": "+7 (988) 935-64-72",
+    "position": "Дизайнер",
+    "department": 3,
+    "monthly_salary": "60000.00",
+    "personal_phone": "",
+    "address": "",
+    "passport_series": "8274",
+    "passport_number": "454545",
+    "passport_issued_by": "",
+    "passport_issue_date": "2021-07-06",
+    "snils": "",
+    "inn": "",
+    "salary_reason": "",
+    "department_change_reason": ""
+  }
+},
+{
+  "model": "accounts.employeeabsence",
+  "pk": 1,
+  "fields": {
+    "user": 18,
+    "absence_type": "sick",
+    "start_date": "2026-02-04",
+    "end_date": "2026-02-11",
+    "created_by": 16,
+    "created_at": "2026-02-04T18:01:04.450Z",
+    "updated_at": "2026-02-04T18:01:04.450Z"
+  }
+},
+{
+  "model": "accounts.employeeabsence",
+  "pk": 2,
+  "fields": {
+    "user": 14,
+    "absence_type": "sick",
+    "start_date": "2026-05-05",
+    "end_date": "2026-05-12",
+    "created_by": 16,
+    "created_at": "2026-05-04T20:12:41.449Z",
+    "updated_at": "2026-05-04T20:12:41.449Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 1,
+  "fields": {
+    "user": 18,
+    "date": "2026-02-09",
+    "is_available": true,
+    "start_time": "16:30:00",
+    "end_time": "20:00:00",
+    "priority": "high",
+    "is_approved": true,
+    "approved_by": 16,
+    "approved_at": "2026-02-08T17:47:06.061Z",
+    "created_at": "2026-02-04T18:52:42.876Z",
+    "updated_at": "2026-02-08T17:47:06.062Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 2,
+  "fields": {
+    "user": 18,
+    "date": "2026-02-10",
+    "is_available": true,
+    "start_time": "07:00:00",
+    "end_time": "15:00:00",
+    "priority": "mid",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-04T18:52:42.878Z",
+    "updated_at": "2026-02-04T19:02:56.557Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 3,
+  "fields": {
+    "user": 18,
+    "date": "2026-02-11",
+    "is_available": false,
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "priority": "mid",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-04T18:52:42.879Z",
+    "updated_at": "2026-02-04T19:02:56.558Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 4,
+  "fields": {
+    "user": 18,
+    "date": "2026-02-12",
+    "is_available": false,
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "priority": "mid",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-04T18:52:42.880Z",
+    "updated_at": "2026-02-04T19:02:56.559Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 5,
+  "fields": {
+    "user": 18,
+    "date": "2026-02-13",
+    "is_available": true,
+    "start_time": "15:00:00",
+    "end_time": "23:00:00",
+    "priority": "high",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-04T18:52:42.880Z",
+    "updated_at": "2026-02-04T19:02:56.559Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 6,
+  "fields": {
+    "user": 18,
+    "date": "2026-02-14",
+    "is_available": false,
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "priority": "mid",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-04T18:52:42.881Z",
+    "updated_at": "2026-02-04T19:02:56.560Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 7,
+  "fields": {
+    "user": 18,
+    "date": "2026-02-15",
+    "is_available": true,
+    "start_time": "07:00:00",
+    "end_time": "15:00:00",
+    "priority": "low",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-04T18:52:42.882Z",
+    "updated_at": "2026-02-04T19:02:56.561Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 8,
+  "fields": {
+    "user": 15,
+    "date": "2026-02-09",
+    "is_available": false,
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "priority": "mid",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-05T10:56:05.632Z",
+    "updated_at": "2026-02-05T10:56:05.632Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 9,
+  "fields": {
+    "user": 15,
+    "date": "2026-02-10",
+    "is_available": true,
+    "start_time": "15:00:00",
+    "end_time": "23:00:00",
+    "priority": "high",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-05T10:56:05.634Z",
+    "updated_at": "2026-02-05T10:56:05.634Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 10,
+  "fields": {
+    "user": 15,
+    "date": "2026-02-11",
+    "is_available": true,
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "priority": "high",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-05T10:56:05.635Z",
+    "updated_at": "2026-02-05T10:56:05.635Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 11,
+  "fields": {
+    "user": 15,
+    "date": "2026-02-12",
+    "is_available": true,
+    "start_time": "07:00:00",
+    "end_time": "15:00:00",
+    "priority": "mid",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-05T10:56:05.636Z",
+    "updated_at": "2026-02-05T10:56:05.636Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 12,
+  "fields": {
+    "user": 15,
+    "date": "2026-02-13",
+    "is_available": false,
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "priority": "mid",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-05T10:56:05.637Z",
+    "updated_at": "2026-02-05T10:56:05.637Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 13,
+  "fields": {
+    "user": 15,
+    "date": "2026-02-14",
+    "is_available": false,
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "priority": "mid",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-05T10:56:05.638Z",
+    "updated_at": "2026-02-05T10:56:05.638Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 14,
+  "fields": {
+    "user": 15,
+    "date": "2026-02-15",
+    "is_available": true,
+    "start_time": "15:00:00",
+    "end_time": "23:00:00",
+    "priority": "low",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-05T10:56:05.639Z",
+    "updated_at": "2026-02-05T10:56:05.639Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 15,
+  "fields": {
+    "user": 17,
+    "date": "2026-02-09",
+    "is_available": false,
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "priority": "mid",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-05T11:02:24.967Z",
+    "updated_at": "2026-02-05T11:02:24.967Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 16,
+  "fields": {
+    "user": 17,
+    "date": "2026-02-10",
+    "is_available": false,
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "priority": "mid",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-05T11:02:24.969Z",
+    "updated_at": "2026-02-05T11:02:24.969Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 17,
+  "fields": {
+    "user": 17,
+    "date": "2026-02-11",
+    "is_available": true,
+    "start_time": "10:00:00",
+    "end_time": "23:00:00",
+    "priority": "high",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-05T11:02:24.970Z",
+    "updated_at": "2026-02-05T11:02:24.970Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 18,
+  "fields": {
+    "user": 17,
+    "date": "2026-02-12",
+    "is_available": true,
+    "start_time": "07:00:00",
+    "end_time": "15:00:00",
+    "priority": "mid",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-05T11:02:24.970Z",
+    "updated_at": "2026-02-05T11:02:24.970Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 19,
+  "fields": {
+    "user": 17,
+    "date": "2026-02-13",
+    "is_available": true,
+    "start_time": "11:30:00",
+    "end_time": "16:30:00",
+    "priority": "high",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-05T11:02:24.971Z",
+    "updated_at": "2026-02-05T11:02:24.971Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 20,
+  "fields": {
+    "user": 17,
+    "date": "2026-02-14",
+    "is_available": true,
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "priority": "low",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-05T11:02:24.972Z",
+    "updated_at": "2026-02-05T11:02:24.972Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 21,
+  "fields": {
+    "user": 17,
+    "date": "2026-02-15",
+    "is_available": false,
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "priority": "mid",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-05T11:02:24.973Z",
+    "updated_at": "2026-02-05T11:02:24.973Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 22,
+  "fields": {
+    "user": 14,
+    "date": "2026-02-09",
+    "is_available": true,
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "priority": "mid",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-05T11:05:25.071Z",
+    "updated_at": "2026-02-05T11:05:25.071Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 23,
+  "fields": {
+    "user": 14,
+    "date": "2026-02-10",
+    "is_available": false,
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "priority": "mid",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-05T11:05:25.073Z",
+    "updated_at": "2026-02-05T11:05:25.073Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 24,
+  "fields": {
+    "user": 14,
+    "date": "2026-02-11",
+    "is_available": true,
+    "start_time": "15:00:00",
+    "end_time": "23:00:00",
+    "priority": "mid",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-05T11:05:25.073Z",
+    "updated_at": "2026-02-05T11:05:25.073Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 25,
+  "fields": {
+    "user": 14,
+    "date": "2026-02-12",
+    "is_available": false,
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "priority": "mid",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-05T11:05:25.074Z",
+    "updated_at": "2026-02-05T11:05:25.074Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 26,
+  "fields": {
+    "user": 14,
+    "date": "2026-02-13",
+    "is_available": true,
+    "start_time": "10:00:00",
+    "end_time": "18:00:00",
+    "priority": "high",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-05T11:05:25.075Z",
+    "updated_at": "2026-02-05T11:05:25.075Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 27,
+  "fields": {
+    "user": 14,
+    "date": "2026-02-14",
+    "is_available": false,
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "priority": "mid",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-05T11:05:25.075Z",
+    "updated_at": "2026-02-05T11:05:25.075Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 28,
+  "fields": {
+    "user": 14,
+    "date": "2026-02-15",
+    "is_available": true,
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "priority": "high",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-02-05T11:05:25.076Z",
+    "updated_at": "2026-02-05T11:05:25.076Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 29,
+  "fields": {
+    "user": 14,
+    "date": "2026-04-20",
+    "is_available": true,
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "priority": "mid",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-04-14T11:04:59.545Z",
+    "updated_at": "2026-04-14T11:04:59.545Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 30,
+  "fields": {
+    "user": 14,
+    "date": "2026-04-21",
+    "is_available": false,
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "priority": "mid",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-04-14T11:04:59.548Z",
+    "updated_at": "2026-04-14T11:04:59.548Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 31,
+  "fields": {
+    "user": 14,
+    "date": "2026-04-22",
+    "is_available": true,
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "priority": "mid",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-04-14T11:04:59.549Z",
+    "updated_at": "2026-04-14T11:04:59.549Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 32,
+  "fields": {
+    "user": 14,
+    "date": "2026-04-23",
+    "is_available": false,
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "priority": "mid",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-04-14T11:04:59.550Z",
+    "updated_at": "2026-04-14T11:04:59.550Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 33,
+  "fields": {
+    "user": 14,
+    "date": "2026-04-24",
+    "is_available": true,
+    "start_time": "07:00:00",
+    "end_time": "15:00:00",
+    "priority": "high",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-04-14T11:04:59.551Z",
+    "updated_at": "2026-04-14T11:04:59.551Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 34,
+  "fields": {
+    "user": 14,
+    "date": "2026-04-25",
+    "is_available": false,
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "priority": "mid",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-04-14T11:04:59.552Z",
+    "updated_at": "2026-04-14T11:04:59.552Z"
+  }
+},
+{
+  "model": "accounts.employeeavailability",
+  "pk": 35,
+  "fields": {
+    "user": 14,
+    "date": "2026-04-26",
+    "is_available": false,
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "priority": "mid",
+    "is_approved": false,
+    "approved_by": null,
+    "approved_at": null,
+    "created_at": "2026-04-14T11:04:59.553Z",
+    "updated_at": "2026-04-14T11:04:59.553Z"
+  }
+},
+{
+  "model": "accounts.employeebaseavailability",
+  "pk": 1,
+  "fields": {
+    "user": 14,
+    "weekday": 0,
+    "mode": "fixed",
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "updated_at": "2026-04-19T08:53:28.446Z"
+  }
+},
+{
+  "model": "accounts.employeebaseavailability",
+  "pk": 2,
+  "fields": {
+    "user": 14,
+    "weekday": 1,
+    "mode": "fixed",
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "updated_at": "2026-04-19T08:53:28.446Z"
+  }
+},
+{
+  "model": "accounts.employeebaseavailability",
+  "pk": 3,
+  "fields": {
+    "user": 14,
+    "weekday": 2,
+    "mode": "fixed",
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "updated_at": "2026-04-19T08:53:28.446Z"
+  }
+},
+{
+  "model": "accounts.employeebaseavailability",
+  "pk": 4,
+  "fields": {
+    "user": 14,
+    "weekday": 3,
+    "mode": "fixed",
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "updated_at": "2026-04-19T08:53:28.446Z"
+  }
+},
+{
+  "model": "accounts.employeebaseavailability",
+  "pk": 5,
+  "fields": {
+    "user": 14,
+    "weekday": 4,
+    "mode": "fixed",
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "updated_at": "2026-04-19T08:53:28.446Z"
+  }
+},
+{
+  "model": "accounts.employeebaseavailability",
+  "pk": 6,
+  "fields": {
+    "user": 14,
+    "weekday": 5,
+    "mode": "off",
+    "start_time": null,
+    "end_time": null,
+    "updated_at": "2026-04-19T08:53:28.446Z"
+  }
+},
+{
+  "model": "accounts.employeebaseavailability",
+  "pk": 7,
+  "fields": {
+    "user": 14,
+    "weekday": 6,
+    "mode": "off",
+    "start_time": null,
+    "end_time": null,
+    "updated_at": "2026-04-19T08:53:28.446Z"
+  }
+},
+{
+  "model": "accounts.employeebaseavailability",
+  "pk": 8,
+  "fields": {
+    "user": 18,
+    "weekday": 0,
+    "mode": "fixed",
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "updated_at": "2026-04-19T09:19:18.786Z"
+  }
+},
+{
+  "model": "accounts.employeebaseavailability",
+  "pk": 9,
+  "fields": {
+    "user": 18,
+    "weekday": 1,
+    "mode": "fixed",
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "updated_at": "2026-04-19T09:19:18.787Z"
+  }
+},
+{
+  "model": "accounts.employeebaseavailability",
+  "pk": 10,
+  "fields": {
+    "user": 18,
+    "weekday": 2,
+    "mode": "fixed",
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "updated_at": "2026-04-19T09:19:18.787Z"
+  }
+},
+{
+  "model": "accounts.employeebaseavailability",
+  "pk": 11,
+  "fields": {
+    "user": 18,
+    "weekday": 3,
+    "mode": "fixed",
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "updated_at": "2026-04-19T09:19:18.787Z"
+  }
+},
+{
+  "model": "accounts.employeebaseavailability",
+  "pk": 12,
+  "fields": {
+    "user": 18,
+    "weekday": 4,
+    "mode": "fixed",
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "updated_at": "2026-04-19T09:19:18.787Z"
+  }
+},
+{
+  "model": "accounts.employeebaseavailability",
+  "pk": 13,
+  "fields": {
+    "user": 18,
+    "weekday": 5,
+    "mode": "off",
+    "start_time": null,
+    "end_time": null,
+    "updated_at": "2026-04-19T09:19:18.787Z"
+  }
+},
+{
+  "model": "accounts.employeebaseavailability",
+  "pk": 14,
+  "fields": {
+    "user": 18,
+    "weekday": 6,
+    "mode": "off",
+    "start_time": null,
+    "end_time": null,
+    "updated_at": "2026-04-19T09:19:18.787Z"
+  }
+},
+{
+  "model": "accounts.employeebaseavailability",
+  "pk": 15,
+  "fields": {
+    "user": 17,
+    "weekday": 0,
+    "mode": "fixed",
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "updated_at": "2026-04-23T08:26:46.913Z"
+  }
+},
+{
+  "model": "accounts.employeebaseavailability",
+  "pk": 16,
+  "fields": {
+    "user": 17,
+    "weekday": 1,
+    "mode": "fixed",
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "updated_at": "2026-04-23T08:26:46.913Z"
+  }
+},
+{
+  "model": "accounts.employeebaseavailability",
+  "pk": 17,
+  "fields": {
+    "user": 17,
+    "weekday": 2,
+    "mode": "fixed",
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "updated_at": "2026-04-23T08:26:46.913Z"
+  }
+},
+{
+  "model": "accounts.employeebaseavailability",
+  "pk": 18,
+  "fields": {
+    "user": 17,
+    "weekday": 3,
+    "mode": "fixed",
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "updated_at": "2026-04-23T08:26:46.914Z"
+  }
+},
+{
+  "model": "accounts.employeebaseavailability",
+  "pk": 19,
+  "fields": {
+    "user": 17,
+    "weekday": 4,
+    "mode": "fixed",
+    "start_time": "07:00:00",
+    "end_time": "23:00:00",
+    "updated_at": "2026-04-23T08:26:46.914Z"
+  }
+},
+{
+  "model": "accounts.employeebaseavailability",
+  "pk": 20,
+  "fields": {
+    "user": 17,
+    "weekday": 5,
+    "mode": "off",
+    "start_time": null,
+    "end_time": null,
+    "updated_at": "2026-04-23T08:26:46.914Z"
+  }
+},
+{
+  "model": "accounts.employeebaseavailability",
+  "pk": 21,
+  "fields": {
+    "user": 17,
+    "weekday": 6,
+    "mode": "off",
+    "start_time": null,
+    "end_time": null,
+    "updated_at": "2026-04-23T08:26:46.914Z"
+  }
+},
+{
+  "model": "accounts.employeeshiftrequest",
+  "pk": 1,
+  "fields": {
+    "user": 18,
+    "date": "2026-02-09",
+    "request_type": "extra_hours",
+    "start_time": "16:30:00",
+    "end_time": "20:00:00",
+    "reason": "доделать задание",
+    "status": "approved",
+    "created_at": "2026-02-08T17:46:44.372Z",
+    "updated_at": "2026-02-08T17:47:06.056Z"
+  }
+},
+{
+  "model": "accounts.departmenttask",
+  "pk": 1,
+  "fields": {
+    "department": 2,
+    "created_by": 16,
+    "assigned_to": 14,
+    "taken_by": null,
+    "sprint": null,
+    "date": "2026-02-10",
+    "due_time": "23:00:00",
+    "title": "Подготовить ТЗ",
+    "description": "Описать все подробно о нашей разрабатываевой системе по ГОСТУ",
+    "task_type": "employee",
+    "priority": "mid",
+    "status": "completed",
+    "refusal_reason": "",
+    "manager_review_comment": "",
+    "created_at": "2026-02-09T11:22:27.736Z",
+    "updated_at": "2026-02-10T09:50:48.419Z"
+  }
+},
+{
+  "model": "accounts.departmenttask",
+  "pk": 2,
+  "fields": {
+    "department": 2,
+    "created_by": 16,
+    "assigned_to": 14,
+    "taken_by": 14,
+    "sprint": 2,
+    "date": "2026-02-10",
+    "due_time": "17:00:00",
+    "title": "Предоставить ТЗ на проверку",
+    "description": "Прикрепить документ с техническим заданием",
+    "task_type": "employee",
+    "priority": "high",
+    "status": "on_review",
+    "refusal_reason": "",
+    "manager_review_comment": "",
+    "created_at": "2026-02-09T11:23:12.980Z",
+    "updated_at": "2026-04-28T20:28:43.791Z"
+  }
+},
+{
+  "model": "accounts.departmenttask",
+  "pk": 3,
+  "fields": {
+    "department": 2,
+    "created_by": 16,
+    "assigned_to": null,
+    "taken_by": null,
+    "sprint": null,
+    "date": "2026-02-10",
+    "due_time": "23:30:00",
+    "title": "Проанализировать требования к проекту",
+    "description": "Проанализировать требования к проекту, понять что необходимо сделать",
+    "task_type": "slot",
+    "priority": "high",
+    "status": "awaiting_confirmation",
+    "refusal_reason": "",
+    "manager_review_comment": "",
+    "created_at": "2026-02-09T11:25:07.428Z",
+    "updated_at": "2026-02-09T11:25:07.428Z"
+  }
+},
+{
+  "model": "accounts.departmenttask",
+  "pk": 4,
+  "fields": {
+    "department": 2,
+    "created_by": 16,
+    "assigned_to": null,
+    "taken_by": null,
+    "sprint": 2,
+    "date": "2026-05-06",
+    "due_time": null,
+    "title": "Сделать дизайн сайта",
+    "description": "Мобильная верстка, все страницы",
+    "task_type": "department",
+    "priority": "high",
+    "status": "awaiting_confirmation",
+    "refusal_reason": "",
+    "manager_review_comment": "",
+    "created_at": "2026-05-04T20:46:43.597Z",
+    "updated_at": "2026-05-05T19:41:34.605Z"
+  }
+},
+{
+  "model": "accounts.tasksubmission",
+  "pk": 1,
+  "fields": {
+    "task": 1,
+    "author": 14,
+    "comment": "Было составлено ТЗ",
+    "attachment": "task_submissions/2026/02/10/Пояснительная_записка.docx",
+    "created_at": "2026-02-10T09:43:37.098Z"
+  }
+},
+{
+  "model": "accounts.tasksubmission",
+  "pk": 2,
+  "fields": {
+    "task": 1,
+    "author": 16,
+    "comment": "Доработать пункт 1.3",
+    "attachment": "",
+    "created_at": "2026-02-10T09:54:14.382Z"
+  }
+},
+{
+  "model": "accounts.tasksubmission",
+  "pk": 3,
+  "fields": {
+    "task": 4,
+    "author": 16,
+    "comment": "В фигме. Скинуть ссылку",
+    "attachment": "",
+    "created_at": "2026-05-04T20:46:43.606Z"
+  }
+},
+{
+  "model": "accounts.sprint",
+  "pk": 2,
+  "fields": {
+    "department": 2,
+    "title": "Создание сайта",
+    "goal": "Написать ТЗ, создать дизайн сайта",
+    "start_date": "2026-05-01",
+    "end_date": "2026-05-15",
+    "status": "active",
+    "created_by": 16,
+    "created_at": "2026-05-04T20:06:47.575Z",
+    "updated_at": "2026-05-04T20:06:47.575Z"
+  }
+},
+{
+  "model": "accounts.leaverequest",
+  "pk": 5,
+  "fields": {
+    "user": 14,
+    "request_type": "sick",
+    "start_date": "2026-05-05",
+    "end_date": "2026-05-12",
+    "comment": "",
+    "attachment": "",
+    "status": "approved",
+    "reviewed_by": 16,
+    "reviewed_at": "2026-05-04T20:12:41.442Z",
+    "review_comment": "",
+    "rejection_reason": "",
+    "created_at": "2026-04-27T21:53:16.898Z",
+    "updated_at": "2026-04-27T21:53:16.898Z"
+  }
+},
+{
+  "model": "accounts.substitution",
+  "pk": 1,
+  "fields": {
+    "absent_user": 14,
+    "substitute_user": 18,
+    "start_date": "2026-05-05",
+    "end_date": "2026-05-12",
+    "created_by": 16,
+    "note": "",
+    "created_at": "2026-05-04T21:05:12.777Z"
+  }
+},
+{
+  "model": "accounts.taskmessage",
+  "pk": 1,
+  "fields": {
+    "task": 2,
+    "author": 14,
+    "text": "нужны помощь",
+    "attachment": "",
+    "reply_to": null,
+    "created_at": "2026-04-28T20:05:47.660Z"
+  }
+},
+{
+  "model": "accounts.taskmessage",
+  "pk": 2,
+  "fields": {
+    "task": 2,
+    "author": 14,
+    "text": "нужно сделать такие стили",
+    "attachment": "task_messages/2026/04/28/Снимок_экрана_2026-04-25_в_11.26.34.png",
+    "reply_to": null,
+    "created_at": "2026-04-28T20:07:18.649Z"
+  }
+},
+{
+  "model": "accounts.taskmessage",
+  "pk": 3,
+  "fields": {
+    "task": 2,
+    "author": 14,
+    "text": "срочно",
+    "attachment": "",
+    "reply_to": 2,
+    "created_at": "2026-04-28T20:16:28.339Z"
+  }
+},
+{
+  "model": "accounts.taskmessagereadstate",
+  "pk": 1,
+  "fields": {
+    "task": 2,
+    "user": 14,
+    "last_read_message": 3,
+    "updated_at": "2026-05-01T09:54:28.884Z"
+  }
+},
+{
+  "model": "accounts.taskmessagereadstate",
+  "pk": 2,
+  "fields": {
+    "task": 2,
+    "user": 16,
+    "last_read_message": 3,
+    "updated_at": "2026-05-04T20:52:28.216Z"
+  }
+},
+{
+  "model": "accounts.globalsettings",
+  "pk": 1,
+  "fields": {
+    "work_start": "07:00:00",
+    "work_end": "23:00:00",
+    "work_days": "daily",
+    "weekly_hours_norm": 40,
+    "platform_name": "Conector Shift",
+    "support_email": "belikbelka2007@gmail.com",
+    "support_phone": "",
+    "global_announcement": "",
+    "allow_password_reset_requests": true,
+    "backup_retention_days": 30,
+    "task_submission_max_files": 5,
+    "task_submission_max_file_size_mb": 10,
+    "ot_threshold": 12,
+    "ot_coeff": "1.50",
+    "shift_templates": [
+      "15:00-23:00",
+      "10:00-18:00",
+      "07:00-15:00"
+    ],
+    "allow_custom_shifts": true,
+    "updated_at": "2026-04-16T17:22:46.324Z",
+    "updated_by": 1
+  }
+},
+{
+  "model": "accounts.globalsettingschange",
+  "pk": 1,
+  "fields": {
+    "admin": 1,
+    "created_at": "2026-02-01T10:24:44.967Z",
+    "summary": "Обновлены глобальные настройки",
+    "details": "Изменения сохранены через панель администратора.",
+    "changes": [
+      "07:00-23:00"
+    ],
+    "payload": {
+      "ot_coeff": "1.5",
+      "work_end": "23:00",
+      "work_days": "daily",
+      "work_start": "07:00",
+      "ot_threshold": 12,
+      "shift_templates": [],
+      "allow_custom_shifts": false
+    }
+  }
+},
+{
+  "model": "accounts.globalsettingschange",
+  "pk": 2,
+  "fields": {
+    "admin": 1,
+    "created_at": "2026-02-01T10:25:43.008Z",
+    "summary": "Обновлены глобальные настройки",
+    "details": "Изменения сохранены через панель администратора.",
+    "changes": [
+      "Типы смен: 3"
+    ],
+    "payload": {
+      "ot_coeff": "1.5",
+      "work_end": "23:00",
+      "work_days": "daily",
+      "work_start": "07:00",
+      "ot_threshold": 12,
+      "shift_templates": [
+        "07:00-23:00",
+        "15:00-23:00",
+        "10:00-23:00"
+      ],
+      "allow_custom_shifts": false
+    }
+  }
+},
+{
+  "model": "accounts.globalsettingschange",
+  "pk": 3,
+  "fields": {
+    "admin": 1,
+    "created_at": "2026-02-01T10:28:46.146Z",
+    "summary": "Обновлены глобальные настройки",
+    "details": "Изменения сохранены через панель администратора.",
+    "changes": [
+      "Типы смен: 4"
+    ],
+    "payload": {
+      "ot_coeff": "1.5",
+      "work_end": "23:00",
+      "work_days": "daily",
+      "work_start": "07:00",
+      "ot_threshold": 12,
+      "shift_templates": [
+        "07:00-23:00",
+        "15:00-23:00",
+        "10:00-23:00",
+        "10:00-18:00"
+      ],
+      "allow_custom_shifts": false
+    }
+  }
+},
+{
+  "model": "accounts.globalsettingschange",
+  "pk": 4,
+  "fields": {
+    "admin": 1,
+    "created_at": "2026-02-01T10:28:50.642Z",
+    "summary": "Обновлены глобальные настройки",
+    "details": "Изменения сохранены через панель администратора.",
+    "changes": [
+      "Разрешены кастомные смены"
+    ],
+    "payload": {
+      "ot_coeff": "1.5",
+      "work_end": "23:00",
+      "work_days": "daily",
+      "work_start": "07:00",
+      "ot_threshold": 12,
+      "shift_templates": [
+        "07:00-23:00",
+        "15:00-23:00",
+        "10:00-23:00",
+        "10:00-18:00"
+      ],
+      "allow_custom_shifts": true
+    }
+  }
+},
+{
+  "model": "accounts.globalsettingschange",
+  "pk": 5,
+  "fields": {
+    "admin": 1,
+    "created_at": "2026-02-14T16:37:31.458Z",
+    "summary": "Обновлены глобальные настройки",
+    "details": "Изменения сохранены через панель администратора.",
+    "changes": [
+      "Типы слотов: 3"
+    ],
+    "payload": {
+      "ot_coeff": "1.5",
+      "work_end": "23:00",
+      "work_days": "daily",
+      "work_start": "07:00",
+      "ot_threshold": 12,
+      "shift_templates": [
+        "15:00-23:00",
+        "10:00-18:00",
+        "07:00-15:00"
+      ],
+      "weekly_hours_norm": 40,
+      "allow_custom_shifts": true
+    }
+  }
+},
+{
+  "model": "accounts.globalsettingschange",
+  "pk": 6,
+  "fields": {
+    "admin": 1,
+    "created_at": "2026-04-16T17:20:21.320Z",
+    "summary": "Обновлены глобальные настройки",
+    "details": "Изменения сохранены через API администратора.",
+    "changes": [
+      "Название платформы: Conector Shift 2"
+    ],
+    "payload": {
+      "work_end": "23:00",
+      "work_start": "07:00",
+      "platform_name": "Conector Shift 2",
+      "support_email": "",
+      "support_phone": "",
+      "weekly_hours_norm": 40,
+      "global_announcement": "",
+      "backup_retention_days": 30,
+      "allow_password_reset_requests": true
+    }
+  }
+},
+{
+  "model": "accounts.globalsettingschange",
+  "pk": 7,
+  "fields": {
+    "admin": 1,
+    "created_at": "2026-04-16T17:20:53.875Z",
+    "summary": "Обновлены глобальные настройки",
+    "details": "Изменения сохранены через API администратора.",
+    "changes": [
+      "Email поддержки: belikbelka2007@gmail.com"
+    ],
+    "payload": {
+      "work_end": "23:00",
+      "work_start": "07:00",
+      "platform_name": "Conector Shift 2",
+      "support_email": "belikbelka2007@gmail.com",
+      "support_phone": "",
+      "weekly_hours_norm": 40,
+      "global_announcement": "",
+      "backup_retention_days": 30,
+      "allow_password_reset_requests": true
+    }
+  }
+},
+{
+  "model": "accounts.globalsettingschange",
+  "pk": 8,
+  "fields": {
+    "admin": 1,
+    "created_at": "2026-04-16T17:21:17.061Z",
+    "summary": "Обновлены глобальные настройки",
+    "details": "Изменения сохранены через API администратора.",
+    "changes": [
+      "Название платформы: Conector Shift",
+      "Глобальное объявление: обновлено"
+    ],
+    "payload": {
+      "work_end": "23:00",
+      "work_start": "07:00",
+      "platform_name": "Conector Shift",
+      "support_email": "belikbelka2007@gmail.com",
+      "support_phone": "",
+      "weekly_hours_norm": 40,
+      "global_announcement": "Ведутся технические работы сайта",
+      "backup_retention_days": 30,
+      "allow_password_reset_requests": true
+    }
+  }
+},
+{
+  "model": "accounts.globalsettingschange",
+  "pk": 9,
+  "fields": {
+    "admin": 1,
+    "created_at": "2026-04-16T17:22:46.328Z",
+    "summary": "Обновлены глобальные настройки",
+    "details": "Изменения сохранены через API администратора.",
+    "changes": [
+      "Глобальное объявление: отключено"
+    ],
+    "payload": {
+      "work_end": "23:00",
+      "work_start": "07:00",
+      "platform_name": "Conector Shift",
+      "support_email": "belikbelka2007@gmail.com",
+      "support_phone": "",
+      "weekly_hours_norm": 40,
+      "global_announcement": "",
+      "backup_retention_days": 30,
+      "allow_password_reset_requests": true
+    }
+  }
+}
+]
