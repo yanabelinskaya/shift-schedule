@@ -18,8 +18,9 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "${DB_PUBLIC_PORT:-5432}:5432"
+    # Порт PostgreSQL не публикуется наружу, чтобы не конфликтовать
+    # с локальной БД на 5432/5433. Web-контейнер подключается к db:5432
+    # по внутренней сети Docker.
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-shift_schedule}"]
       interval: 5s
@@ -50,6 +51,8 @@ services:
       DB_HOST: db
       DB_PORT: "5432"
       DJANGO_COLLECTSTATIC: "0"
+      DJANGO_LOAD_SEED_DATA: ${DJANGO_LOAD_SEED_DATA:-1}
+      DJANGO_SEED_FIXTURE: ${DJANGO_SEED_FIXTURE:-render_data.json}
       DJANGO_CREATE_SUPERUSER: ${DJANGO_CREATE_SUPERUSER:-1}
       DJANGO_SUPERUSER_USERNAME: ${DJANGO_SUPERUSER_USERNAME:-admin}
       DJANGO_SUPERUSER_EMAIL: ${DJANGO_SUPERUSER_EMAIL:-admin@example.com}

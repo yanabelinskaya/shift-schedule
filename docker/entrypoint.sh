@@ -28,6 +28,26 @@ echo "[entrypoint] База доступна."
 echo "[entrypoint] Применяем миграции..."
 python manage.py migrate --noinput
 
+if [ "${DJANGO_LOAD_SEED_DATA:-0}" = "1" ]; then
+  SEED_FIXTURE="${DJANGO_SEED_FIXTURE:-render_data.json}"
+  if [ -f "$SEED_FIXTURE" ]; then
+    SHOULD_LOAD_SEED="$(python manage.py shell <<'PY' | tail -n 1
+from django.contrib.auth import get_user_model
+User = get_user_model()
+print("yes" if User.objects.count() <= 1 else "no")
+PY
+)"
+    if [ "$SHOULD_LOAD_SEED" = "yes" ]; then
+      echo "[entrypoint] Загружаем демо-данные из ${SEED_FIXTURE}..."
+      python manage.py loaddata "$SEED_FIXTURE"
+    else
+      echo "[entrypoint] Демо-данные не загружаются: пользователи уже есть."
+    fi
+  else
+    echo "[entrypoint] Файл демо-данных ${SEED_FIXTURE} не найден, пропускаем."
+  fi
+fi
+
 if [ "${DJANGO_COLLECTSTATIC:-0}" = "1" ]; then
   echo "[entrypoint] Собираем статику..."
   python manage.py collectstatic --noinput
