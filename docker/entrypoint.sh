@@ -31,12 +31,16 @@ python manage.py migrate --noinput
 if [ "${DJANGO_LOAD_SEED_DATA:-0}" = "1" ]; then
   SEED_FIXTURE="${DJANGO_SEED_FIXTURE:-render_data.json}"
   if [ -f "$SEED_FIXTURE" ]; then
-    SHOULD_LOAD_SEED="$(python manage.py shell <<'PY' | tail -n 1
+    if [ "${DJANGO_FORCE_LOAD_SEED_DATA:-0}" = "1" ]; then
+      SHOULD_LOAD_SEED="yes"
+    else
+      SHOULD_LOAD_SEED="$(python manage.py shell <<'PY' | tail -n 1
 from django.contrib.auth import get_user_model
 User = get_user_model()
 print("yes" if User.objects.count() <= 1 else "no")
 PY
 )"
+    fi
     if [ "$SHOULD_LOAD_SEED" = "yes" ]; then
       echo "[entrypoint] Загружаем демо-данные из ${SEED_FIXTURE}..."
       python manage.py loaddata "$SEED_FIXTURE"
