@@ -74,4 +74,24 @@ else:
 PY
 fi
 
+if [ -n "${DJANGO_RESET_USER_PASSWORD_USERNAME:-}" ] && [ -n "${DJANGO_RESET_USER_PASSWORD:-}" ]; then
+  echo "[entrypoint] Обновляем пароль пользователя ${DJANGO_RESET_USER_PASSWORD_USERNAME}..."
+  python manage.py shell <<'PY'
+import os
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+username = os.environ["DJANGO_RESET_USER_PASSWORD_USERNAME"]
+password = os.environ["DJANGO_RESET_USER_PASSWORD"]
+user = User.objects.filter(username=username).first()
+if user:
+    user.set_password(password)
+    user.is_active = True
+    user.save(update_fields=["password", "is_active"])
+    print(f"[entrypoint] password for '{username}' updated")
+else:
+    print(f"[entrypoint] user '{username}' not found")
+PY
+fi
+
 exec "$@"
