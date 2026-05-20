@@ -4319,8 +4319,6 @@ body.modal-open {
 
   .dashboard-page .sidebar-toggle-main {
     display: grid;
-    width: auto;
-    height: auto;
     min-width: 0;
     padding: 0;
     place-items: center;
