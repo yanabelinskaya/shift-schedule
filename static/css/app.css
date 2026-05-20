@@ -1018,6 +1018,72 @@ a {
   color: var(--muted);
 }
 
+.mgr-notif-list {
+  display: grid;
+  gap: 10px;
+}
+
+.mgr-notif-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.mgr-notif-item[role="button"] {
+  cursor: pointer;
+}
+
+.mgr-notif-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: rgba(42, 122, 110, 0.12);
+  color: var(--accent);
+}
+
+.mgr-notif-item--warning .mgr-notif-icon {
+  background: rgba(212, 158, 75, 0.14);
+  color: #9d6a18;
+}
+
+.mgr-notif-item--danger .mgr-notif-icon {
+  background: rgba(217, 101, 89, 0.14);
+  color: #b94c42;
+}
+
+.mgr-notif-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.mgr-notif-body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mgr-notif-title,
+.mgr-notif-text {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.mgr-notif-action {
+  justify-self: end;
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+}
+
 .tab-bar {
   display: flex;
   gap: 10px;
@@ -4535,6 +4601,18 @@ body.modal-open {
   .reports-date-picker,
   .reports-date-picker .date-input,
   .tag-input input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .mgr-notif-item {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .mgr-notif-action {
+    grid-column: 1 / -1;
+    justify-self: stretch;
     width: 100%;
     min-width: 0;
   }
