@@ -4255,9 +4255,8 @@ body.modal-open {
     height: 36px;
     min-width: 36px;
     place-items: center;
-    border-radius: 12px;
-    border: 1px solid var(--line);
-    background: var(--surface);
+    border: none;
+    background: transparent;
   }
 }
 

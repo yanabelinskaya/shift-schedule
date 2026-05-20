@@ -82,6 +82,11 @@
         setSidebarCollapsed(nextState);
       });
     });
+    document.querySelectorAll(".sidebar a").forEach((link) => {
+      link.addEventListener("click", () => {
+        closeMobileSidebar();
+      });
+    });
     document.addEventListener("click", (event) => {
       if (!mobileSidebarQuery.matches || document.body.classList.contains("sidebar-collapsed")) {
         return;
