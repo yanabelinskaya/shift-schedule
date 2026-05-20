@@ -62,17 +62,48 @@
   };
 
   if (sidebarToggles.length) {
+    const mobileSidebarQuery = window.matchMedia("(max-width: 1023px)");
     const storedSidebar = getStored("sidebar-collapsed");
-    const initialCollapsed =
-      storedSidebar === null
+    let initialCollapsed = true;
+    if (!mobileSidebarQuery.matches) {
+      initialCollapsed = storedSidebar === null
         ? document.body.classList.contains("sidebar-collapsed")
         : storedSidebar === "true";
+    }
+    const closeMobileSidebar = () => {
+      if (mobileSidebarQuery.matches && !document.body.classList.contains("sidebar-collapsed")) {
+        setSidebarCollapsed(true);
+      }
+    };
     setSidebarCollapsed(initialCollapsed);
     sidebarToggles.forEach((btn) => {
       btn.addEventListener("click", () => {
         const nextState = !document.body.classList.contains("sidebar-collapsed");
         setSidebarCollapsed(nextState);
       });
+    });
+    document.addEventListener("click", (event) => {
+      if (!mobileSidebarQuery.matches || document.body.classList.contains("sidebar-collapsed")) {
+        return;
+      }
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      if (target.closest(".sidebar") || target.closest("[data-action='toggle-sidebar']")) {
+        return;
+      }
+      closeMobileSidebar();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closeMobileSidebar();
+      }
+    });
+    mobileSidebarQuery.addEventListener("change", (event) => {
+      if (event.matches) {
+        setSidebarCollapsed(true);
+      }
     });
   }
 

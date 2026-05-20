@@ -4139,6 +4139,137 @@ body.modal-open {
   }
 }
 
+@media (max-width: 1023px) {
+  .dashboard-page .app-shell,
+  .dashboard-page.sidebar-collapsed .app-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dashboard-page .main {
+    grid-column: 1;
+    width: 100%;
+    max-width: 100vw;
+  }
+
+  .dashboard-page::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 250;
+    background: rgba(15, 14, 12, 0);
+    pointer-events: none;
+    transition: background 0.22s ease, backdrop-filter 0.22s ease;
+  }
+
+  .dashboard-page:not(.sidebar-collapsed) {
+    overflow: hidden;
+  }
+
+  .dashboard-page:not(.sidebar-collapsed)::before {
+    background: rgba(15, 14, 12, 0.48);
+    backdrop-filter: blur(2px);
+    pointer-events: auto;
+  }
+
+  .dashboard-page .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 300;
+    width: min(84vw, 320px);
+    max-width: 320px;
+    height: 100dvh;
+    padding: 18px 16px;
+    border-right: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0 18px 18px 0;
+    box-shadow: 24px 0 60px rgba(15, 14, 12, 0.28);
+    overflow-y: auto;
+    overflow-x: hidden;
+    transform: translateX(0);
+    opacity: 1;
+    transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease, box-shadow 0.22s ease;
+  }
+
+  .dashboard-page.sidebar-collapsed .sidebar {
+    width: min(84vw, 320px);
+    padding: 18px 16px;
+    transform: translateX(calc(-100% - 18px));
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .dashboard-page .sidebar .brand {
+    width: auto;
+    max-width: 260px;
+    max-height: 72px;
+    padding: 8px;
+    justify-content: flex-start;
+    gap: 12px;
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  .dashboard-page .sidebar .sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .dashboard-page .sidebar .sidebar-section-nav,
+  .dashboard-page .sidebar .sidebar-nav {
+    justify-items: stretch;
+  }
+
+  .dashboard-page .sidebar .sidebar-section-nav .sidebar-label,
+  .dashboard-page .sidebar .sidebar-section-extra,
+  .dashboard-page .sidebar .sidebar-footer,
+  .dashboard-page .sidebar .sidebar-link .nav-text {
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+    overflow: visible;
+  }
+
+  .dashboard-page .sidebar .sidebar-link {
+    width: 100%;
+    padding: 10px 12px;
+    justify-content: flex-start;
+    gap: 12px;
+  }
+
+  .dashboard-page .sidebar .sidebar-toggle {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .dashboard-page .sidebar-toggle-main {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    place-items: center;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-page .sidebar,
+  .dashboard-page.sidebar-collapsed .sidebar {
+    width: min(88vw, 300px);
+    max-width: 300px;
+    border-radius: 0 16px 16px 0;
+  }
+}
+
 .sidebar-link .nav-icon {
   position: relative;
 }
