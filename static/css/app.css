@@ -4308,21 +4308,25 @@ body.modal-open {
   }
 
   .dashboard-page .sidebar .sidebar-toggle {
-    width: 36px;
-    height: 36px;
-    min-width: 36px;
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    background: rgba(255, 255, 255, 0.08);
+    width: auto;
+    height: auto;
+    min-width: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
   }
 
   .dashboard-page .sidebar-toggle-main {
     display: grid;
-    width: 36px;
-    height: 36px;
-    min-width: 36px;
+    width: auto;
+    height: auto;
+    min-width: 0;
+    padding: 0;
     place-items: center;
     border: none;
     background: transparent;
+    box-shadow: none;
   }
 }
 
@@ -4611,9 +4615,10 @@ body.modal-open {
   }
 
   .mgr-notif-action {
-    grid-column: 1 / -1;
-    justify-self: stretch;
-    width: 100%;
+    grid-column: 2;
+    justify-self: start;
+    width: fit-content;
+    max-width: 100%;
     min-width: 0;
   }
 
