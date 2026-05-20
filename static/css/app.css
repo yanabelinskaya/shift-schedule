@@ -4243,10 +4243,11 @@ body.modal-open {
     z-index: 300;
     width: min(84vw, 320px);
     max-width: 320px;
-    height: 100dvh;
+    height: 100vh;
+    min-height: 100dvh;
     padding: 18px 16px;
     border-right: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 0 18px 18px 0;
+    border-radius: 0;
     box-shadow: 24px 0 60px rgba(15, 14, 12, 0.28);
     overflow-y: auto;
     overflow-x: hidden;
@@ -4308,8 +4309,6 @@ body.modal-open {
   }
 
   .dashboard-page .sidebar .sidebar-toggle {
-    width: auto;
-    height: auto;
     min-width: 0;
     padding: 0;
     border: none;
@@ -4333,7 +4332,7 @@ body.modal-open {
   .dashboard-page.sidebar-collapsed .sidebar {
     width: min(88vw, 300px);
     max-width: 300px;
-    border-radius: 0 16px 16px 0;
+    border-radius: 0;
   }
 }
 
