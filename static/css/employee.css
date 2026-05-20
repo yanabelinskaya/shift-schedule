@@ -3518,3 +3518,297 @@
   word-break: break-word;
   overflow-wrap: anywhere;
 }
+
+/* Mobile hardening for employee pages */
+.availability-page,
+.availability-table,
+.availability-row,
+.availability-studio,
+.availability-stage,
+.availability-day-card,
+.availability-panel,
+.employee-tasks,
+.employee-tasks-v2,
+.employee-task-detail,
+.employee-task-card,
+.task-list-item,
+.task-list-main,
+.task-detail-layout,
+.task-detail-main,
+.task-detail-sidebar,
+.task-card-v2,
+.task-card-v2-body,
+.task-slide-drawer,
+.task-panel-body,
+.dashboard-grid,
+.dashboard-grid-bottom,
+.dashboard-notification,
+.profile-layout,
+.profile-col-main,
+.profile-col-side,
+.profile-hero-identity,
+.profile-info-row,
+.request-card,
+.req-card,
+.employee-chat-layout,
+.chat-sidebar,
+.chat-main,
+.chat-task-item-body,
+.chat-header-info,
+.chat-messages-wrap,
+.chat-messages,
+.sprint-page,
+.sprint-hero,
+.sprint-hero-card,
+.sprint-stat-card,
+.sprint-task-card,
+.sprint-chat,
+.sprint-chat-message {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.availability-day-head h3,
+.availability-hint,
+.task-empty-hero h2,
+.task-empty-hero p,
+.task-card-title h3,
+.task-card-desc,
+.task-list-main,
+.task-list-meta,
+.task-detail-text,
+.task-detail-value,
+.task-card-v2-title,
+.task-card-v2-desc,
+.task-meta-item,
+.task-panel-title,
+.task-panel-meta-row,
+.dashboard-notification-title,
+.dashboard-notification-text,
+.profile-info-value,
+.request-card-header h3,
+.request-card-header p,
+.req-card-title,
+.req-card-comment,
+.req-card-rejection,
+.chat-task-item-title,
+.chat-header-title,
+.chat-message-text,
+.chat-reply-text,
+.sprint-task-title h3,
+.sprint-task-meta,
+.sprint-chat-preview,
+.sprint-chat-message p {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (max-width: 760px) {
+  .availability-row,
+  .availability-footer,
+  .availability-summary,
+  .availability-preset-bar,
+  .availability-day-head,
+  .availability-day-controls,
+  .availability-split,
+  .availability-panel-actions,
+  .availability-actions-row,
+  .availability-actions-controls,
+  .task-card-top,
+  .task-submit-actions,
+  .task-submissions-header,
+  .task-list-item,
+  .task-list-side,
+  .task-detail-actions,
+  .tasks-toolbar,
+  .tasks-filter-bar,
+  .task-card-v2-header,
+  .task-card-v2-title-row,
+  .task-card-v2-footer,
+  .task-card-v2-counters,
+  .task-panel-title-row,
+  .task-panel-meta-row,
+  .dashboard-notification,
+  .profile-hero-identity,
+  .profile-info-row,
+  .req-form-grid,
+  .req-date-grid,
+  .req-card-head,
+  .req-card-footer,
+  .chat-header,
+  .chat-form,
+  .chat-reply-banner,
+  .sprint-task-top,
+  .sprint-chat-form-row,
+  .sprint-task-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .availability-time-range,
+  .availability-day-time,
+  .request-time-grid,
+  .dashboard-grid,
+  .dashboard-grid-bottom,
+  .profile-layout,
+  .request-grid,
+  .tasks-grid,
+  .task-detail-layout,
+  .sprint-hero-grid,
+  .sprint-board,
+  .sprint-stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .availability-studio .custom-select,
+  .availability-studio .custom-select-trigger,
+  .availability-studio .control-input,
+  .availability-studio .request-time-input,
+  .availability-time-select,
+  .availability-footer .btn,
+  .availability-panel-actions .btn,
+  .availability-actions-controls .btn,
+  .task-submit-actions .btn,
+  .task-detail-actions .btn,
+  .tasks-search-form,
+  .tasks-search-input,
+  .task-card-v2-footer .btn,
+  .req-form-grid .custom-select,
+  .req-form-grid .control-input,
+  .req-form-grid .btn,
+  .req-date-grid .custom-date,
+  .req-card-footer .btn,
+  .chat-input,
+  .sprint-chat-form textarea,
+  .sprint-chat-form-row .btn,
+  .sprint-task-actions .btn {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .availability-overrides-table,
+  .availability-absences-table {
+    min-width: 680px;
+  }
+
+  .availability-overrides-section,
+  .availability-absences-section {
+    overflow-x: auto;
+    max-width: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .task-board,
+  .tasks-grid,
+  .request-grid {
+    gap: 12px;
+  }
+
+  .employee-task-card,
+  .task-card-v2,
+  .req-card,
+  .request-card,
+  .availability-day-card,
+  .availability-panel {
+    padding: 16px;
+  }
+
+  .task-card-v2-meta,
+  .task-card-v2-counters,
+  .task-card-chips,
+  .task-detail-meta,
+  .profile-chips,
+  .req-card-dates,
+  .chat-message-meta,
+  .sprint-task-meta {
+    gap: 8px;
+  }
+
+  .task-chip,
+  .task-meta-item,
+  .task-counter-chip,
+  .req-card-type,
+  .req-card-dates,
+  .req-card-attachment {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .profile-info-label {
+    flex-basis: auto;
+  }
+
+  .profile-stats {
+    margin-left: -16px;
+    margin-right: -16px;
+    margin-bottom: -16px;
+  }
+
+  .task-slide-drawer {
+    width: min(100%, calc(100vw - 20px));
+    max-width: none;
+  }
+
+  .task-slide-content {
+    overflow-x: hidden;
+  }
+
+  .employee-chat-layout {
+    min-height: 0;
+  }
+
+  .chat-main {
+    min-height: 520px;
+  }
+
+  .chat-message {
+    max-width: 100%;
+  }
+
+  .chat-footer {
+    padding: 12px;
+  }
+
+  .chat-attach-label,
+  .chat-send-btn {
+    width: 44px;
+  }
+
+  .sprint-task-card,
+  .sprint-chat {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 420px) {
+  .employee-task-card,
+  .task-card-v2,
+  .task-slide-drawer,
+  .task-panel-section,
+  .request-card,
+  .req-card,
+  .availability-day-card,
+  .availability-panel,
+  .sprint-task-card,
+  .sprint-chat {
+    padding: 14px;
+  }
+
+  .profile-stat-value,
+  .sprint-hero-card strong,
+  .sprint-stat-card strong {
+    font-size: 1.35rem;
+  }
+
+  .dashboard-notification {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .chat-sidebar {
+    max-height: 240px;
+  }
+}

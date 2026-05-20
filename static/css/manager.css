@@ -5668,3 +5668,346 @@
     display: none;
   }
 }
+
+/* Mobile hardening for manager pages, excluding sprint and notifications views */
+.manager-employees,
+.manager-employee-page,
+.manager-employee-card,
+.manager-tasks,
+.manager-task-card,
+.manager-task-detail,
+.manager-task-create,
+.manager-chat,
+.manager-chat-panel,
+.manager-chat-sidebar,
+.manager-chat-item-main,
+.task-create-layout,
+.task-create-grid,
+.task-detail-action-grid,
+.mgr-dash-top,
+.mgr-dash-mid,
+.mgr-dash-sprint-card,
+.mgr-dash-absences-card,
+.mgr-team-row,
+.mgr-team-identity,
+.mgr-team-right,
+.profile-layout,
+.profile-col-main,
+.profile-col-side,
+.profile-hero-identity,
+.mgr-profile-team-chip,
+.team-emp-card,
+.team-emp-identity,
+.mgr-emp-hero,
+.mgr-emp-detail-col,
+.emp-task-main,
+.emp-lr-main,
+.leave-page,
+.leave-hero,
+.leave-request-card,
+.leave-detail-main,
+.leave-detail-side,
+.substitution-page,
+.substitution-hero,
+.substitution-card,
+.substitution-card-identity,
+.substitution-modal-card,
+.substitution-modal-body,
+.substitution-candidate,
+.substitution-active-row,
+.substitution-history-body {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.manager-task-card-main h3,
+.manager-task-card-main p,
+.manager-chat-item-title,
+.manager-chat-item-meta,
+.manager-chat-item-preview,
+.manager-chat .chat-header-title,
+.manager-chat .chat-message-text,
+.mgr-sprint-name,
+.mgr-team-emp-name,
+.mgr-absence-name,
+.profile-info-value,
+.team-emp-name,
+.team-emp-position,
+.emp-task-title,
+.emp-lr-type,
+.leave-hero h1,
+.leave-card-top h2,
+.leave-card-comment,
+.leave-period,
+.leave-info-grid strong,
+.leave-detail-note p,
+.substitution-hero h1,
+.substitution-card-identity h3,
+.substitution-card-reason,
+.substitution-card-period,
+.substitution-recommend strong,
+.substitution-task-titles h4,
+.substitution-task-titles p,
+.substitution-candidate-info h3,
+.substitution-candidate-info p,
+.substitution-active-pair strong,
+.substitution-history-head,
+.task-details-value {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (max-width: 760px) {
+  .employee-toolbar,
+  .manager-tasks .request-filters,
+  .filter-actions,
+  .task-slot-header,
+  .task-slot-item,
+  .manager-task-card-top,
+  .manager-task-card-footer,
+  .manager-task-detail .task-submit-actions,
+  .task-detail-action-grid > form,
+  .task-create-grid,
+  .task-time-row,
+  .manager-chat .chat-header,
+  .manager-chat-header-actions,
+  .manager-chat .chat-form,
+  .mgr-team-row,
+  .mgr-progress-row,
+  .profile-info-row,
+  .profile-hero-identity,
+  .mgr-profile-team-row,
+  .team-filters,
+  .team-emp-load-top,
+  .team-emp-actions,
+  .mgr-emp-hero-body,
+  .mgr-emp-hero-actions,
+  .emp-task-row,
+  .emp-lr-row,
+  .leave-hero-main,
+  .leave-filter-panel,
+  .leave-filter-group,
+  .leave-card-top,
+  .leave-card-actions,
+  .leave-decision-actions,
+  .leave-alert,
+  .substitution-hero-main,
+  .substitution-section-header,
+  .substitution-card-header,
+  .substitution-card-footer,
+  .substitution-modal-header,
+  .substitution-task-head,
+  .substitution-task-row,
+  .substitution-candidate-head,
+  .substitution-active-row,
+  .substitution-active-people,
+  .substitution-active-actions,
+  .substitution-history-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .employee-toolbar .filter-group,
+  .manager-tasks .request-filters .filter-group,
+  .manager-tasks .request-filters .custom-select,
+  .filter-field,
+  .week-picker,
+  .week-picker-control,
+  .week-picker .date-input,
+  .filter-actions .btn,
+  .task-detail-action-grid > form .custom-select,
+  .task-detail-action-grid > form .control-input,
+  .task-detail-action-grid > form .btn,
+  .task-create-grid .custom-select,
+  .task-time-row .custom-date,
+  .manager-chat-header-actions .btn,
+  .manager-chat .chat-input,
+  .manager-chat .chat-send-btn,
+  .team-filters .custom-select,
+  .team-emp-actions .btn,
+  .mgr-emp-hero-actions .btn,
+  .leave-filter-chip,
+  .leave-card-actions .btn,
+  .leave-decision-actions .btn,
+  .substitution-card-cta,
+  .substitution-task-row > .custom-select,
+  .substitution-task-row > .custom-date,
+  .substitution-task-row > .control-input,
+  .substitution-task-row > .control-input-sm,
+  .substitution-task-row > .btn,
+  .substitution-active-actions .btn {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .manager-task-card-grid,
+  .team-cards-grid,
+  .leave-card-grid,
+  .substitution-card-grid,
+  .substitution-situations,
+  .substitution-work-layout,
+  .leave-detail-layout,
+  .leave-info-grid,
+  .leave-hero-stats,
+  .leave-detail-metrics,
+  .substitution-hero-stats,
+  .substitution-modal-grid,
+  .task-detail-action-grid,
+  .absence-meta-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .manager-task-card-grid {
+    gap: 12px;
+  }
+
+  .manager-task-card {
+    min-height: auto;
+    padding: 16px;
+  }
+
+  .manager-task-card-meta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .task-slot-list,
+  .task-chip-list,
+  .task-slot-tags,
+  .leave-card-meta,
+  .substitution-candidate-stats,
+  .substitution-history-meta {
+    gap: 8px;
+  }
+
+  .task-chip,
+  .task-priority-badge,
+  .task-card-signals,
+  .mgr-load-badge,
+  .leave-filter-chip,
+  .leave-period,
+  .substitution-status {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .manager-chat-layout {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  .manager-chat-panel {
+    min-height: 520px;
+  }
+
+  .manager-chat .chat-messages-wrap,
+  .manager-chat .chat-messages {
+    min-width: 0;
+  }
+
+  .manager-chat .chat-message {
+    max-width: 100%;
+  }
+
+  .manager-chat .chat-footer {
+    padding: 12px;
+  }
+
+  .manager-chat .chat-attach-label,
+  .manager-chat .chat-send-btn {
+    width: 44px;
+  }
+
+  .mgr-stat-grid,
+  .profile-stats {
+    margin-left: -16px;
+    margin-right: -16px;
+    margin-bottom: -16px;
+  }
+
+  .mgr-team-right {
+    align-items: stretch;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .mgr-bar-wrap {
+    width: 100%;
+  }
+
+  .profile-info-label {
+    flex-basis: auto;
+  }
+
+  .profile-info-value,
+  .team-emp-name,
+  .team-emp-position,
+  .emp-task-title,
+  .emp-sprint-title {
+    white-space: normal;
+  }
+
+  .leave-hero,
+  .substitution-hero {
+    padding: 18px;
+  }
+
+  .leave-request-card,
+  .substitution-card {
+    padding: 16px;
+  }
+
+  .substitution-modal-card {
+    width: min(100%, calc(100vw - 20px));
+    max-height: calc(100dvh - 20px);
+    overflow: hidden;
+  }
+
+  .substitution-modal-body {
+    overflow-x: hidden;
+  }
+
+  .substitution-task-row {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 420px) {
+  .manager-task-card,
+  .team-emp-card,
+  .leave-request-card,
+  .substitution-card,
+  .substitution-modal-block,
+  .task-details,
+  .absence-item,
+  .absence-meta-card {
+    padding: 14px;
+  }
+
+  .mgr-stat-value,
+  .profile-stat-value,
+  .mgr-profile-team-value,
+  .leave-hero-stats strong,
+  .leave-detail-metrics strong,
+  .substitution-hero-stat strong {
+    font-size: 1.35rem;
+  }
+
+  .absence-calendar-weekdays,
+  .absence-calendar-grid {
+    gap: 4px;
+  }
+
+  .absence-day {
+    min-height: 46px;
+    padding: 6px 4px;
+    border-radius: 10px;
+  }
+
+  .absence-day-label {
+    display: none;
+  }
+}
