@@ -1469,7 +1469,8 @@ a {
   background: var(--surface);
   box-shadow: var(--shadow);
   padding: 24px;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
   z-index: 1;
   overflow: hidden;
@@ -1488,10 +1489,15 @@ a {
 
 .modal-card > form,
 .modal-card > .modal-body {
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
+}
+
+.modal-card > .modal-actions {
+  flex: 0 0 auto;
 }
 
 .modal-actions {
@@ -4305,7 +4311,7 @@ body.modal-open {
 
 @media (max-width: 760px) {
   .content {
-    padding: 8px 14px 28px;
+    padding: 8px 14px calc(96px + env(safe-area-inset-bottom, 0px));
   }
 
   .login-grid {
@@ -4568,11 +4574,30 @@ body.modal-open {
   .reports-line-chart svg {
     min-width: 620px;
   }
+
+  .notifications-page,
+  .notifications-list,
+  .notifications-item,
+  .notifications-body,
+  .notifications-head,
+  .notifications-meta {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .notifications-item {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 14px;
+  }
+
+  .notifications-dot {
+    display: none;
+  }
 }
 
 @media (max-width: 420px) {
   .content {
-    padding: 8px 10px 24px;
+    padding: 8px 10px calc(104px + env(safe-area-inset-bottom, 0px));
   }
 
   .login-card h1,

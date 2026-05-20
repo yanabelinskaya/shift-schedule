@@ -779,11 +779,22 @@
 .manager-task-detail .task-file-field {
   display: grid;
   gap: 6px;
+  min-width: 0;
 }
 
 .manager-task-detail .task-file-hint {
   font-size: 12px;
   color: var(--muted);
+}
+
+.manager-task-detail input[type="file"],
+.manager-task-create input[type="file"],
+.task-create-layout input[type="file"] {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .manager-task-detail .task-submit-actions {
@@ -5752,10 +5763,52 @@
 .substitution-candidate-info p,
 .substitution-active-pair strong,
 .substitution-history-head,
-.task-details-value {
+.task-details-value,
+.task-details-body,
+.manager-task-detail .task-detail-text,
+.manager-task-detail .submission-comment,
+.manager-task-detail .submission-file,
+.manager-task-detail .task-submissions-list li,
+.task-status-comment,
+.task-status-meta,
+.sprint-kanban-card,
+.sprint-kanban-card .kanban-card-title,
+.sprint-task-mini-title,
+.sprint-task-mini-title a,
+.team-load-name,
+.team-load-position,
+.sprint-add-task-card h3,
+.sprint-add-task-card p {
   max-width: 100%;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.manager-task-detail,
+.manager-task-detail .card,
+.manager-task-detail .task-detail-grid,
+.manager-task-detail .task-detail-section,
+.manager-task-detail .task-submissions-list,
+.task-details,
+.task-details-grid,
+.task-details-item,
+.task-status-timeline,
+.task-status-body,
+.sprint-detail-grid,
+.sprint-work-layout,
+.sprint-work-main,
+.sprint-work-side,
+.sprint-kanban-board,
+.sprint-kanban-column,
+.sprint-kanban-card,
+.sprint-add-task-grid,
+.sprint-add-task-card,
+.sprint-task-mini-list,
+.sprint-task-mini,
+.team-load-list,
+.team-load-item {
+  min-width: 0;
+  max-width: 100%;
 }
 
 @media (max-width: 760px) {
@@ -5772,7 +5825,6 @@
   .task-time-row,
   .manager-chat .chat-header,
   .manager-chat-header-actions,
-  .manager-chat .chat-form,
   .mgr-team-row,
   .mgr-progress-row,
   .profile-info-row,
@@ -5916,9 +5968,43 @@
     padding: 12px;
   }
 
+  .manager-chat .chat-form {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    align-items: end;
+    gap: 8px;
+    width: 100%;
+    padding: 10px;
+  }
+
   .manager-chat .chat-attach-label,
   .manager-chat .chat-send-btn {
     width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .manager-chat .chat-input {
+    width: 100%;
+    min-width: 0;
+    max-height: 96px;
+  }
+
+  .manager-chat .chat-attach-filename {
+    padding: 0 10px 10px;
+  }
+
+  .manager-chat .chat-reply-banner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .manager-chat .chat-reply-banner-text,
+  .manager-chat .chat-reply-text,
+  .manager-chat-item-title,
+  .manager-chat-item-meta,
+  .manager-chat-item-preview {
+    white-space: normal;
   }
 
   .mgr-stat-grid,
@@ -5973,6 +6059,61 @@
   .substitution-task-row {
     padding: 12px;
   }
+
+  .mgr-dash-tasks-card .mgr-stat-grid,
+  .mgr-stat-grid {
+    grid-template-columns: minmax(0, 1fr);
+    margin-left: -16px;
+    margin-right: -16px;
+  }
+
+  .mgr-stat-card {
+    padding: 14px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .mgr-stat-card::after {
+    display: none;
+  }
+
+  .mgr-stat-card:last-child {
+    border-bottom: 0;
+  }
+
+  .mgr-stat-label {
+    letter-spacing: 0.03em;
+    overflow-wrap: anywhere;
+  }
+
+  .task-detail-action-grid,
+  .task-details-grid,
+  .manager-task-detail .task-detail-grid,
+  .sprint-detail-grid,
+  .sprint-work-layout,
+  .sprint-kanban-board,
+  .sprint-add-task-grid,
+  .sprint-detail-grid .sprint-detail-kpis {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .task-details,
+  .manager-task-detail .task-submissions-list li,
+  .sprint-kanban-column,
+  .sprint-kanban-card,
+  .sprint-add-task-card,
+  .sprint-task-mini,
+  .team-load-item {
+    overflow: hidden;
+  }
+
+  .sprint-work-side {
+    position: static;
+  }
+
+  .sprint-load-list {
+    max-height: none;
+    overflow: visible;
+  }
 }
 
 @media (max-width: 420px) {
@@ -6009,5 +6150,23 @@
 
   .absence-day-label {
     display: none;
+  }
+
+  .manager-chat .chat-form {
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .manager-chat .chat-attach-label,
+  .manager-chat .chat-send-btn {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+  }
+
+  .manager-chat .chat-input {
+    min-height: 40px;
+    padding: 9px 10px;
   }
 }

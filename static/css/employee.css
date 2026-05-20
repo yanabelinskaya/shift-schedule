@@ -1743,6 +1743,17 @@
   font-size: 11px;
 }
 
+.sprint-chat-form-row input[type="file"],
+.task-file-field input[type="file"],
+.employee-task-detail input[type="file"],
+.task-detail-layout input[type="file"] {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .sprint-task-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2553,6 +2564,7 @@
 .task-detail-main {
   display: grid;
   gap: 20px;
+  min-width: 0;
 }
 
 .task-detail-sidebar {
@@ -2560,6 +2572,7 @@
   gap: 20px;
   position: sticky;
   top: 24px;
+  min-width: 0;
 }
 
 .task-detail-text {
@@ -2631,6 +2644,8 @@
   line-height: 1.55;
   color: var(--ink);
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .submission-file {
@@ -2645,6 +2660,9 @@
   padding: 4px 10px;
   background: var(--surface-2);
   transition: background 0.15s;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .submission-file:hover {
@@ -3406,7 +3424,7 @@
 @media (max-width: 700px) {
   .content:has(.employee-chat-layout) {
     overflow-y: auto;
-    padding-bottom: 8px;
+    padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
     align-content: start;
     align-items: start;
   }
@@ -3684,6 +3702,8 @@
   .req-card-footer .btn,
   .chat-input,
   .sprint-chat-form textarea,
+  .sprint-chat-form-row label,
+  .sprint-chat-form-row input[type="file"],
   .sprint-chat-form-row .btn,
   .sprint-task-actions .btn {
     width: 100%;
@@ -3781,6 +3801,26 @@
   .sprint-task-card,
   .sprint-chat {
     padding: 16px;
+  }
+
+  .task-detail-main,
+  .task-detail-sidebar,
+  .task-detail-comments .task-submissions-list,
+  .submission-item,
+  .task-status-timeline,
+  .task-status-body,
+  .task-panel-section {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .task-detail-text,
+  .submission-comment,
+  .submission-file,
+  .task-status-comment,
+  .task-status-meta {
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 }
 
